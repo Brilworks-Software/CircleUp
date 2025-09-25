@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TextInput,
   TouchableOpacity,
   KeyboardAvoidingView,
@@ -11,6 +10,7 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { User, Lock, Eye, EyeOff } from 'lucide-react-native';
 import { useAuth } from '../../firebase/hooks/useAuth';

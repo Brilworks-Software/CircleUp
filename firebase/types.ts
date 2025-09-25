@@ -16,56 +16,189 @@ export interface UserSettings {
   notifications?: boolean;
 }
 
-// ---------------- Contacts ----------------
+// Async Storage Types
+export interface BusinessCard {
+  fullName: string;
+  about: string;
+  company: string;
+  jobTitle: string;
+  email: string;
+  phone: string;
+  website: string;
+  address: string;
+  notes: string;
+}
+
 export interface Contact {
-  id?: string; // Firestore document ID
-  firstName: string;
-  lastName?: string;
-  email?: string;
-  phone?: string;
+  id: string;
+  name: string;
+  phoneNumbers?: { number: string; label?: string }[];
+  emails?: { email: string; label?: string }[];
+  website?: string;
+  linkedin?: string;
+  twitter?: string;
+  instagram?: string;
+  facebook?: string;
   company?: string;
   jobTitle?: string;
-  birthday?: string; // YYYY-MM-DD
-  tags?: string[]; // tag IDs or names
-  lastInteraction?: any;
-  nextFollowUp?: any;
+  address?: string;
+  birthday?: string;
   notes?: string;
-  profilePhotoUrl?: string;
-  createdAt: any;
-  updatedAt?: any;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-// ---------------- Interactions ----------------
-export interface Interaction {
-  id?: string; // Firestore document ID
-  type: 'Call' | 'Meeting' | 'Email' | 'Text' | 'Other';
-  date: any;
-  content: string;
-  attachments?: FileAttachment[];
-  createdAt: any;
-  updatedAt?: any;
-}
-
-export interface FileAttachment {
-  type: 'image' | 'video' | 'audio' | 'file';
-  url: string;
-}
-
-// ---------------- Reminders ----------------
-export interface Reminder {
-  id?: string; // Firestore document ID
+export interface ContactInteraction {
+  id: string;
   contactId: string;
-  title: string;
-  dueDate: any;
-  isCompleted: boolean;
-  createdAt: any;
-  updatedAt?: any;
+  date: string;
+  type: string;
+  notes?: string;
 }
 
-// ---------------- Tags ----------------
-export interface Tag {
-  id?: string; // Firestore document ID
-  name: string;
-  color?: string; // Hex code
-  createdAt: any;
+export interface Relationship {
+  id: string;
+  contactId: string;
+  contactName: string;
+  lastContactDate: string;
+  lastContactMethod: string;
+  reminderFrequency: string;
+  nextReminderDate: string;
+  tags: string[];
+  notes: string;
+  familyInfo: {
+    kids: string;
+    siblings: string;
+    spouse: string;
+  };
 }
+
+export interface Reminder {
+  id: string;
+  contactName: string;
+  contactId?: string;
+  type: string;
+  date: string;
+  frequency: string;
+  tags: string[];
+  isOverdue: boolean;
+  isThisWeek: boolean;
+  notes?: string;
+  title?: string;
+}
+
+export interface AppStats {
+  totalReminders: number;
+  totalRelationships: number;
+  totalContacts: number;
+  totalInteractions: number;
+}
+
+export type LastContactOption = 'today' | 'yesterday' | 'week' | 'month' | '3months' | '6months' | 'year' | 'custom';
+export type ContactMethod = 'call' | 'text' | 'email' | 'inPerson';
+export type ReminderFrequency = 'once' | 'daily' | 'week' | 'month' | '3months' | '6months' | 'yearly' | 'never';
+export type ReminderTab = 'missed' | 'thisWeek' | 'upcoming';
+export type FilterType = 'all' | 'client' | 'family' | 'friends' | 'prospect';
+
+// Activity Types
+export type ActivityType = 'note' | 'interaction' | 'reminder';
+
+export interface BaseActivity {
+  id: string;
+  userId: string;
+  type: ActivityType;
+  title: string;
+  description: string;
+  createdAt: any;
+  updatedAt: any;
+  tags: string[];
+  isArchived: boolean;
+}
+
+export interface NoteActivity extends BaseActivity {
+  type: 'note';
+  content: string;
+  category?: string;
+  contactId?: string;
+  contactName?: string;
+}
+
+export interface InteractionActivity extends BaseActivity {
+  type: 'interaction';
+  contactId: string;
+  contactName: string;
+  interactionType: ContactMethod;
+  date: string;
+  duration?: number; // in minutes
+  location?: string;
+}
+
+export interface ReminderActivity extends BaseActivity {
+  type: 'reminder';
+  contactId: string;
+  contactName: string;
+  reminderDate: string;
+  reminderType: string;
+  frequency: ReminderFrequency;
+  isCompleted: boolean;
+  completedAt?: string;
+  reminderId?: string; // Reference to the reminder document
+}
+
+export type Activity = NoteActivity | InteractionActivity | ReminderActivity;
+
+export interface CreateActivityData {
+  type: ActivityType;
+  title: string;
+  description: string;
+  tags: string[];
+  // Note specific
+  content?: string;
+  category?: string;
+  // Interaction specific
+  contactId?: string;
+  contactName?: string;
+  interactionType?: ContactMethod;
+  date?: string;
+  duration?: number;
+  location?: string;
+  // Reminder specific
+  reminderDate?: string;
+  reminderType?: string;
+  frequency?: ReminderFrequency;
+  reminderId?: string; // Reference to the reminder document
+}
+
+export interface UpdateActivityData {
+  title?: string;
+  description?: string;
+  tags?: string[];
+  isArchived?: boolean;
+  // Note specific
+  content?: string;
+  category?: string;
+  // Interaction specific
+  interactionType?: ContactMethod;
+  date?: string;
+  duration?: number;
+  location?: string;
+  // Reminder specific
+  reminderDate?: string;
+  reminderType?: string;
+  frequency?: ReminderFrequency;
+  isCompleted?: boolean;
+  completedAt?: string;
+  reminderId?: string; // Reference to the reminder document
+}
+
+export interface ActivityStats {
+  totalActivities: number;
+  notesCount: number;
+  interactionsCount: number;
+  remindersCount: number;
+  completedReminders: number;
+  pendingReminders: number;
+  recentActivities: number;
+}
+
+

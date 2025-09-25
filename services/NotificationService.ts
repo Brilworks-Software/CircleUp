@@ -84,6 +84,12 @@ class NotificationService {
    */
   async scheduleNotification(notificationData: NotificationData): Promise<string | null> {
     try {
+      // Validate the scheduled time
+      if (!notificationData.scheduledTime || isNaN(notificationData.scheduledTime.getTime())) {
+        console.error('Invalid scheduled time for notification:', notificationData.scheduledTime);
+        return null;
+      }
+      
       // Check if notification is in the future
       if (notificationData.scheduledTime <= new Date()) {
         console.warn('Cannot schedule notification in the past');
@@ -101,7 +107,10 @@ class NotificationService {
       // Schedule the notification
       const notificationId = await Notifications.scheduleNotificationAsync({
         content,
-        trigger: notificationData.scheduledTime,
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: notificationData.scheduledTime,
+        },
       });
 
       // Store the scheduled notification
@@ -324,7 +333,7 @@ class NotificationService {
           sound: 'default',
         },
         trigger: {
-          type: 'date',
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
           date: newTime,
         },
       });

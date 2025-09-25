@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Chrome as Home, Bell, Users, UserPlus } from 'lucide-react-native';
+import { Chrome as Home, Bell, Users, Settings } from 'lucide-react-native';
 
 export default function TabLayout() {
   return (
@@ -48,11 +48,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="contacts"
+        name="settings"
         options={{
-          title: 'Contacts',
+          title: 'Settings',
           tabBarIcon: ({ size, color }) => (
-            <UserPlus size={size} color={color} />
+            <Settings size={size} color={color} />
           ),
         }}
       />

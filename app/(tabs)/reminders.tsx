@@ -3,81 +3,197 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   FlatList,
   Alert,
   Modal,
   TextInput,
   ScrollView,
+  Platform,
+  Linking,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Calendar, Clock, Filter, Search, X, Plus, Bell, CircleCheck as CheckCircle, CircleAlert as AlertCircle } from 'lucide-react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Calendar, Clock, Filter, Search, X, Plus, Bell, CircleCheck as CheckCircle, CircleAlert as AlertCircle, ChevronDown, Users, Phone, MessageCircle, Mail } from 'lucide-react-native';
+import { useRemindersInfinite } from '../../firebase/hooks/useRemindersInfinite';
+import { useAuth } from '../../firebase/hooks/useAuth';
+import { useRelationships } from '../../firebase/hooks/useRelationships';
+import { useActivity } from '../../firebase/hooks/useActivity';
+import type { Reminder, ReminderTab, FilterType, Relationship, ReminderFrequency } from '../../firebase/types';
+import * as Contacts from 'expo-contacts';
 
-interface Reminder {
-  id: string;
-  contactName: string;
-  type: string;
-  date: string;
-  frequency: string;
-  tags: string[];
-  isOverdue: boolean;
-  isThisWeek: boolean;
-  notes?: string;
-}
-
-type ReminderTab = 'missed' | 'thisWeek' | 'upcoming';
-type FilterType = 'all' | 'client' | 'family' | 'friends' | 'prospect';
 
 export default function RemindersScreen() {
+  const { currentUser } = useAuth();
+  
+  const { relationships, isLoading: relationshipsLoading } = useRelationships();
+  const { createActivity } = useActivity();
+  
   const [activeTab, setActiveTab] = useState<ReminderTab>('thisWeek');
-  const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [filteredReminders, setFilteredReminders] = useState<Reminder[]>([]);
   const [showAllReminders, setShowAllReminders] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('all');
   const [selectedReminder, setSelectedReminder] = useState<Reminder | null>(null);
   const [showReminderDetail, setShowReminderDetail] = useState(false);
+  
+  // Infinite query for reminders
+  const {
+    reminders,
+    totalCount,
+    tabCounts,
+    isLoading,
+    isFetching,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    refetch,
+    createReminder,
+    updateReminder,
+    deleteReminder,
+    isCreating,
+    isUpdating,
+    isDeleting,
+    isLoadingTabCounts,
+  } = useRemindersInfinite(activeTab, searchQuery, selectedFilter);
+  
+  // Add Reminder Modal State
+  const [showAddReminderModal, setShowAddReminderModal] = useState(false);
+  const [reminderNote, setReminderNote] = useState('');
+  const [reminderDate, setReminderDate] = useState(new Date());
+  const [reminderTime, setReminderTime] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [reminderContactName, setReminderContactName] = useState('');
+  const [reminderType, setReminderType] = useState('follow_up');
+  const [reminderFrequency, setReminderFrequency] = useState('once');
+  const [reminderTags, setReminderTags] = useState<string[]>([]);
+  
+  // Contact Selection State
+  const [selectedContact, setSelectedContact] = useState<Relationship | null>(null);
+  const [showContactPicker, setShowContactPicker] = useState(false);
+  const [contactSearchQuery, setContactSearchQuery] = useState('');
+  
+  // Contact Actions State
+  const [showContactActions, setShowContactActions] = useState(false);
+  
+  // Edit Reminder Modal State
+  const [showEditReminderModal, setShowEditReminderModal] = useState(false);
+  const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
+  const [editReminderNote, setEditReminderNote] = useState('');
+  const [editReminderDate, setEditReminderDate] = useState(new Date());
+  const [editReminderTime, setEditReminderTime] = useState(new Date());
+  const [showEditDatePicker, setShowEditDatePicker] = useState(false);
+  const [showEditTimePicker, setShowEditTimePicker] = useState(false);
+  const [editReminderType, setEditReminderType] = useState('follow_up');
+  const [editReminderFrequency, setEditReminderFrequency] = useState('once');
+  
+  // Device contacts state
+  const [deviceContacts, setDeviceContacts] = useState<Contacts.Contact[]>([]);
+  const [hasPermission, setHasPermission] = useState(false);
+  
+  // Check if selected date/time is in the past
+  const isDateTimeInPast = () => {
+    const combinedDateTime = new Date(reminderDate);
+    combinedDateTime.setHours(reminderTime.getHours());
+    combinedDateTime.setMinutes(reminderTime.getMinutes());
+    return combinedDateTime <= new Date();
+  };
+
+  // Check contacts permission
+  const checkPermission = async () => {
+    try {
+      const { status } = await Contacts.requestPermissionsAsync();
+      setHasPermission(status === 'granted');
+      if (status === 'granted') {
+        loadDeviceContacts();
+      }
+    } catch (error) {
+      console.error('Error requesting contacts permission:', error);
+    }
+  };
+
+  // Load device contacts
+  const loadDeviceContacts = async () => {
+    try {
+      const { data } = await Contacts.getContactsAsync({
+        fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Emails],
+      });
+      setDeviceContacts(data);
+    } catch (error) {
+      console.error('Error loading device contacts:', error);
+    }
+  };
+
+  // Load contacts on component mount
+  useEffect(() => {
+    checkPermission();
+  }, []);
+
+  // Debug tab counts changes
+  useEffect(() => {
+    console.log('📊 Tab counts updated:', tabCounts, 'isLoadingTabCounts:', isLoadingTabCounts);
+  }, [tabCounts, isLoadingTabCounts]);
 
   const filterOptions = [
     { key: 'all', label: 'All Reminders' },
-    { key: 'client', label: 'Client' },
-    { key: 'family', label: 'Family' },
-    { key: 'friends', label: 'Friends' },
-    { key: 'prospect', label: 'Prospect' },
+    { key: 'Client', label: 'Client' },
+    { key: 'College', label: 'College' },
+    { key: 'Family', label: 'Family' },
+    { key: 'Favorite', label: 'Favorite' },
+    { key: 'Friends', label: 'Friends' },
+    { key: 'Prospect', label: 'Prospect' },
   ];
 
-  useEffect(() => {
-    loadReminders();
-  }, []);
+  const frequencyOptions = [
+    { key: 'once', label: 'Once' },
+    { key: 'daily', label: 'Daily' },
+    { key: 'week', label: 'Weekly' },
+    { key: 'month', label: 'Monthly' },
+    { key: '3months', label: 'Every 3 Months' },
+    { key: '6months', label: 'Every 6 Months' },
+    { key: 'yearly', label: 'Yearly' },
+  ];
 
-  useEffect(() => {
-    filterReminders();
-  }, [activeTab, reminders, searchQuery, selectedFilter]);
-
-  const loadReminders = async () => {
-    try {
-      const savedReminders = await AsyncStorage.getItem('reminders');
-      if (savedReminders) {
-        const parsedReminders = JSON.parse(savedReminders);
-        const processedReminders = parsedReminders.map((reminder: any) => ({
-          ...reminder,
-          isOverdue: isOverdue(reminder.date),
-          isThisWeek: isThisWeek(reminder.date),
-        }));
-        setReminders(processedReminders);
-      }
-    } catch (error) {
-      console.error('Error loading reminders:', error);
-    }
-  };
 
   const isOverdue = (dateString: string): boolean => {
     const reminderDate = new Date(dateString);
     const now = new Date();
     now.setHours(23, 59, 59, 999); // End of today
     return reminderDate < now;
+  };
+
+  const calculateNextReminderDate = (currentDate: string, frequency: string): string => {
+    const date = new Date(currentDate);
+    
+    switch (frequency) {
+      case 'once':
+        return currentDate; // No change for once - will be deleted
+      case 'daily':
+        date.setDate(date.getDate() + 1);
+        break;
+      case 'week':
+        date.setDate(date.getDate() + 7);
+        break;
+      case 'month':
+        date.setMonth(date.getMonth() + 1);
+        break;
+      case '3months':
+        date.setMonth(date.getMonth() + 3);
+        break;
+      case '6months':
+        date.setMonth(date.getMonth() + 6);
+        break;
+      case 'yearly':
+        date.setFullYear(date.getFullYear() + 1);
+        break;
+      case 'never':
+        return currentDate; // No change for never
+      default:
+        return currentDate; // Default to no change
+    }
+    
+    return date.toISOString();
   };
 
   const isThisWeek = (dateString: string): boolean => {
@@ -94,46 +210,42 @@ export default function RemindersScreen() {
     return reminderDate >= startOfWeek && reminderDate <= endOfWeek;
   };
 
-  const filterReminders = () => {
-    let filtered: Reminder[] = [];
-    
-    // First filter by tab
-    switch (activeTab) {
-      case 'missed':
-        filtered = reminders.filter(r => r.isOverdue);
-        break;
-      case 'thisWeek':
-        filtered = reminders.filter(r => r.isThisWeek && !r.isOverdue);
-        break;
-      case 'upcoming':
-        filtered = reminders.filter(r => !r.isThisWeek && !r.isOverdue);
-        break;
-    }
-
-    // Then filter by search query
-    if (searchQuery.trim()) {
-      filtered = filtered.filter(r => 
-        r.contactName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.type.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-
-    // Then filter by selected filter
-    if (selectedFilter !== 'all') {
-      filtered = filtered.filter(r => 
-        r.tags.some(tag => tag.toLowerCase() === selectedFilter.toLowerCase())
-      );
-    }
-    
-    setFilteredReminders(filtered);
-  };
 
   const formatDate = (dateString: string): string => {
+    console.log('formatDate input:', dateString, 'type:', typeof dateString);
     const date = new Date(dateString);
+    
+    // Check if the date is valid
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid date string:', dateString);
+      return 'Invalid Date';
+    }
+    
     const now = new Date();
-    const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+    
+    // Use UTC dates to avoid timezone issues
+    const todayUTC = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const targetDateUTC = new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+    
+    // Calculate difference in days
+    const diffInDays = Math.floor((todayUTC.getTime() - targetDateUTC.getTime()) / (1000 * 60 * 60 * 24));
+    
+    console.log('Date comparison (UTC):', {
+      input: dateString,
+      parsedDate: date.toISOString(),
+      todayUTC: todayUTC.toISOString(),
+      targetDateUTC: targetDateUTC.toISOString(),
+      diffInDays,
+      now: now.toISOString(),
+      nowLocal: now.toLocaleDateString(),
+      dateLocal: date.toLocaleDateString()
+    });
 
-    if (diffInDays === 0) return 'Today';
+    if (diffInDays === 0) {
+      // Show time for today's reminders
+      const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return `Today ${timeString}`;
+    }
     if (diffInDays === -1) return 'Tomorrow';
     if (diffInDays === 1) return 'Yesterday';
     if (diffInDays > 0 && diffInDays <= 7) return `${diffInDays} days ago`;
@@ -153,11 +265,51 @@ export default function RemindersScreen() {
 
   const markAsDone = async (reminderId: string) => {
     try {
-      const updatedReminders = reminders.filter(r => r.id !== reminderId);
-      setReminders(updatedReminders);
-      await AsyncStorage.setItem('reminders', JSON.stringify(updatedReminders));
+      const reminder = reminders.find(r => r.id === reminderId);
+      if (!reminder) {
+        Alert.alert('Error', 'Reminder not found.');
+        return;
+      }
+
+      // Create activity to record reminder completion
+      try {
+        await createActivity({
+          type: 'reminder',
+          title: `Reminder completed: ${reminder.contactName}`,
+          description: `Completed reminder: ${reminder.type}${reminder.notes ? ` - ${reminder.notes}` : ''}`,
+          tags: ['completed', 'reminder'],
+          contactId: reminder.contactId || '',
+          contactName: reminder.contactName,
+          reminderDate: reminder.date,
+          reminderType: reminder.type,
+          frequency: reminder.frequency,
+          reminderId: reminderId,
+        });
+      } catch (activityError) {
+        console.error('Error creating completion activity:', activityError);
+        // Continue with reminder processing even if activity creation fails
+      }
+
+      // If frequency is 'once', delete the reminder
+      if (reminder.frequency === 'once') {
+        await deleteReminder(reminderId);
+        setShowReminderDetail(false);
+        Alert.alert('Success', 'Reminder marked as completed!');
+        return;
+      }
+
+      // For recurring reminders, calculate next date and update
+      const nextDate = calculateNextReminderDate(reminder.date, reminder.frequency);
+      
+      await updateReminder({
+        reminderId: reminderId,
+        updates: {
+          date: nextDate,
+        }
+      });
+      
       setShowReminderDetail(false);
-      Alert.alert('Success', 'Reminder marked as completed!');
+      Alert.alert('Success', `Reminder rescheduled for ${formatDate(nextDate)}!`);
     } catch (error) {
       console.error('Error marking reminder as done:', error);
       Alert.alert('Error', 'Failed to update reminder.');
@@ -166,22 +318,19 @@ export default function RemindersScreen() {
 
   const snoozeReminder = async (reminderId: string, days: number) => {
     try {
-      const updatedReminders = reminders.map(r => {
-        if (r.id === reminderId) {
-          const newDate = new Date(r.date);
-          newDate.setDate(newDate.getDate() + days);
-          return {
-            ...r,
-            date: newDate.toISOString(),
-            isOverdue: false,
-            isThisWeek: isThisWeek(newDate.toISOString()),
-          };
+      const reminder = reminders.find(r => r.id === reminderId);
+      if (!reminder) return;
+      
+      const newDate = new Date(reminder.date);
+      newDate.setDate(newDate.getDate() + days);
+      
+      await updateReminder({
+        reminderId,
+        updates: {
+        date: newDate.toISOString(),
         }
-        return r;
       });
       
-      setReminders(updatedReminders);
-      await AsyncStorage.setItem('reminders', JSON.stringify(updatedReminders));
       setShowReminderDetail(false);
       Alert.alert('Success', `Reminder snoozed for ${days} day${days > 1 ? 's' : ''}!`);
     } catch (error) {
@@ -190,18 +339,294 @@ export default function RemindersScreen() {
     }
   };
 
-  const contactPerson = (reminder: Reminder) => {
+  const handleEditReminder = (reminder: Reminder) => {
+    setEditingReminder(reminder);
+    setEditReminderNote(reminder.notes || '');
+    setEditReminderDate(new Date(reminder.date));
+    setEditReminderTime(new Date(reminder.date));
+    setEditReminderType(reminder.type);
+    setEditReminderFrequency(reminder.frequency);
     setShowReminderDetail(false);
+    setShowEditReminderModal(true);
+  };
+
+  const handleUpdateReminder = async () => {
+    if (!editingReminder) return;
+    
+    // Validation: Check if note is not empty
+    if (!editReminderNote || editReminderNote.trim() === '') {
+      Alert.alert('Validation Error', 'Please enter a note for the reminder.');
+      return;
+    }
+    
+    // Combine date and time
+    const combinedDateTime = new Date(editReminderDate);
+    combinedDateTime.setHours(editReminderTime.getHours());
+    combinedDateTime.setMinutes(editReminderTime.getMinutes());
+    
+    // Validation: Check if reminder date/time is in the future
+    const now = new Date();
+    if (combinedDateTime <= now) {
+      Alert.alert('Validation Error', 'Please select a future date and time for the reminder.');
+      return;
+    }
+    
+    try {
+      console.log('🔄 Updating reminder:', {
+        reminderId: editingReminder.id,
+        oldDate: editingReminder.date,
+        newDate: combinedDateTime.toISOString(),
+        notes: editReminderNote.trim(),
+        type: editReminderType
+      });
+      
+      await updateReminder({
+        reminderId: editingReminder.id,
+        updates: {
+          notes: editReminderNote.trim(),
+          date: combinedDateTime.toISOString(),
+          type: editReminderType,
+          frequency: editReminderFrequency,
+        }
+      });
+      
+      console.log('✅ Reminder updated successfully, notification should be rescheduled');
+      
+      setShowEditReminderModal(false);
+      setEditingReminder(null);
+      Alert.alert('Success', 'Reminder updated successfully!');
+    } catch (error) {
+      console.error('❌ Error updating reminder:', error);
+      Alert.alert('Error', 'Failed to update reminder.');
+    }
+  };
+
+  const handleDeleteReminder = async (reminderId: string) => {
     Alert.alert(
-      'Contact Options',
-      `How would you like to contact ${reminder.contactName}?`,
+      'Delete Reminder',
+      'Are you sure you want to delete this reminder? This action cannot be undone.',
       [
-        { text: 'Call', onPress: () => console.log('Call') },
-        { text: 'Message', onPress: () => console.log('Message') },
-        { text: 'Email', onPress: () => console.log('Email') },
-        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteReminder(reminderId);
+              setShowReminderDetail(false);
+              Alert.alert('Success', 'Reminder deleted successfully!');
+            } catch (error) {
+              console.error('Error deleting reminder:', error);
+              Alert.alert('Error', 'Failed to delete reminder.');
+            }
+          },
+        },
       ]
     );
+  };
+
+  const handleAddReminder = () => {
+    setShowAddReminderModal(true);
+    // Reset form with default values
+    setReminderNote('');
+    setReminderDate(new Date());
+    setReminderTime(new Date());
+    setReminderContactName('');
+    setReminderType('follow_up');
+    setReminderFrequency('once');
+    setReminderTags([]);
+    setSelectedContact(null);
+    setContactSearchQuery('');
+  };
+
+  const handleCreateReminder = async () => {
+    if (!currentUser || !selectedContact) {
+      Alert.alert('Error', 'Please select a contact');
+      return;
+    }
+    
+    // Validation: Check if note is not empty
+    if (!reminderNote || reminderNote.trim() === '') {
+      Alert.alert('Validation Error', 'Please enter a note for the reminder.');
+      return;
+    }
+    
+      // Combine date and time
+      const combinedDateTime = new Date(reminderDate);
+      combinedDateTime.setHours(reminderTime.getHours());
+      combinedDateTime.setMinutes(reminderTime.getMinutes());
+      
+    // Validation: Check if reminder date/time is in the future
+    const now = new Date();
+    if (combinedDateTime <= now) {
+      Alert.alert('Validation Error', 'Please select a future date and time for the reminder.');
+      return;
+    }
+    
+    try {
+      // Create a new reminder
+      console.log('🔔 Creating reminder with data:', {
+        contactName: selectedContact.contactName,
+        type: reminderType,
+        date: combinedDateTime.toISOString(),
+        frequency: reminderFrequency,
+        tags: selectedContact.tags || [],
+        notes: reminderNote.trim(),
+      });
+      
+      await createReminder({
+        contactName: selectedContact.contactName,
+        type: reminderType,
+        date: combinedDateTime.toISOString(),
+        frequency: reminderFrequency,
+        tags: selectedContact.tags || [],
+        notes: reminderNote.trim(),
+      });
+      
+      console.log('✅ Reminder created successfully');
+      
+      // Close modal and show success
+      setShowAddReminderModal(false);
+      Alert.alert('Success', 'Reminder added successfully!');
+    } catch (error) {
+      console.error('Error adding reminder:', error);
+      Alert.alert('Error', 'Failed to add reminder');
+    }
+  };
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setReminderDate(selectedDate);
+    }
+  };
+
+  const onTimeChange = (event: any, selectedTime?: Date) => {
+    setShowTimePicker(Platform.OS === 'ios');
+    if (selectedTime) {
+      setReminderTime(selectedTime);
+    }
+  };
+
+  const onEditDateChange = (event: any, selectedDate?: Date) => {
+    setShowEditDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setEditReminderDate(selectedDate);
+    }
+  };
+
+  const onEditTimeChange = (event: any, selectedTime?: Date) => {
+    setShowEditTimePicker(Platform.OS === 'ios');
+    if (selectedTime) {
+      setEditReminderTime(selectedTime);
+    }
+  };
+
+  const contactPerson = (reminder: Reminder) => {
+    setShowReminderDetail(false);
+    setSelectedReminder(reminder);
+    setShowContactActions(true);
+  };
+
+  // Contact action functions
+  const handleCall = async () => {
+    if (!selectedReminder) return;
+    
+    // Find the contact in device contacts to get phone number
+    const deviceContact = deviceContacts.find(contact => 
+      contact.name === selectedReminder.contactName
+    );
+    
+    if (deviceContact?.phoneNumbers && deviceContact.phoneNumbers.length > 0) {
+      const phoneNumber = deviceContact.phoneNumbers[0].number;
+      const url = `tel:${phoneNumber}`;
+      
+      try {
+        const supported = await Linking.canOpenURL(url);
+        if (supported) {
+          await Linking.openURL(url);
+          setShowContactActions(false);
+        } else {
+          Alert.alert('Error', 'Phone app is not available');
+        }
+      } catch (error) {
+        console.error('Error opening phone app:', error);
+        Alert.alert('Error', 'Failed to open phone app');
+      }
+    } else {
+      Alert.alert(
+        'No Phone Number', 
+        `Phone number not available for ${selectedReminder.contactName}. Please add contact information in your device contacts.`,
+        [{ text: 'OK', onPress: () => setShowContactActions(false) }]
+      );
+    }
+  };
+
+  const handleMessage = async () => {
+    if (!selectedReminder) return;
+    
+    const deviceContact = deviceContacts.find(contact => 
+      contact.name === selectedReminder.contactName
+    );
+    
+    if (deviceContact?.phoneNumbers && deviceContact.phoneNumbers.length > 0) {
+      const phoneNumber = deviceContact.phoneNumbers[0].number;
+      const url = `sms:${phoneNumber}`;
+      
+      try {
+        const supported = await Linking.canOpenURL(url);
+        if (supported) {
+          await Linking.openURL(url);
+          setShowContactActions(false);
+        } else {
+          Alert.alert('Error', 'SMS app is not available');
+        }
+      } catch (error) {
+        console.error('Error opening SMS app:', error);
+        Alert.alert('Error', 'Failed to open SMS app');
+      }
+    } else {
+      Alert.alert(
+        'No Phone Number', 
+        `Phone number not available for ${selectedReminder.contactName}. Please add contact information in your device contacts.`,
+        [{ text: 'OK', onPress: () => setShowContactActions(false) }]
+      );
+    }
+  };
+
+  const handleEmail = async () => {
+    if (!selectedReminder) return;
+    
+    const deviceContact = deviceContacts.find(contact => 
+      contact.name === selectedReminder.contactName
+    );
+    
+    if (deviceContact?.emails && deviceContact.emails.length > 0) {
+      const email = deviceContact.emails[0].email;
+      const url = `mailto:${email}`;
+      
+      try {
+        const supported = await Linking.canOpenURL(url);
+        if (supported) {
+          await Linking.openURL(url);
+          setShowContactActions(false);
+        } else {
+          Alert.alert('Error', 'Email app is not available');
+        }
+      } catch (error) {
+        console.error('Error opening email app:', error);
+        Alert.alert('Error', 'Failed to open email app');
+      }
+    } else {
+      Alert.alert(
+        'No Email Address', 
+        `Email address not available for ${selectedReminder.contactName}. Please add contact information in your device contacts.`,
+        [{ text: 'OK', onPress: () => setShowContactActions(false) }]
+      );
+    }
   };
 
   const renderReminder = ({ item }: { item: Reminder }) => (
@@ -249,12 +674,10 @@ export default function RemindersScreen() {
   );
 
   const getTabCount = (tab: ReminderTab): number => {
-    switch (tab) {
-      case 'missed': return reminders.filter(r => r.isOverdue).length;
-      case 'thisWeek': return reminders.filter(r => r.isThisWeek && !r.isOverdue).length;
-      case 'upcoming': return reminders.filter(r => !r.isThisWeek && !r.isOverdue).length;
-      default: return 0;
-    }
+    // Use tabCounts from the hook for accurate counts
+    const count = tabCounts[tab] || 0;
+    console.log(`📊 Tab count for ${tab}:`, count, 'tabCounts:', tabCounts, 'isLoadingTabCounts:', isLoadingTabCounts);
+    return count;
   };
 
   const renderAllReminders = () => (
@@ -298,11 +721,27 @@ export default function RemindersScreen() {
         )}
 
         <FlatList
-          data={filteredReminders}
+          data={reminders}
           renderItem={renderReminder}
           keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContainer}
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage) {
+              fetchNextPage();
+            }
+          }}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={() => {
+            if (isFetchingNextPage) {
+              return (
+                <View style={styles.loadingFooter}>
+                  <Text style={styles.loadingText}>Loading more reminders...</Text>
+                </View>
+              );
+            }
+            return null;
+          }}
         />
       </SafeAreaView>
     </Modal>
@@ -415,6 +854,22 @@ export default function RemindersScreen() {
                 <Text style={styles.secondaryButtonText}>Mark as Done</Text>
               </TouchableOpacity>
 
+              <View style={styles.editDeleteButtons}>
+                <TouchableOpacity 
+                  style={styles.editButton}
+                  onPress={() => handleEditReminder(selectedReminder)}
+                >
+                  <Text style={styles.editButtonText}>Edit Reminder</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.deleteButton}
+                  onPress={() => handleDeleteReminder(selectedReminder.id)}
+                >
+                  <Text style={styles.deleteButtonText}>Delete Reminder</Text>
+                </TouchableOpacity>
+              </View>
+
               <View style={styles.snoozeButtons}>
                 <TouchableOpacity 
                   style={styles.snoozeButton}
@@ -436,11 +891,520 @@ export default function RemindersScreen() {
     </Modal>
   );
 
+  // Add Reminder Modal
+  const renderAddReminderModal = () => (
+    <Modal visible={showAddReminderModal} animationType="slide" transparent>
+      <View style={styles.addReminderOverlay}>
+        <View style={styles.addReminderContainer}>
+          <View style={styles.addReminderHeader}>
+            <Text style={styles.addReminderTitle}>Add Reminder</Text>
+            <TouchableOpacity onPress={() => setShowAddReminderModal(false)}>
+              <X size={24} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView style={styles.addReminderContent}>
+            <View style={styles.reminderForm}>
+              <Text style={styles.reminderFormLabel}>Contact *</Text>
+              <TouchableOpacity
+                style={styles.contactSelector}
+                onPress={() => setShowContactPicker(true)}
+              >
+                <View style={styles.contactSelectorContent}>
+                  <Users size={20} color="#6B7280" />
+                  <Text style={[
+                    styles.contactSelectorText,
+                    !selectedContact && styles.contactSelectorPlaceholder
+                  ]}>
+                    {selectedContact ? selectedContact.contactName : 'Select a contact...'}
+                  </Text>
+                </View>
+                <ChevronDown size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+              
+              <Text style={styles.reminderFormLabel}>Type</Text>
+              <View style={styles.typeSelector}>
+                {['follow_up', 'meeting', 'call', 'birthday', 'other'].map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.typeOption,
+                      reminderType === type && styles.typeOptionSelected
+                    ]}
+                    onPress={() => setReminderType(type)}
+                  >
+                    <Text style={[
+                      styles.typeOptionText,
+                      reminderType === type && styles.typeOptionTextSelected
+                    ]}>
+                      {type.replace('_', ' ').toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              
+              <Text style={styles.reminderFormLabel}>Frequency</Text>
+              <View style={styles.frequencySelector}>
+                {frequencyOptions.map((option) => (
+                  <TouchableOpacity
+                    key={option.key}
+                    style={[
+                      styles.frequencyOption,
+                      reminderFrequency === option.key && styles.frequencyOptionSelected
+                    ]}
+                    onPress={() => setReminderFrequency(option.key as ReminderFrequency)}
+                  >
+                    <Text style={[
+                      styles.frequencyOptionText,
+                      reminderFrequency === option.key && styles.frequencyOptionTextSelected
+                    ]}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              
+              <Text style={styles.reminderFormLabel}>Date *</Text>
+              <TouchableOpacity 
+                style={styles.dateTimeButton}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Calendar size={20} color="#6B7280" />
+                <Text style={styles.dateTimeButtonText}>
+                  {reminderDate.toLocaleDateString()}
+                </Text>
+              </TouchableOpacity>
+              
+              <Text style={styles.reminderFormLabel}>Time *</Text>
+              <TouchableOpacity 
+                style={styles.dateTimeButton}
+                onPress={() => setShowTimePicker(true)}
+              >
+                <Clock size={20} color="#6B7280" />
+                <Text style={styles.dateTimeButtonText}>
+                  {reminderTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              </TouchableOpacity>
+              
+              <Text style={styles.helperText}>
+                Please select a future date and time for your reminder
+              </Text>
+              
+              {isDateTimeInPast() && (
+                <View style={styles.warningContainer}>
+                  <AlertCircle size={16} color="#EF4444" />
+                  <Text style={styles.warningText}>
+                    Selected date and time is in the past. Please choose a future date and time.
+                  </Text>
+                </View>
+              )}
+              
+              <Text style={styles.reminderFormLabel}>Note *</Text>
+              <TextInput
+                style={styles.reminderNoteInput}
+                value={reminderNote}
+                onChangeText={setReminderNote}
+                placeholder="Add a note for this reminder..."
+                placeholderTextColor="#9CA3AF"
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </View>
+          </ScrollView>
+          
+          <View style={styles.addReminderActions}>
+            <TouchableOpacity 
+              style={styles.cancelButton}
+              onPress={() => setShowAddReminderModal(false)}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[
+                styles.createReminderButton,
+                (!selectedContact || !reminderNote.trim() || isDateTimeInPast()) && styles.createReminderButtonDisabled
+              ]}
+              onPress={handleCreateReminder}
+              disabled={!selectedContact || !reminderNote.trim() || isDateTimeInPast()}
+            >
+              <Text style={[
+                styles.createReminderButtonText,
+                (!selectedContact || !reminderNote.trim() || isDateTimeInPast()) && styles.createReminderButtonTextDisabled
+              ]}>
+                Create Reminder
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // Contact Actions Modal
+  const renderContactActionsModal = () => {
+    if (!selectedReminder) return null;
+
+    // Find the contact in device contacts
+    const deviceContact = deviceContacts.find(contact => 
+      contact.name === selectedReminder.contactName
+    );
+
+    const hasPhone = deviceContact?.phoneNumbers && deviceContact.phoneNumbers.length > 0;
+    const hasEmail = deviceContact?.emails && deviceContact.emails.length > 0;
+    const phoneNumber = hasPhone ? deviceContact?.phoneNumbers?.[0]?.number || '' : '';
+    const email = hasEmail ? deviceContact?.emails?.[0]?.email || '' : '';
+
+    return (
+      <Modal visible={showContactActions} animationType="slide" transparent>
+        <View style={styles.contactActionsOverlay}>
+          <View style={styles.contactActionsContainer}>
+            <View style={styles.contactActionsHeader}>
+              <Text style={styles.contactActionsTitle}>Get in touch with {selectedReminder.contactName}</Text>
+              <TouchableOpacity onPress={() => setShowContactActions(false)}>
+                <X size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            
+            {/* Contact Information Display */}
+            <View style={styles.contactInfoDisplay}>
+              {hasPhone && (
+                <View style={styles.contactInfoItem}>
+                  <Phone size={16} color="#6B7280" />
+                  <Text style={styles.contactInfoText}>{phoneNumber}</Text>
+                </View>
+              )}
+              {hasEmail && (
+                <View style={styles.contactInfoItem}>
+                  <Mail size={16} color="#6B7280" />
+                  <Text style={styles.contactInfoText}>{email}</Text>
+                </View>
+              )}
+              {!hasPhone && !hasEmail && (
+                <View style={styles.noContactInfo}>
+                  <Text style={styles.noContactInfoText}>No contact information available</Text>
+                  <Text style={styles.noContactInfoSubtext}>Add contact details in your device contacts</Text>
+                </View>
+              )}
+            </View>
+            
+            <View style={styles.contactActionsList}>
+              <TouchableOpacity 
+                style={[
+                  styles.contactActionItem,
+                  !hasPhone && styles.contactActionItemDisabled
+                ]} 
+                onPress={handleCall}
+                disabled={!hasPhone}
+              >
+                <View style={[
+                  styles.contactActionIcon,
+                  !hasPhone && styles.contactActionIconDisabled
+                ]}>
+                  <Phone size={24} color={hasPhone ? "#10B981" : "#9CA3AF"} />
+                </View>
+                <View style={styles.contactActionContent}>
+                  <Text style={[
+                    styles.contactActionTitle,
+                    !hasPhone && styles.contactActionTitleDisabled
+                  ]}>Call</Text>
+                  <Text style={[
+                    styles.contactActionSubtitle,
+                    !hasPhone && styles.contactActionSubtitleDisabled
+                  ]}>
+                    {hasPhone ? phoneNumber : 'Phone number not available'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[
+                  styles.contactActionItem,
+                  !hasPhone && styles.contactActionItemDisabled
+                ]} 
+                onPress={handleMessage}
+                disabled={!hasPhone}
+              >
+                <View style={[
+                  styles.contactActionIcon,
+                  !hasPhone && styles.contactActionIconDisabled
+                ]}>
+                  <MessageCircle size={24} color={hasPhone ? "#3B82F6" : "#9CA3AF"} />
+                </View>
+                <View style={styles.contactActionContent}>
+                  <Text style={[
+                    styles.contactActionTitle,
+                    !hasPhone && styles.contactActionTitleDisabled
+                  ]}>Message</Text>
+                  <Text style={[
+                    styles.contactActionSubtitle,
+                    !hasPhone && styles.contactActionSubtitleDisabled
+                  ]}>
+                    {hasPhone ? 'Send SMS' : 'Phone number not available'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[
+                  styles.contactActionItem,
+                  !hasEmail && styles.contactActionItemDisabled
+                ]} 
+                onPress={handleEmail}
+                disabled={!hasEmail}
+              >
+                <View style={[
+                  styles.contactActionIcon,
+                  !hasEmail && styles.contactActionIconDisabled
+                ]}>
+                  <Mail size={24} color={hasEmail ? "#EF4444" : "#9CA3AF"} />
+                </View>
+                <View style={styles.contactActionContent}>
+                  <Text style={[
+                    styles.contactActionTitle,
+                    !hasEmail && styles.contactActionTitleDisabled
+                  ]}>Email</Text>
+                  <Text style={[
+                    styles.contactActionSubtitle,
+                    !hasEmail && styles.contactActionSubtitleDisabled
+                  ]}>
+                    {hasEmail ? email : 'Email address not available'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  // Edit Reminder Modal
+  const renderEditReminderModal = () => (
+    <Modal visible={showEditReminderModal} animationType="slide" transparent>
+      <View style={styles.addReminderOverlay}>
+        <View style={styles.addReminderContainer}>
+          <View style={styles.addReminderHeader}>
+            <Text style={styles.addReminderTitle}>Edit Reminder</Text>
+            <TouchableOpacity onPress={() => setShowEditReminderModal(false)}>
+              <X size={24} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView style={styles.addReminderContent}>
+            <View style={styles.reminderForm}>
+              <Text style={styles.reminderFormLabel}>Contact</Text>
+              <View style={styles.contactDisplay}>
+                <Users size={20} color="#6B7280" />
+                <Text style={styles.contactDisplayText}>
+                  {editingReminder?.contactName}
+                </Text>
+              </View>
+              
+              <Text style={styles.reminderFormLabel}>Type</Text>
+              <View style={styles.typeSelector}>
+                {['follow_up', 'meeting', 'call', 'birthday', 'other'].map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.typeOption,
+                      editReminderType === type && styles.typeOptionSelected
+                    ]}
+                    onPress={() => setEditReminderType(type)}
+                  >
+                    <Text style={[
+                      styles.typeOptionText,
+                      editReminderType === type && styles.typeOptionTextSelected
+                    ]}>
+                      {type.replace('_', ' ').toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              
+              <Text style={styles.reminderFormLabel}>Frequency</Text>
+              <View style={styles.frequencySelector}>
+                {frequencyOptions.map((option) => (
+                  <TouchableOpacity
+                    key={option.key}
+                    style={[
+                      styles.frequencyOption,
+                      editReminderFrequency === option.key && styles.frequencyOptionSelected
+                    ]}
+                    onPress={() => setEditReminderFrequency(option.key as ReminderFrequency)}
+                  >
+                    <Text style={[
+                      styles.frequencyOptionText,
+                      editReminderFrequency === option.key && styles.frequencyOptionTextSelected
+                    ]}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              
+              <Text style={styles.reminderFormLabel}>Date *</Text>
+              <TouchableOpacity 
+                style={styles.dateTimeButton}
+                onPress={() => setShowEditDatePicker(true)}
+              >
+                <Calendar size={20} color="#6B7280" />
+                <Text style={styles.dateTimeButtonText}>
+                  {editReminderDate.toLocaleDateString()}
+                </Text>
+              </TouchableOpacity>
+              
+              <Text style={styles.reminderFormLabel}>Time *</Text>
+              <TouchableOpacity 
+                style={styles.dateTimeButton}
+                onPress={() => setShowEditTimePicker(true)}
+              >
+                <Clock size={20} color="#6B7280" />
+                <Text style={styles.dateTimeButtonText}>
+                  {editReminderTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              </TouchableOpacity>
+              
+              <Text style={styles.helperText}>
+                Please select a future date and time for your reminder
+              </Text>
+              
+              <Text style={styles.reminderFormLabel}>Note *</Text>
+              <TextInput
+                style={styles.reminderNoteInput}
+                value={editReminderNote}
+                onChangeText={setEditReminderNote}
+                placeholder="Add a note for this reminder..."
+                placeholderTextColor="#9CA3AF"
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </View>
+          </ScrollView>
+          
+          <View style={styles.addReminderActions}>
+            <TouchableOpacity 
+              style={styles.cancelButton}
+              onPress={() => setShowEditReminderModal(false)}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[
+                styles.createReminderButton,
+                (!editReminderNote.trim()) && styles.createReminderButtonDisabled
+              ]}
+              onPress={handleUpdateReminder}
+              disabled={!editReminderNote.trim()}
+            >
+              <Text style={[
+                styles.createReminderButtonText,
+                (!editReminderNote.trim()) && styles.createReminderButtonTextDisabled
+              ]}>
+                Update Reminder
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // Contact Picker Modal
+  const renderContactPickerModal = () => {
+    const filteredContacts = relationships.filter(contact =>
+      contact.contactName.toLowerCase().includes(contactSearchQuery.toLowerCase())
+    );
+
+    return (
+      <Modal visible={showContactPicker} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={styles.contactPickerModal}>
+          <View style={styles.contactPickerHeader}>
+            <Text style={styles.contactPickerTitle}>Select Contact</Text>
+            <TouchableOpacity onPress={() => setShowContactPicker(false)}>
+              <X size={24} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.contactSearchContainer}>
+            <View style={styles.contactSearchInputContainer}>
+              <Search size={20} color="#6B7280" />
+              <TextInput
+                style={styles.contactSearchInput}
+                value={contactSearchQuery}
+                onChangeText={setContactSearchQuery}
+                placeholder="Search contacts..."
+                placeholderTextColor="#9CA3AF"
+              />
+            </View>
+          </View>
+
+          <ScrollView style={styles.contactList}>
+            {relationshipsLoading ? (
+              <View style={styles.loadingContainer}>
+                <Text style={styles.loadingText}>Loading contacts...</Text>
+              </View>
+            ) : filteredContacts.length > 0 ? (
+              filteredContacts.map((contact) => (
+                <TouchableOpacity
+                  key={contact.id}
+                  style={[
+                    styles.contactItem,
+                    selectedContact?.id === contact.id && styles.selectedContactItem
+                  ]}
+                  onPress={() => {
+                    setSelectedContact(contact);
+                    setReminderContactName(contact.contactName);
+                    setShowContactPicker(false);
+                    setContactSearchQuery('');
+                  }}
+                >
+                  <View style={styles.contactItemContent}>
+                    <View style={styles.contactAvatar}>
+                      <Text style={styles.contactAvatarText}>
+                        {contact.contactName.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.contactInfo}>
+                      <Text style={styles.contactName}>{contact.contactName}</Text>
+                      <Text style={styles.contactType}>{contact.lastContactMethod}</Text>
+                    </View>
+                  </View>
+                  {selectedContact?.id === contact.id && (
+                    <CheckCircle size={20} color="#3B82F6" />
+                  )}
+                </TouchableOpacity>
+              ))
+            ) : (
+              <View style={styles.emptyContactsContainer}>
+                <Users size={48} color="#9CA3AF" />
+                <Text style={styles.emptyContactsTitle}>No contacts found</Text>
+                <Text style={styles.emptyContactsSubtitle}>
+                  {contactSearchQuery 
+                    ? 'Try a different search term' 
+                    : 'Add contacts in the Relationships tab first'
+                  }
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Reminders</Text>
         <View style={styles.headerActions}>
+          <TouchableOpacity 
+            style={styles.iconButton}
+            onPress={handleAddReminder}
+          >
+            <Plus size={20} color="#3B82F6" />
+          </TouchableOpacity>
           <TouchableOpacity 
             style={styles.iconButton}
             onPress={() => setShowFilters(true)}
@@ -462,6 +1426,7 @@ export default function RemindersScreen() {
             key={tab}
             style={[styles.tab, activeTab === tab && styles.activeTab]}
             onPress={() => setActiveTab(tab)}
+            activeOpacity={0.7}
           >
             <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
               {tab === 'missed' ? 'Missed' : tab === 'thisWeek' ? 'This Week' : 'Upcoming'}
@@ -476,13 +1441,31 @@ export default function RemindersScreen() {
       </View>
 
       <View style={styles.content}>
-        {filteredReminders.length > 0 ? (
+        {reminders.length > 0 ? (
           <FlatList
-            data={filteredReminders}
+            data={reminders}
             renderItem={renderReminder}
             keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContainer}
+            onEndReached={() => {
+              if (hasNextPage && !isFetchingNextPage) {
+                fetchNextPage();
+              }
+            }}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={() => {
+              if (isFetchingNextPage) {
+                return (
+                  <View style={styles.loadingFooter}>
+                    <Text style={styles.loadingText}>Loading more reminders...</Text>
+                  </View>
+                );
+              }
+              return null;
+            }}
+            refreshing={isFetching && !isFetchingNextPage}
+            onRefresh={refetch}
           />
         ) : (
           <View style={styles.emptyState}>
@@ -509,6 +1492,52 @@ export default function RemindersScreen() {
       {renderAllReminders()}
       {renderFiltersModal()}
       {renderReminderDetail()}
+      {renderAddReminderModal()}
+      {renderEditReminderModal()}
+      {renderContactPickerModal()}
+      {renderContactActionsModal()}
+
+      {/* Date Picker */}
+      {showDatePicker && (
+        <DateTimePicker
+          value={reminderDate}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onDateChange}
+          minimumDate={new Date()}
+        />
+      )}
+
+      {/* Time Picker */}
+      {showTimePicker && (
+        <DateTimePicker
+          value={reminderTime}
+          mode="time"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onTimeChange}
+        />
+      )}
+
+      {/* Edit Date Picker */}
+      {showEditDatePicker && (
+        <DateTimePicker
+          value={editReminderDate}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onEditDateChange}
+          minimumDate={new Date()}
+        />
+      )}
+
+      {/* Edit Time Picker */}
+      {showEditTimePicker && (
+        <DateTimePicker
+          value={editReminderTime}
+          mode="time"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onEditTimeChange}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -524,26 +1553,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
     paddingTop: 16,
-    paddingBottom: 20,
+    paddingBottom: 8,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 32,
+    fontWeight: '800',
     color: '#111827',
+    letterSpacing: -0.5,
   },
   headerActions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
   },
   iconButton: {
-    padding: 8,
-    borderRadius: 8,
+    padding: 10,
+    borderRadius: 12,
     backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   tabContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 24,
-    marginBottom: 20,
+    marginBottom: 24,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 16,
+    padding: 4,
+    marginHorizontal:8,
+    gap:8
   },
   tab: {
     flex: 1,
@@ -552,13 +1591,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#ffffff',
-    marginHorizontal: 4,
+    backgroundColor: "white",
     borderRadius: 12,
-    gap: 8,
+    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   activeTab: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#ffffff',
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
   tabText: {
     fontSize: 14,
@@ -566,22 +1614,23 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   activeTabText: {
-    color: '#ffffff',
+    color: '#3B82F6',
   },
   badge: {
     backgroundColor: '#E5E7EB',
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 10,
-    minWidth: 20,
+    borderRadius: 8,
+    minWidth: 18,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   activeBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: '#3B82F6',
   },
   badgeText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
     color: '#6B7280',
   },
   activeBadgeText: {
@@ -725,8 +1774,13 @@ const styles = StyleSheet.create({
     marginVertical: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 16,
     gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   searchInput: {
     flex: 1,
@@ -871,5 +1925,509 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontSize: 14,
     fontWeight: '500',
+  },
+  // Edit/Delete Button Styles
+  editDeleteButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  editButton: {
+    flex: 1,
+    backgroundColor: '#3B82F6',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  editButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  deleteButton: {
+    flex: 1,
+    backgroundColor: '#EF4444',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  // Contact Display Styles
+  contactDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  contactDisplayText: {
+    fontSize: 16,
+    color: '#374151',
+    marginLeft: 8,
+    flex: 1,
+  },
+  // Add Reminder Modal Styles
+  addReminderOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addReminderContainer: {
+    flex:1,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    width: '90%',
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  addReminderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  addReminderTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#111827',
+    flex: 1,
+  },
+  addReminderContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  reminderForm: {
+    paddingVertical: 16,
+  },
+  reminderFormLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+    marginTop: 16,
+  },
+  reminderInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#374151',
+    marginBottom: 8,
+  },
+  typeSelector: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  typeOption: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  typeOptionSelected: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#3B82F6',
+  },
+  typeOptionText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+  typeOptionTextSelected: {
+    color: '#ffffff',
+  },
+  frequencySelector: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  frequencyOption: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  frequencyOptionSelected: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#3B82F6',
+  },
+  frequencyOptionText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+  frequencyOptionTextSelected: {
+    color: '#ffffff',
+  },
+  dateTimeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+  dateTimeButtonText: {
+    fontSize: 16,
+    color: '#374151',
+    marginLeft: 8,
+    flex: 1,
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: -4,
+    marginBottom: 16,
+    fontStyle: 'italic',
+  },
+  warningContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 16,
+  },
+  warningText: {
+    fontSize: 12,
+    color: '#DC2626',
+    marginLeft: 8,
+    flex: 1,
+  },
+  reminderNoteInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#374151',
+    minHeight: 80,
+    marginBottom: 16,
+  },
+  addReminderActions: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    gap: 12,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  createReminderButton: {
+    flex: 1,
+    backgroundColor: '#3B82F6',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  createReminderButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  createReminderButtonDisabled: {
+    backgroundColor: '#E5E7EB',
+  },
+  createReminderButtonTextDisabled: {
+    color: '#9CA3AF',
+  },
+  // Contact Picker Styles
+  contactSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  contactSelectorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  contactSelectorText: {
+    fontSize: 16,
+    color: '#374151',
+    marginLeft: 8,
+    flex: 1,
+  },
+  contactSelectorPlaceholder: {
+    color: '#9CA3AF',
+  },
+  contactPickerModal: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+  contactPickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    backgroundColor: '#ffffff',
+  },
+  contactPickerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  contactSearchContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  contactSearchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  contactSearchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#374151',
+    marginLeft: 8,
+  },
+  contactList: {
+    flex: 1,
+  },
+  contactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  selectedContactItem: {
+    backgroundColor: '#EBF4FF',
+  },
+  contactItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  contactAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#3B82F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  contactAvatarText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  contactInfo: {
+    flex: 1,
+  },
+  contactType: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyContactsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyContactsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyContactsSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  loadingFooter: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  // Contact Actions Modal Styles
+  contactActionsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  contactActionsContainer: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 34, // Safe area padding
+  },
+  contactActionsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  contactActionsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    flex: 1,
+  },
+  contactActionsList: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  contactActionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: '#F9FAFB',
+  },
+  contactActionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  contactActionContent: {
+    flex: 1,
+  },
+  contactActionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  contactActionSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  // Contact Information Display Styles
+  contactInfoDisplay: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  contactInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  contactInfoText: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginLeft: 8,
+    flex: 1,
+  },
+  noContactInfo: {
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  noContactInfoText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  noContactInfoSubtext: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+  },
+  // Disabled States
+  contactActionItemDisabled: {
+    opacity: 0.5,
+  },
+  contactActionIconDisabled: {
+    backgroundColor: '#F3F4F6',
+  },
+  contactActionTitleDisabled: {
+    color: '#9CA3AF',
+  },
+  contactActionSubtitleDisabled: {
+    color: '#9CA3AF',
   },
 });

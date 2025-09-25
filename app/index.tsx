@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { User } from 'lucide-react-native';
 import { useAuth } from '../firebase/hooks/useAuth';
@@ -34,7 +35,7 @@ export default function IndexScreen() {
           <View style={styles.logo}>
             <User size={40} color="#ffffff" />
           </View>
-          <Text style={styles.appName}>ContactPro</Text>
+          <Text style={styles.appName}>CircleUp</Text>
           <Text style={styles.tagline}>Manage your connections</Text>
           <View style={styles.loadingDots}>
             <View style={[styles.dot, styles.dot1]} />

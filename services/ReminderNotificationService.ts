@@ -1,4 +1,4 @@
-import RemindersService from '../firebase/services/ReminderService';
+import RemindersService from '../firebase/services/RemindersService';
 import NotificationService from './NotificationService';
 import type { Reminder } from '../firebase/types';
 
@@ -10,9 +10,11 @@ export interface ReminderWithNotifications extends Reminder {
 class ReminderNotificationService {
   private static instance: ReminderNotificationService;
   private notificationService: NotificationService;
+  private remindersService: RemindersService;
 
   private constructor() {
     this.notificationService = NotificationService.getInstance();
+    this.remindersService = RemindersService.getInstance();
   }
 
   public static getInstance(): ReminderNotificationService {
@@ -32,7 +34,7 @@ class ReminderNotificationService {
   ): Promise<ReminderWithNotifications> {
     try {
       // Create the reminder in Firestore
-      const reminder = await RemindersService.createReminder(userId, reminderData);
+      const reminder = await this.remindersService.createReminder(userId, reminderData);
 
       // Schedule notifications for the reminder
       const notificationIds = await this.notificationService.scheduleReminderNotifications(
@@ -65,18 +67,22 @@ class ReminderNotificationService {
       await this.notificationService.cancelReminderNotifications(reminderId);
 
       // Update the reminder in Firestore
-      await RemindersService.updateReminder(userId, reminderId, updates);
+      await this.remindersService.updateReminder(userId, reminderId, updates);
 
       // Get the updated reminder
-      const updatedReminder = await RemindersService.fetchReminder(userId, reminderId);
+      const updatedReminder = await this.remindersService.getReminderById(userId, reminderId);
 
       // Schedule new notifications if due date is in the future
       let notificationIds: string[] = [];
-      if (updatedReminder.dueDate && new Date(updatedReminder.dueDate) > new Date()) {
+      if (updatedReminder && updatedReminder.date && new Date(updatedReminder.date) > new Date()) {
         notificationIds = await this.notificationService.scheduleReminderNotifications(
           updatedReminder,
           notificationIntervals
         );
+      }
+
+      if (!updatedReminder) {
+        throw new Error('Reminder not found after update');
       }
 
       return {
@@ -102,7 +108,7 @@ class ReminderNotificationService {
       await this.notificationService.cancelReminderNotifications(reminderId);
 
       // Delete the reminder from Firestore
-      await RemindersService.deleteReminder(userId, reminderId);
+      await this.remindersService.deleteReminder(userId, reminderId);
     } catch (error) {
       console.error('Error deleting reminder with notifications:', error);
       throw error;
@@ -114,7 +120,7 @@ class ReminderNotificationService {
    */
   async getRemindersWithNotifications(userId: string): Promise<ReminderWithNotifications[]> {
     try {
-      const reminders = await RemindersService.fetchReminders(userId);
+      const reminders = await this.remindersService.getReminders(userId);
       const scheduledNotifications = this.notificationService.getScheduledNotifications();
 
       return reminders.map(reminder => {
@@ -175,14 +181,20 @@ class ReminderNotificationService {
       // Cancel future notifications
       await this.notificationService.cancelReminderNotifications(reminderId);
 
-      // Mark reminder as completed
-      await RemindersService.updateReminder(userId, reminderId, { isCompleted: true });
+      // Mark reminder as completed by deleting it (as per the completeReminder method)
+      await this.remindersService.completeReminder(userId, reminderId);
 
-      // Get the updated reminder
-      const updatedReminder = await RemindersService.fetchReminder(userId, reminderId);
-
+      // Since we completed the reminder by deleting it, we don't need to fetch it
+      // Return a completed reminder object
       return {
-        ...updatedReminder,
+        id: reminderId,
+        contactName: '',
+        type: '',
+        date: new Date().toISOString(),
+        frequency: 'never',
+        tags: [],
+        isOverdue: false,
+        isThisWeek: false,
         notificationIds: [],
         hasNotifications: false,
       };
@@ -202,8 +214,8 @@ class ReminderNotificationService {
       const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
       return allReminders.filter(reminder => {
-        const dueDate = new Date(reminder.dueDate);
-        return dueDate > now && dueDate <= tomorrow && !reminder.isCompleted;
+        const dueDate = new Date(reminder.date);
+        return dueDate > now && dueDate <= tomorrow;
       });
     } catch (error) {
       console.error('Error getting upcoming reminders:', error);
@@ -220,8 +232,8 @@ class ReminderNotificationService {
       const now = new Date();
 
       return allReminders.filter(reminder => {
-        const dueDate = new Date(reminder.dueDate);
-        return dueDate < now && !reminder.isCompleted;
+        const dueDate = new Date(reminder.date);
+        return dueDate < now;
       });
     } catch (error) {
       console.error('Error getting overdue reminders:', error);

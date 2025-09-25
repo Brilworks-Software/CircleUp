@@ -1,400 +1,256 @@
-# Notification Service Documentation
+# Async Storage Services and Hooks
 
-A comprehensive notification service for scheduling local notifications with expo-notifications, integrated with your existing reminder system.
+This directory contains services and hooks for managing data stored in AsyncStorage across all screens in the app.
 
-## 🚀 Features
+## Services
 
-- ✅ **Schedule Single Notifications**: Schedule individual notifications at specific times
-- ✅ **Schedule Multiple Notifications**: Schedule multiple notifications at different times
-- ✅ **Reminder Integration**: Automatically schedule notifications for reminders with multiple intervals
-- ✅ **Recurring Notifications**: Schedule daily, weekly, or monthly recurring notifications
-- ✅ **Notification Management**: Cancel, update, and manage scheduled notifications
-- ✅ **Persistent Storage**: Notifications persist across app restarts
-- ✅ **React Hooks**: Easy-to-use React hooks for integration
-- ✅ **Permission Handling**: Automatic permission requests and status checking
+### BusinessCardService
+**File:** `BusinessCardService.ts`
+**Purpose:** Manages business card data storage and retrieval
+**Key Methods:**
+- `getBusinessCard()` - Get saved business card
+- `saveBusinessCard(card)` - Save business card
+- `updateBusinessCard(updates)` - Update specific fields
+- `initializeWithUserProfile(profile)` - Initialize with user data
+- `clearBusinessCard()` - Clear stored data
 
-## 📁 File Structure
+### ContactsService
+**File:** `ContactsService.ts`
+**Purpose:** Manages imported contacts and contact interactions
+**Key Methods:**
+- `requestContactsPermission()` - Request device contacts permission
+- `importContacts()` - Import contacts from device
+- `getContacts()` - Get stored contacts
+- `searchContacts(query)` - Search contacts
+- `recordInteraction(contactId, type, notes)` - Record contact interaction
+- `getContactInteractions()` - Get all interactions
+- `getLastInteraction(contactId)` - Get last interaction for contact
 
-```
-services/
-├── NotificationService.ts           # Core notification service
-├── ReminderNotificationService.ts   # Enhanced reminder service with notifications
-└── README.md                       # This documentation
+### RelationshipsService
+**File:** `RelationshipsService.ts`
+**Purpose:** Manages relationship data and follow-up tracking
+**Key Methods:**
+- `getRelationships()` - Get all relationships
+- `createRelationship(data)` - Create new relationship
+- `updateRelationship(id, updates)` - Update relationship
+- `deleteRelationship(id)` - Delete relationship
+- `getRelationshipByContactId(contactId)` - Get relationship for contact
+- `getRelationshipsNeedingFollowUp()` - Get relationships needing follow-up
+- `updateLastContact(id, date, method)` - Update last contact info
 
-hooks/
-├── useNotifications.ts             # Basic notification hook
-└── useReminderNotifications.ts     # Enhanced reminder hook with notifications
+### RemindersService
+**File:** `RemindersService.ts`
+**Purpose:** Manages reminder data and scheduling
+**Key Methods:**
+- `getReminders()` - Get all reminders
+- `createReminder(data)` - Create new reminder
+- `updateReminder(id, updates)` - Update reminder
+- `deleteReminder(id)` - Delete reminder
+- `getRemindersByTab(tab)` - Get reminders by tab (missed/thisWeek/upcoming)
+- `snoozeReminder(id, days)` - Snooze reminder
+- `completeReminder(id)` - Mark reminder as completed
+- `getOverdueReminders()` - Get overdue reminders
 
-examples/
-└── NotificationExample.tsx         # Complete usage example
+### StatsService
+**File:** `StatsService.ts`
+**Purpose:** Manages app statistics and analytics
+**Key Methods:**
+- `getStats()` - Get current app statistics
+- `getCachedStats()` - Get cached statistics
+- `updateStats()` - Update statistics
+- `getContactsStats()` - Get contacts statistics
+- `getRelationshipsStats()` - Get relationships statistics
+- `getRemindersStats()` - Get reminders statistics
+- `getInteractionsStats()` - Get interactions statistics
+- `getDashboardStats()` - Get dashboard summary stats
 
-app/(tabs)/
-└── notifications.tsx               # Demo screen in your app
-```
+## Hooks
 
-## 🛠 Setup
+### useBusinessCard
+**File:** `../hooks/useBusinessCard.ts`
+**Purpose:** React hook for business card management
+**Returns:**
+- `businessCard` - Current business card data
+- `isLoading` - Loading state
+- `error` - Error state
+- `saveBusinessCard(card)` - Save business card
+- `updateBusinessCard(updates)` - Update business card
+- `initializeWithUserProfile(profile)` - Initialize with user data
 
-### 1. Dependencies
+### useContacts
+**File:** `../hooks/useContacts.ts`
+**Purpose:** React hook for contacts and interactions management
+**Returns:**
+- `contacts` - All contacts
+- `filteredContacts` - Filtered contacts
+- `interactions` - All interactions
+- `isLoading` - Loading state
+- `error` - Error state
+- `requestPermission()` - Request contacts permission
+- `importContacts()` - Import contacts
+- `searchContacts(query)` - Search contacts
+- `recordInteraction(contactId, type, notes)` - Record interaction
+- `getLastInteraction(contactId)` - Get last interaction
 
-The service uses `expo-notifications` which is already configured in your `app.json`:
+### useRelationships
+**File:** `../hooks/useRelationships.ts`
+**Purpose:** React hook for relationships management
+**Returns:**
+- `relationships` - All relationships
+- `isLoading` - Loading state
+- `error` - Error state
+- `createRelationship(data)` - Create relationship
+- `updateRelationship(id, updates)` - Update relationship
+- `deleteRelationship(id)` - Delete relationship
+- `getRelationshipByContactId(contactId)` - Get relationship for contact
+- `getRelationshipsNeedingFollowUp()` - Get relationships needing follow-up
 
-```json
-{
-  "plugins": [
-    "expo-notifications"
-  ]
-}
-```
+### useReminders
+**File:** `../hooks/useReminders.ts`
+**Purpose:** React hook for reminders management
+**Returns:**
+- `reminders` - All reminders
+- `filteredReminders` - Filtered reminders
+- `isLoading` - Loading state
+- `error` - Error state
+- `createReminder(data)` - Create reminder
+- `updateReminder(id, updates)` - Update reminder
+- `deleteReminder(id)` - Delete reminder
+- `getRemindersByTab(tab)` - Get reminders by tab
+- `snoozeReminder(id, days)` - Snooze reminder
+- `completeReminder(id)` - Complete reminder
 
-### 2. Initialization
+### useStats
+**File:** `../hooks/useStats.ts`
+**Purpose:** React hook for statistics management
+**Returns:**
+- `stats` - Current app statistics
+- `isLoading` - Loading state
+- `error` - Error state
+- `updateStats()` - Update statistics
+- `getContactsStats()` - Get contacts statistics
+- `getRelationshipsStats()` - Get relationships statistics
+- `getRemindersStats()` - Get reminders statistics
+- `getDashboardStats()` - Get dashboard statistics
 
-The notification service is automatically initialized in your app layout (`app/_layout.tsx`):
+## Types
 
+All types are defined in `../firebase/types.ts`:
+
+- `BusinessCard` - Business card data structure
+- `Contact` - Contact data structure
+- `ContactInteraction` - Contact interaction data structure
+- `Relationship` - Relationship data structure
+- `Reminder` - Reminder data structure
+- `AppStats` - App statistics data structure
+- `LastContactOption` - Last contact date options
+- `ContactMethod` - Contact method types
+- `ReminderFrequency` - Reminder frequency types
+- `ReminderTab` - Reminder tab types
+- `FilterType` - Filter type options
+
+## Usage Examples
+
+### Business Card
 ```typescript
-useEffect(() => {
-  const initializeNotifications = async () => {
-    const notificationService = NotificationService.getInstance();
-    await notificationService.initialize();
-  };
-  initializeNotifications();
-}, []);
+import { useBusinessCard } from '../hooks/useBusinessCard';
+
+const { businessCard, saveBusinessCard, updateBusinessCard } = useBusinessCard();
+
+// Save business card
+await saveBusinessCard({
+  fullName: 'John Doe',
+  email: 'john@example.com',
+  // ... other fields
+});
+
+// Update specific fields
+await updateBusinessCard({ company: 'New Company' });
 ```
 
-## 📖 Usage Examples
-
-### Basic Notification Scheduling
-
+### Contacts
 ```typescript
-import { useNotifications } from '../hooks/useNotifications';
+import { useContacts } from '../hooks/useContacts';
 
-function MyComponent() {
-  const { scheduleNotification, scheduledNotifications } = useNotifications();
+const { contacts, importContacts, recordInteraction } = useContacts();
 
-  const handleScheduleNotification = async () => {
-    const notificationData = {
-      id: 'unique_id',
-      title: 'My Notification',
-      body: 'This is a test notification',
-      scheduledTime: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes from now
-      type: 'custom' as const,
-    };
+// Import contacts from device
+await importContacts();
 
-    await scheduleNotification(notificationData);
-  };
-
-  return (
-    <View>
-      <TouchableOpacity onPress={handleScheduleNotification}>
-        <Text>Schedule Notification</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
+// Record interaction
+await recordInteraction('contactId', 'call', 'Had a great conversation');
 ```
 
-### Schedule Multiple Notifications
-
+### Relationships
 ```typescript
-const notifications = [
-  {
-    id: 'notif_1',
-    title: 'First Reminder',
-    body: 'Don\'t forget!',
-    scheduledTime: new Date(Date.now() + 5 * 60 * 1000),
-    type: 'reminder' as const,
-  },
-  {
-    id: 'notif_2',
-    title: 'Second Reminder',
-    body: 'Still important!',
-    scheduledTime: new Date(Date.now() + 10 * 60 * 1000),
-    type: 'reminder' as const,
-  },
-];
+import { useRelationships } from '../hooks/useRelationships';
 
-await scheduleMultipleNotifications(notifications);
-```
+const { createRelationship, getRelationshipsNeedingFollowUp } = useRelationships();
 
-### Schedule for Specific Date and Time
-
-```typescript
-// Schedule a notification for a specific date and time
-const specificDate = new Date('2024-12-25T10:00:00'); // Christmas morning at 10 AM
-
-await scheduleNotificationForDateTime(
-  'christmas_reminder',
-  'Merry Christmas!',
-  'Don\'t forget to open presents!',
-  specificDate
-);
-```
-
-### Schedule Multiple Notifications for Specific Dates
-
-```typescript
-const notifications = [
-  {
-    id: 'meeting_1',
-    title: 'Team Meeting',
-    body: 'Weekly team standup',
-    date: new Date('2024-01-15T09:00:00'),
-  },
-  {
-    id: 'meeting_2',
-    title: 'Project Review',
-    body: 'Monthly project review meeting',
-    date: new Date('2024-01-20T14:00:00'),
-  },
-  {
-    id: 'meeting_3',
-    title: 'Client Call',
-    body: 'Important client presentation',
-    date: new Date('2024-01-25T11:00:00'),
-  },
-];
-
-await scheduleNotificationsForDateTimes(notifications);
-```
-
-### Reminder with Notifications
-
-```typescript
-import { useReminderNotifications } from '../hooks/useReminderNotifications';
-
-function ReminderComponent() {
-  const { createReminder, reminders } = useReminderNotifications();
-
-  const handleCreateReminder = async () => {
-    await createReminder({
-      reminderData: {
-        contactId: 'contact_123',
-        title: 'Call John',
-        dueDate: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1 hour from now
-        isCompleted: false,
-      },
-      notificationIntervals: [15, 30, 60], // minutes before due date
-    });
-  };
-
-  return (
-    <View>
-      <TouchableOpacity onPress={handleCreateReminder}>
-        <Text>Create Reminder with Notifications</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-```
-
-### Recurring Notifications
-
-```typescript
-const notificationService = NotificationService.getInstance();
-
-await notificationService.scheduleRecurringNotification(
-  {
-    title: 'Daily Reminder',
-    body: 'Check your tasks',
-    scheduledTime: new Date(),
-    type: 'custom',
-  },
-  'daily', // recurrence type
-  new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // end date (30 days)
-);
-```
-
-## 🔧 API Reference
-
-### NotificationService
-
-#### Core Methods
-
-- `initialize()`: Initialize the service and request permissions
-- `scheduleNotification(data)`: Schedule a single notification
-- `scheduleMultipleNotifications(notifications)`: Schedule multiple notifications
-- `scheduleNotificationForDateTime(id, title, body, date, data?)`: Schedule notification for specific date/time
-- `scheduleNotificationsForDateTimes(notifications)`: Schedule multiple notifications for specific dates
-- `scheduleReminderNotifications(reminder, intervals)`: Schedule reminder notifications
-- `cancelNotification(id)`: Cancel a specific notification
-- `cancelReminderNotifications(reminderId)`: Cancel all notifications for a reminder
-- `cancelAllNotifications()`: Cancel all scheduled notifications
-- `updateNotificationTime(id, newTime)`: Update notification time
-- `scheduleRecurringNotification(data, recurrence, endDate)`: Schedule recurring notifications
-
-#### Utility Methods
-
-- `getScheduledNotifications()`: Get all scheduled notifications
-- `getReminderNotifications(reminderId)`: Get notifications for a specific reminder
-- `areNotificationsEnabled()`: Check if notifications are enabled
-- `getPermissionsStatus()`: Get permission status
-
-### useNotifications Hook
-
-#### Returns
-
-- `isInitialized`: Whether the service is initialized
-- `hasPermission`: Whether notification permissions are granted
-- `scheduledNotifications`: Array of scheduled notifications
-- `scheduleNotification`: Function to schedule a single notification
-- `scheduleMultipleNotifications`: Function to schedule multiple notifications
-- `scheduleNotificationForDateTime`: Function to schedule notification for specific date/time
-- `scheduleNotificationsForDateTimes`: Function to schedule multiple notifications for specific dates
-- `cancelNotification`: Function to cancel a notification
-- `cancelAllNotifications`: Function to cancel all notifications
-- `refreshNotifications`: Function to refresh the notifications list
-
-### useReminderNotifications Hook
-
-#### Returns
-
-- `reminders`: All reminders with notification status
-- `upcomingReminders`: Reminders due within 24 hours
-- `overdueReminders`: Overdue reminders
-- `createReminder`: Function to create a reminder with notifications
-- `updateReminder`: Function to update a reminder and reschedule notifications
-- `deleteReminder`: Function to delete a reminder and cancel notifications
-- `completeReminder`: Function to mark reminder as completed and cancel notifications
-
-## 📱 Demo Screen
-
-A complete demo screen is available at `app/(tabs)/notifications.tsx` that demonstrates:
-
-- Scheduling single notifications
-- Scheduling multiple notifications
-- Creating reminders with notifications
-- Viewing scheduled notifications
-- Canceling notifications
-- Statistics display
-
-## 🔔 Notification Types
-
-### Custom Notifications
-```typescript
-{
-  id: 'custom_id',
-  title: 'Custom Title',
-  body: 'Custom message',
-  scheduledTime: new Date(),
-  type: 'custom'
-}
-```
-
-### Reminder Notifications
-```typescript
-{
-  id: 'reminder_id',
-  title: 'Reminder',
-  body: 'Your reminder is due soon',
-  scheduledTime: new Date(),
-  reminderId: 'reminder_123',
-  contactId: 'contact_456',
-  type: 'reminder'
-}
-```
-
-### Follow-up Notifications
-```typescript
-{
-  id: 'followup_id',
-  title: 'Follow-up',
-  body: 'Time to follow up',
-  scheduledTime: new Date(),
-  contactId: 'contact_456',
-  type: 'follow_up'
-}
-```
-
-## ⚙️ Configuration
-
-### Notification Intervals
-
-Default reminder notification intervals:
-- 15 minutes before due date
-- 30 minutes before due date
-- 60 minutes before due date
-- At exact due time
-
-You can customize these intervals:
-
-```typescript
-await createReminder({
-  reminderData: reminderData,
-  notificationIntervals: [5, 10, 30, 60] // Custom intervals
+// Create relationship
+await createRelationship({
+  contactId: 'contactId',
+  contactName: 'John Doe',
+  lastContactDate: new Date().toISOString(),
+  lastContactMethod: 'call',
+  reminderFrequency: 'month',
+  nextReminderDate: nextDate.toISOString(),
+  tags: ['client'],
+  notes: 'Important client',
+  familyInfo: { kids: '', siblings: '', spouse: '' }
 });
 ```
 
-### Recurrence Types
-
-- `'daily'`: Every day
-- `'weekly'`: Every week
-- `'monthly'`: Every month
-
-## 🛡️ Error Handling
-
-The service includes comprehensive error handling:
-
+### Reminders
 ```typescript
-try {
-  await scheduleNotification(notificationData);
-} catch (error) {
-  console.error('Failed to schedule notification:', error);
-  // Handle error appropriately
-}
+import { useReminders } from '../hooks/useReminders';
+
+const { createReminder, getRemindersByTab } = useReminders();
+
+// Create reminder
+await createReminder({
+  contactName: 'John Doe',
+  type: 'Follow-up',
+  date: new Date().toISOString(),
+  frequency: 'month',
+  tags: ['client'],
+  notes: 'Follow up on project'
+});
 ```
 
-## 🔍 Troubleshooting
+### Statistics
+```typescript
+import { useStats } from '../hooks/useStats';
 
-### Notifications not showing
-- ✅ Check if permissions are granted
-- ✅ Verify the scheduled time is in the future
-- ✅ Test on a real device (not simulator)
-- ✅ Check device notification settings
+const { stats, getDashboardStats } = useStats();
 
-### Permission denied
-- ✅ Request permissions explicitly
-- ✅ Check device notification settings
-- ✅ Handle permission denial gracefully
+// Get dashboard statistics
+const dashboardStats = await getDashboardStats();
+console.log(`Total contacts: ${dashboardStats.totalContacts}`);
+```
 
-### Notifications not persisting
-- ✅ The service automatically saves to AsyncStorage
-- ✅ Check if storage permissions are available
+## Storage Keys
 
-## 🎯 Best Practices
+All services use consistent storage keys:
+- `business_card` - Business card data
+- `imported_contacts` - Imported contacts
+- `contact_interactions` - Contact interactions
+- `relationships` - Relationships data
+- `reminders` - Reminders data
+- `app_stats` - Cached app statistics
 
-1. **Always check permissions** before scheduling notifications
-2. **Use unique IDs** for notifications to avoid conflicts
-3. **Handle errors gracefully** when scheduling notifications
-4. **Clean up notifications** when they're no longer needed
-5. **Test on real devices** as notifications don't work in simulators
-6. **Consider battery life** when scheduling many notifications
-7. **Use appropriate intervals** for reminder notifications
-8. **Cancel notifications** when reminders are completed or deleted
+## Error Handling
 
-## 📊 Performance Considerations
+All services and hooks include comprehensive error handling:
+- Try-catch blocks around all async operations
+- Error state management in hooks
+- Fallback to cached data when possible
+- Console error logging for debugging
 
-- Notifications are limited to 100 per recurring schedule
-- Scheduled notifications are stored in AsyncStorage
-- The service uses a singleton pattern for efficiency
-- Notifications are automatically cleaned up when canceled
+## Performance Considerations
 
-## 🔄 Integration with Existing Code
-
-The notification service integrates seamlessly with your existing:
-
-- ✅ Firebase authentication system
-- ✅ Reminder management system
-- ✅ React Query for state management
-- ✅ Existing UI components
-
-## 📝 Example Integration
-
-See the complete example in `app/(tabs)/notifications.tsx` for a full implementation showing:
-
-- Permission handling
-- Multiple notification scheduling
-- Reminder creation with notifications
-- Notification management
-- Error handling
-- User interface components
-
-The notification service is now fully integrated and ready to use in your app! 🎉
+- Services use singleton pattern to avoid multiple instances
+- Hooks provide both async and local helper functions
+- Caching mechanisms for frequently accessed data
+- Batch operations where possible
+- Optimistic updates for better UX

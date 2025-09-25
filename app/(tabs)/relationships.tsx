@@ -1,55 +1,77 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   FlatList,
   Modal,
   TextInput,
   Alert,
   ScrollView,
+  Linking,
+  Platform,
+  Animated,
+  Vibration,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Plus, Users, X, Calendar, MessageCircle, Phone, Mail, User, ChevronRight, Search, Filter } from 'lucide-react-native';
-
-interface Contact {
-  id: string;
-  name: string;
-  phoneNumbers?: { number: string }[];
-  emails?: { email: string }[];
-}
-
-interface Relationship {
-  id: string;
-  contactId: string;
-  contactName: string;
-  lastContactDate: string;
-  lastContactMethod: string;
-  reminderFrequency: string;
-  nextReminderDate: string;
-  tags: string[];
-  notes: string;
-  familyInfo: {
-    kids: string;
-    siblings: string;
-    spouse: string;
-  };
-}
+import * as Contacts from 'expo-contacts';
+import { useRelationships } from '../../firebase/hooks/useRelationships';
+import { useReminders } from '../../firebase/hooks/useReminders';
+import { useAuth } from '../../firebase/hooks/useAuth';
+import { useActivity } from '../../firebase/hooks/useActivity';
+import AddActivityModal from '../../components/AddActivityModal';
+import ReminderNotificationService from '../../services/ReminderNotificationService';
+import type { Contact, Relationship } from '../../firebase/types';
 
 type LastContactOption = 'today' | 'yesterday' | 'week' | 'month' | '3months' | '6months' | 'year' | 'custom';
 type ContactMethod = 'call' | 'text' | 'email' | 'inPerson';
 type ReminderFrequency = 'week' | 'month' | '3months' | '6months' | 'never';
 
 export default function RelationshipsScreen() {
-  const [relationships, setRelationships] = useState<Relationship[]>([]);
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
+  const { currentUser } = useAuth();
+  
+  const { 
+    relationships, 
+    isLoading: isLoadingRelationships, 
+    createRelationship, 
+    updateRelationship,
+    deleteRelationship
+  } = useRelationships();
+  
+  const { createReminder, deleteReminder } = useReminders();
+  const { activities, getActivitiesByTags, getFilteredActivities, createActivity, updateActivity, deleteActivity } = useActivity();
+  
   const [showAddModal, setShowAddModal] = useState(false);
   const [showContactList, setShowContactList] = useState(false);
+  const [showRelationshipDetail, setShowRelationshipDetail] = useState(false);
+  const [showFrequencyModal, setShowFrequencyModal] = useState(false);
+  const [showContactActions, setShowContactActions] = useState(false);
+  const [showMoreActions, setShowMoreActions] = useState(false);
+  const [showNewContactModal, setShowNewContactModal] = useState(false);
+  const [showDetailActions, setShowDetailActions] = useState(false);
+  const [showAddReminderModal, setShowAddReminderModal] = useState(false);
+  const [showEditActivityModal, setShowEditActivityModal] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [selectedRelationship, setSelectedRelationship] = useState<Relationship | null>(null);
+  const [selectedActivity, setSelectedActivity] = useState<any>(null);
   const [contactSearchQuery, setContactSearchQuery] = useState('');
+  
+  // Reminder form state
+  const [reminderNote, setReminderNote] = useState('');
+  const [reminderDate, setReminderDate] = useState(new Date());
+  const [reminderTime, setReminderTime] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  
+  // Device contacts state
+  const [deviceContacts, setDeviceContacts] = useState<Contacts.Contact[]>([]);
+  const [filteredDeviceContacts, setFilteredDeviceContacts] = useState<Contacts.Contact[]>([]);
+  const [isLoadingDeviceContacts, setIsLoadingDeviceContacts] = useState(false);
+  const [hasPermission, setHasPermission] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Form state
   const [lastContactOption, setLastContactOption] = useState<LastContactOption>('today');
@@ -59,7 +81,133 @@ export default function RelationshipsScreen() {
   const [notes, setNotes] = useState('');
   const [familyInfo, setFamilyInfo] = useState({ kids: '', siblings: '', spouse: '' });
   const [customDate, setCustomDate] = useState('');
-  const [newTag, setNewTag] = useState('');
+  
+  // Contact edit state
+  const [editContactPhone, setEditContactPhone] = useState('');
+  const [editContactEmail, setEditContactEmail] = useState('');
+  const [editContactWebsite, setEditContactWebsite] = useState('');
+  const [editContactLinkedin, setEditContactLinkedin] = useState('');
+  const [editContactTwitter, setEditContactTwitter] = useState('');
+  const [editContactInstagram, setEditContactInstagram] = useState('');
+  const [editContactFacebook, setEditContactFacebook] = useState('');
+  const [editContactCompany, setEditContactCompany] = useState('');
+  const [editContactJobTitle, setEditContactJobTitle] = useState('');
+  const [editContactAddress, setEditContactAddress] = useState('');
+  const [editContactBirthday, setEditContactBirthday] = useState('');
+  const [editContactNotes, setEditContactNotes] = useState('');
+  
+  // New contact form state
+  const [newContactName, setNewContactName] = useState('');
+  const [newContactPhone, setNewContactPhone] = useState('');
+  const [newContactEmail, setNewContactEmail] = useState('');
+  const [newContactWebsite, setNewContactWebsite] = useState('');
+  const [newContactLinkedin, setNewContactLinkedin] = useState('');
+  const [newContactTwitter, setNewContactTwitter] = useState('');
+  const [newContactInstagram, setNewContactInstagram] = useState('');
+  const [newContactFacebook, setNewContactFacebook] = useState('');
+  const [newContactCompany, setNewContactCompany] = useState('');
+  const [newContactJobTitle, setNewContactJobTitle] = useState('');
+  const [newContactAddress, setNewContactAddress] = useState('');
+  const [newContactBirthday, setNewContactBirthday] = useState('');
+  const [newContactNotes, setNewContactNotes] = useState('');
+  
+  // Activity filtering state
+  const [activityFilter, setActivityFilter] = useState<'all' | 'note' | 'interaction' | 'reminder'>('all');
+  const [showActivityDropdown, setShowActivityDropdown] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState<'below' | 'above'>('below');
+  
+  // Editing states
+  const [isEditingNote, setIsEditingNote] = useState(false);
+  const [isEditingFamilyInfo, setIsEditingFamilyInfo] = useState(false);
+  const [editedNote, setEditedNote] = useState('');
+  const [editedFamilyInfo, setEditedFamilyInfo] = useState({ kids: '', siblings: '', spouse: '' });
+  
+  // Edit modal states
+  const [showEditNoteModal, setShowEditNoteModal] = useState(false);
+  const [showEditFamilyInfoModal, setShowEditFamilyInfoModal] = useState(false);
+  
+  // Activity creation modal states
+  const [showAddActivityModal, setShowAddActivityModal] = useState(false);
+  const [activeActivityTab, setActiveActivityTab] = useState<'note' | 'interaction' | 'reminder'>('note');
+  
+  // Animation states for tabs
+  const tabAnimations = useRef({
+    note: new Animated.Value(1),
+    interaction: new Animated.Value(1),
+    reminder: new Animated.Value(1),
+  }).current;
+
+  // Handle tab switching with animation
+  const handleTabSwitch = (tab: 'note' | 'interaction' | 'reminder') => {
+    // Reset all animations
+    Object.values(tabAnimations).forEach(anim => anim.setValue(1));
+    
+    // Animate the selected tab
+    Animated.sequence([
+      Animated.timing(tabAnimations[tab], {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(tabAnimations[tab], {
+        toValue: 1.02,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(tabAnimations[tab], {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    
+    setActiveActivityTab(tab);
+  };
+  
+  // Note activity states
+  const [noteTitle, setNoteTitle] = useState('');
+  const [noteContent, setNoteContent] = useState('');
+  const [noteTags, setNoteTags] = useState<string[]>([]);
+  
+  // Interaction activity states
+  const [interactionType, setInteractionType] = useState<'call' | 'text' | 'email' | 'inPerson'>('call');
+  const [interactionDate, setInteractionDate] = useState(new Date());
+  const [interactionNotes, setInteractionNotes] = useState('');
+  const [interactionDuration, setInteractionDuration] = useState('');
+  const [interactionLocation, setInteractionLocation] = useState('');
+  
+  // Reminder activity states
+  const [activityReminderTitle, setActivityReminderTitle] = useState('');
+  const [activityReminderDate, setActivityReminderDate] = useState(new Date());
+  const [activityReminderType, setActivityReminderType] = useState('follow_up');
+  const [activityReminderFrequency, setActivityReminderFrequency] = useState<'week' | 'month' | '3months' | '6months' | 'never'>('month');
+  
+  // Edit activity states
+  const [editNoteTitle, setEditNoteTitle] = useState('');
+  const [editNoteContent, setEditNoteContent] = useState('');
+  const [editNoteTags, setEditNoteTags] = useState<string[]>([]);
+  const [editInteractionType, setEditInteractionType] = useState<'call' | 'text' | 'email' | 'inPerson'>('call');
+  const [editInteractionDate, setEditInteractionDate] = useState(new Date());
+  const [editInteractionNotes, setEditInteractionNotes] = useState('');
+  const [editInteractionDuration, setEditInteractionDuration] = useState('');
+  const [editInteractionLocation, setEditInteractionLocation] = useState('');
+  const [editReminderTitle, setEditReminderTitle] = useState('');
+  const [editReminderDate, setEditReminderDate] = useState(new Date());
+  const [editReminderType, setEditReminderType] = useState('follow_up');
+  const [editReminderFrequency, setEditReminderFrequency] = useState<'week' | 'month' | '3months' | '6months' | 'never'>('month');
+  const [activityReminderNotes, setActivityReminderNotes] = useState('');
+  
+  // Validation states
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [editValidationErrors, setEditValidationErrors] = useState<Record<string, string>>({});
+  
+  // Date picker states
+  const [showInteractionDatePicker, setShowInteractionDatePicker] = useState(false);
+  const [showInteractionTimePicker, setShowInteractionTimePicker] = useState(false);
+  const [showReminderDatePicker, setShowReminderDatePicker] = useState(false);
+  const [showReminderTimePicker, setShowReminderTimePicker] = useState(false);
+  const [showEditInteractionDatePicker, setShowEditInteractionDatePicker] = useState(false);
+  const [showEditReminderDatePicker, setShowEditReminderDatePicker] = useState(false);
 
   const predefinedTags = ['Client', 'College', 'Family', 'Favorite', 'Friends', 'Prospect'];
   const lastContactOptions = [
@@ -71,6 +219,21 @@ export default function RelationshipsScreen() {
     { key: '6months', label: '6 months ago' },
     { key: 'year', label: 'A year ago' },
     { key: 'custom', label: 'Custom date' },
+  ];
+  const reminderTypes = [
+    { key: 'follow_up', label: 'Follow up' },
+    { key: 'birthday', label: 'Birthday' },
+    { key: 'anniversary', label: 'Anniversary' },
+    { key: 'meeting', label: 'Meeting' },
+    { key: 'call', label: 'Call' },
+    { key: 'other', label: 'Other' },
+  ];
+  
+  const activityFilterOptions = [
+    { key: 'all', label: 'All Activities', icon: '📋' },
+    { key: 'note', label: 'Notes', icon: '📝' },
+    { key: 'interaction', label: 'Interactions', icon: '🤝' },
+    { key: 'reminder', label: 'Reminders', icon: '⏰' },
   ];
 
   const contactMethods = [
@@ -89,51 +252,590 @@ export default function RelationshipsScreen() {
   ];
 
   useEffect(() => {
-    loadData();
+    filterDeviceContacts(contactSearchQuery);
+  }, [contactSearchQuery, deviceContacts]);
+
+  useEffect(() => {
+    checkPermission();
   }, []);
 
   useEffect(() => {
-    filterContacts();
-  }, [contactSearchQuery, contacts]);
+    if (hasPermission) {
+      loadDeviceContacts();
+    }
+  }, [hasPermission]);
 
-  const loadData = async () => {
+  // Debug selectedTags changes
+  useEffect(() => {
+    console.log('🔍 selectedTags changed to:', selectedTags);
+  }, [selectedTags]);
+
+  // Stable function to set tags for editing
+  const setTagsForEditing = useCallback((tags: string[]) => {
+    console.log('🔍 setTagsForEditing called with:', tags);
+    setSelectedTags(tags);
+  }, []);
+
+
+  const checkPermission = async () => {
     try {
-      const [savedRelationships, savedContacts] = await Promise.all([
-        AsyncStorage.getItem('relationships'),
-        AsyncStorage.getItem('imported_contacts')
-      ]);
-      
-      if (savedRelationships) {
-        setRelationships(JSON.parse(savedRelationships));
-      }
-      
-      if (savedContacts) {
-        const parsedContacts = JSON.parse(savedContacts);
-        setContacts(parsedContacts);
-        setFilteredContacts(parsedContacts);
+      const { status } = await Contacts.getPermissionsAsync();
+      setHasPermission(status === 'granted');
+    } catch (error) {
+      console.error('Error checking contacts permission:', error);
+    }
+  };
+
+  const requestPermission = async () => {
+    try {
+      const { status } = await Contacts.requestPermissionsAsync();
+      setHasPermission(status === 'granted');
+      if (status === 'granted') {
+        loadDeviceContacts();
       }
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('Error requesting contacts permission:', error);
+      Alert.alert('Error', 'Failed to request contacts permission');
     }
   };
 
-  const filterContacts = () => {
-    if (contactSearchQuery.trim() === '') {
-      setFilteredContacts(contacts);
-    } else {
-      const filtered = contacts.filter(contact =>
-        contact.name.toLowerCase().includes(contactSearchQuery.toLowerCase())
-      );
-      setFilteredContacts(filtered);
+  const loadDeviceContacts = async () => {
+    if (!hasPermission) return;
+    
+    try {
+      setIsLoadingDeviceContacts(true);
+      const { data } = await Contacts.getContactsAsync({
+        fields: [
+          Contacts.Fields.Name,
+          Contacts.Fields.PhoneNumbers,
+          Contacts.Fields.Emails,
+          Contacts.Fields.Image,
+          Contacts.Fields.Company,
+          Contacts.Fields.JobTitle,
+          Contacts.Fields.Addresses,
+          Contacts.Fields.Birthday,
+          Contacts.Fields.Note,
+        ],
+      });
+      
+      // Filter out contacts without names
+      const validContacts = data.filter(contact => contact.name && contact.name.trim() !== '');
+      setDeviceContacts(validContacts);
+      setFilteredDeviceContacts(validContacts);
+    } catch (error) {
+      console.error('Error loading device contacts:', error);
+      Alert.alert('Error', 'Failed to load device contacts');
+    } finally {
+      setIsLoadingDeviceContacts(false);
     }
   };
+
+  const filterDeviceContacts = (query: string) => {
+    if (!query.trim()) {
+      setFilteredDeviceContacts(deviceContacts);
+      return;
+    }
+    
+    const filtered = deviceContacts.filter(contact =>
+      contact.name?.toLowerCase().includes(query.toLowerCase()) ||
+      contact.phoneNumbers?.some(phone => 
+        phone.number?.includes(query)
+      ) ||
+      contact.emails?.some(email => 
+        email.email?.toLowerCase().includes(query.toLowerCase())
+      )
+    );
+    setFilteredDeviceContacts(filtered);
+  };
+
+  const handleDeviceContactSelect = async (deviceContact: Contacts.Contact) => {
+    if (!currentUser) {
+      Alert.alert('Error', 'Please log in to add relationships');
+      return;
+    }
+
+    try {
+      // Convert device contact to our Contact format
+      const newContact: Contact = {
+        id: `device_${Date.now()}_${deviceContact.name}`,
+        name: deviceContact.name || 'Unknown',
+        phoneNumbers: deviceContact.phoneNumbers?.map(phone => ({
+          number: phone.number || '',
+          label: phone.label || 'mobile'
+        })) || [],
+        emails: deviceContact.emails?.map(email => ({
+          email: email.email || '',
+          label: email.label || 'work'
+        })) || [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      
+      // Check if relationship already exists by name (since device contacts might have different IDs)
+      const existingRelationship = relationships.find(r => 
+        r.contactName.toLowerCase() === newContact.name.toLowerCase()
+      );
+      
+      if (existingRelationship) {
+        Alert.alert(
+          'Relationship Exists',
+          `You already have a relationship with ${newContact.name}. Would you like to edit it?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Edit', onPress: () => editRelationship(existingRelationship) },
+          ]
+        );
+        return;
+      }
+      
+      // Set the selected contact for the relationship form
+      setSelectedContact(newContact);
+      
+      // Populate form fields with contact data
+      setEditContactPhone(deviceContact?.phoneNumbers?.[0]?.number || '');
+      setEditContactEmail(deviceContact?.emails?.[0]?.email || '');
+      setEditContactWebsite(''); // Website not available in Expo Contacts
+      setEditContactLinkedin(''); // LinkedIn not available in Expo Contacts
+      setEditContactTwitter(''); // Twitter not available in Expo Contacts
+      setEditContactInstagram(''); // Instagram not available in Expo Contacts
+      setEditContactFacebook(''); // Facebook not available in Expo Contacts
+      setEditContactCompany(deviceContact?.company || '');
+      setEditContactJobTitle(deviceContact?.jobTitle || '');
+      setEditContactAddress(deviceContact?.addresses?.[0]?.street || '');
+      setEditContactBirthday(deviceContact?.birthday ? 
+        `${deviceContact.birthday.month}/${deviceContact.birthday.day}/${deviceContact.birthday.year}` : '');
+      setEditContactNotes(deviceContact?.note || '');
+      
+      setShowContactList(false);
+      setShowAddModal(true);
+      
+    } catch (error) {
+      console.error('Error selecting contact:', error);
+      Alert.alert('Error', 'Failed to select contact');
+    }
+  };
+
 
   const openAddRelationship = () => {
-    if (contacts.length === 0) {
-      Alert.alert('No Contacts', 'Please allow contact access to add relationships.');
+    if (!hasPermission) {
+      Alert.alert('No Permission', 'Please allow contact access to add relationships.');
+      return;
+    }
+    if (deviceContacts.length === 0) {
+      Alert.alert('No Contacts', 'No device contacts found. Please check your contacts.');
       return;
     }
     setShowContactList(true);
+  };
+
+  const showRelationshipDetails = (relationship: Relationship) => {
+    setSelectedRelationship(relationship);
+    setActivityFilter('all'); // Reset filter when opening relationship details
+    setShowRelationshipDetail(true);
+  };
+
+  const handleFrequencyChange = async (newFrequency: ReminderFrequency) => {
+    if (!selectedRelationship || !currentUser) return;
+
+    try {
+      // Calculate new next reminder date based on the new frequency
+      const lastContactDate = new Date(selectedRelationship.lastContactDate);
+      const nextReminderDate = calculateNextReminderDate(lastContactDate, newFrequency);
+
+      // Update the relationship with new frequency and next reminder date
+      await updateRelationship(selectedRelationship.id, {
+        reminderFrequency: newFrequency,
+        nextReminderDate: nextReminderDate,
+      });
+
+      // Update the selected relationship state
+      setSelectedRelationship(prev => prev ? {
+        ...prev,
+        reminderFrequency: newFrequency,
+        nextReminderDate: nextReminderDate,
+      } : null);
+
+      setShowFrequencyModal(false);
+      Alert.alert('Success', 'Reminder frequency updated successfully!');
+    } catch (error) {
+      console.error('Error updating reminder frequency:', error);
+      Alert.alert('Error', 'Failed to update reminder frequency.');
+    }
+  };
+
+  const handleCall = async () => {
+    if (!selectedRelationship) return;
+    
+    // Find the contact in device contacts to get phone number
+    const deviceContact = deviceContacts.find(contact => 
+      contact.name === selectedRelationship.contactName
+    );
+    
+    if (deviceContact?.phoneNumbers && deviceContact.phoneNumbers.length > 0) {
+      const phoneNumber = deviceContact.phoneNumbers[0].number;
+      const url = `tel:${phoneNumber}`;
+      
+      try {
+        const supported = await Linking.canOpenURL(url);
+        if (supported) {
+          await Linking.openURL(url);
+          setShowContactActions(false);
+        } else {
+          Alert.alert('Error', 'Phone app is not available');
+        }
+      } catch (error) {
+        console.error('Error making call:', error);
+        Alert.alert('Error', 'Failed to make call');
+      }
+    } else {
+      Alert.alert('No Phone Number', 'No phone number available for this contact');
+    }
+  };
+
+  const handleMessage = async () => {
+    if (!selectedRelationship) return;
+    
+    const deviceContact = deviceContacts.find(contact => 
+      contact.name === selectedRelationship.contactName
+    );
+    
+    if (deviceContact?.phoneNumbers && deviceContact.phoneNumbers.length > 0) {
+      const phoneNumber = deviceContact.phoneNumbers[0].number;
+      const url = `sms:${phoneNumber}`;
+      
+      try {
+        const supported = await Linking.canOpenURL(url);
+        if (supported) {
+          await Linking.openURL(url);
+          setShowContactActions(false);
+        } else {
+          Alert.alert('Error', 'SMS app is not available');
+        }
+      } catch (error) {
+        console.error('Error opening SMS:', error);
+        Alert.alert('Error', 'Failed to open SMS');
+      }
+    } else {
+      Alert.alert('No Phone Number', 'No phone number available for this contact');
+    }
+  };
+
+  const handleWhatsApp = async () => {
+    if (!selectedRelationship) return;
+    
+    const deviceContact = deviceContacts.find(contact => 
+      contact.name === selectedRelationship.contactName
+    );
+    
+    if (deviceContact?.phoneNumbers && deviceContact.phoneNumbers.length > 0) {
+      const phoneNumber = deviceContact.phoneNumbers[0]?.number?.replace(/\D/g, '') || ''; // Remove non-digits
+      const url = `whatsapp://send?phone=${phoneNumber}`;
+      
+      try {
+        const supported = await Linking.canOpenURL(url);
+        if (supported) {
+          await Linking.openURL(url);
+          setShowContactActions(false);
+        } else {
+          Alert.alert('Error', 'WhatsApp is not installed');
+        }
+      } catch (error) {
+        console.error('Error opening WhatsApp:', error);
+        Alert.alert('Error', 'Failed to open WhatsApp');
+      }
+    } else {
+      Alert.alert('No Phone Number', 'No phone number available for this contact');
+    }
+  };
+
+  const handleEmail = async () => {
+    if (!selectedRelationship) return;
+    
+    const deviceContact = deviceContacts.find(contact => 
+      contact.name === selectedRelationship.contactName
+    );
+    
+    if (deviceContact?.emails && deviceContact.emails.length > 0) {
+      const email = deviceContact.emails[0].email;
+      const url = `mailto:${email}`;
+      
+      try {
+        const supported = await Linking.canOpenURL(url);
+        if (supported) {
+          await Linking.openURL(url);
+          setShowContactActions(false);
+        } else {
+          Alert.alert('Error', 'Email app is not available');
+        }
+      } catch (error) {
+        console.error('Error opening email:', error);
+        Alert.alert('Error', 'Failed to open email');
+      }
+    } else {
+      Alert.alert('No Email', 'No email address available for this contact');
+    }
+  };
+
+  const handleFindOnX = async () => {
+    if (!selectedRelationship) return;
+    
+    const searchQuery = encodeURIComponent(selectedRelationship.contactName);
+    const url = `https://x.com/search?q=${searchQuery}`;
+    
+    try {
+      await Linking.openURL(url);
+      setShowMoreActions(false);
+    } catch (error) {
+      console.error('Error opening X search:', error);
+      Alert.alert('Error', 'Unable to open X. Please check if you have a browser installed.');
+    }
+  };
+
+  const handleFindOnLinkedIn = async () => {
+    if (!selectedRelationship) return;
+    
+    const searchQuery = encodeURIComponent(selectedRelationship.contactName);
+    const url = `https://www.linkedin.com/search/results/people/?keywords=${searchQuery}`;
+    
+    try {
+      // Try to open the URL directly
+      await Linking.openURL(url);
+      setShowMoreActions(false);
+    } catch (error) {
+      console.error('Error opening LinkedIn search:', error);
+      // If direct opening fails, try with a simpler LinkedIn URL
+      try {
+        const fallbackUrl = `https://www.linkedin.com/search/results/all/?keywords=${searchQuery}`;
+        await Linking.openURL(fallbackUrl);
+        setShowMoreActions(false);
+      } catch (fallbackError) {
+        console.error('Error opening LinkedIn fallback:', fallbackError);
+        Alert.alert('Error', 'Unable to open LinkedIn. Please check if you have a browser installed.');
+      }
+    }
+  };
+
+  const handleFindOnGoogle = async () => {
+    if (!selectedRelationship) return;
+    
+    const searchQuery = encodeURIComponent(selectedRelationship.contactName);
+    const url = `https://www.google.com/search?q=${searchQuery}`;
+    
+    try {
+      await Linking.openURL(url);
+      setShowMoreActions(false);
+    } catch (error) {
+      console.error('Error opening Google search:', error);
+      Alert.alert('Error', 'Unable to open Google. Please check if you have a browser installed.');
+    }
+  };
+
+  const handleFindOnFacebook = async () => {
+    if (!selectedRelationship) return;
+    
+    const searchQuery = encodeURIComponent(selectedRelationship.contactName);
+    const url = `https://www.facebook.com/search/people/?q=${searchQuery}`;
+    
+    try {
+      await Linking.openURL(url);
+      setShowMoreActions(false);
+    } catch (error) {
+      console.error('Error opening Facebook search:', error);
+      Alert.alert('Error', 'Unable to open Facebook. Please check if you have a browser installed.');
+    }
+  };
+
+  const handleEditRelationship = () => {
+    setShowDetailActions(false);
+    setShowRelationshipDetail(false);
+    // Open the relationship form with existing data
+    setSelectedContact({
+      id: selectedRelationship?.contactId || '',
+      name: selectedRelationship?.contactName || '',
+      phoneNumbers: [],
+      emails: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    setShowAddModal(true);
+  };
+
+  const handleShareRelationship = async () => {
+    if (!selectedRelationship) return;
+    
+    const shareText = `Contact: ${selectedRelationship.contactName}\n` +
+      `Last Contact: ${new Date(selectedRelationship.lastContactDate).toLocaleDateString()}\n` +
+      `Last Contact Method: ${selectedRelationship.lastContactMethod}\n` +
+      `Reminder Frequency: ${selectedRelationship.reminderFrequency}\n` +
+      `Next Reminder: ${selectedRelationship.nextReminderDate ? new Date(selectedRelationship.nextReminderDate).toLocaleDateString() : 'No reminder set'}\n` +
+      `Tags: ${selectedRelationship.tags.join(', ') || 'No tags'}\n` +
+      `Notes: ${selectedRelationship.notes || 'No notes'}`;
+    
+    try {
+      // For React Native, we'll use the Share API
+      const { Share } = require('react-native');
+      await Share.share({
+        message: shareText,
+        title: `Contact: ${selectedRelationship.contactName}`,
+      });
+      setShowDetailActions(false);
+    } catch (error) {
+      console.error('Error sharing relationship:', error);
+      Alert.alert('Error', 'Failed to share contact information');
+    }
+  };
+
+
+  const handleDeleteRelationship = async (relationshipId: string, contactName: string) => {
+    if (!currentUser) {
+      Alert.alert('Error', 'Please log in to delete relationships');
+      return;
+    }
+
+    Alert.alert(
+      'Delete Relationship',
+      `Are you sure you want to delete the relationship with ${contactName}? This will also delete all associated reminders, activities, and cancel all notifications.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('🗑️ Starting comprehensive relationship deletion for:', contactName);
+              
+              // Get all reminders for this relationship
+              const relationshipReminders = activities
+                .filter(activity => activity.type === 'reminder' && activity.contactName === contactName)
+                .map(activity => (activity as any).reminderId)
+                .filter(Boolean);
+
+              console.log('🔔 Found reminders to delete:', relationshipReminders);
+
+              // Get all activities for this relationship
+              const relationshipActivities = activities
+                .filter(activity => activity.contactName === contactName);
+
+              console.log('📝 Found activities to delete:', relationshipActivities.length);
+
+              // Delete all reminders and cancel their notifications
+              const reminderNotificationService = ReminderNotificationService.getInstance();
+              for (const reminderId of relationshipReminders) {
+                try {
+                  await reminderNotificationService.deleteReminderWithNotifications(currentUser.uid, reminderId);
+                  console.log('✅ Deleted reminder and cancelled notifications:', reminderId);
+                } catch (error) {
+                  console.error('❌ Error deleting reminder:', reminderId, error);
+                  // Continue with other deletions even if one fails
+                }
+              }
+
+              // Delete all activities
+              for (const activity of relationshipActivities) {
+                try {
+                  await deleteActivity(activity.id);
+                  console.log('✅ Deleted activity:', activity.id);
+                } catch (error) {
+                  console.error('❌ Error deleting activity:', activity.id, error);
+                  // Continue with other deletions even if one fails
+                }
+              }
+
+              // Finally, delete the relationship
+              await deleteRelationship(relationshipId);
+              console.log('✅ Deleted relationship:', relationshipId);
+
+              // Close any open modals
+              setShowDetailActions(false);
+              setShowRelationshipDetail(false);
+              setSelectedRelationship(null);
+
+              Alert.alert('Success', `Relationship with ${contactName} and all associated data has been deleted successfully.`);
+            } catch (error) {
+              console.error('❌ Error deleting relationship:', error);
+              Alert.alert('Error', 'Failed to delete relationship. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleAddReminder = () => {
+    setShowDetailActions(false);
+    setShowAddReminderModal(true);
+    // Reset form with default values - set date to tomorrow and time to 9 AM
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(9, 0, 0, 0);
+    
+    setReminderNote('');
+    setReminderDate(tomorrow);
+    setReminderTime(tomorrow);
+  };
+
+  const handleCreateReminder = async () => {
+    if (!selectedRelationship || !currentUser) return;
+    
+    
+    // Validation: Check if note is not empty
+    if (!reminderNote || reminderNote.trim() === '') {
+      Alert.alert('Validation Error', 'Please enter a note for the reminder.');
+      return;
+    }
+    
+    // Validation: Check if reminder date/time is in the future
+    const combinedDateTime = new Date(reminderDate);
+    combinedDateTime.setHours(reminderTime.getHours());
+    combinedDateTime.setMinutes(reminderTime.getMinutes());
+    
+    const now = new Date();
+    if (combinedDateTime <= now) {
+      Alert.alert('Validation Error', 'Please select a future date and time for the reminder.');
+      return;
+    }
+    
+    try {
+      console.log('🔔 Creating reminder with data:', {
+        contactName: selectedRelationship.contactName,
+        type: 'follow_up',
+        date: combinedDateTime.toISOString(),
+        frequency: selectedRelationship.reminderFrequency,
+        tags: selectedRelationship.tags,
+        notes: reminderNote.trim(),
+      });
+      
+      // Create a new reminder for this relationship
+      const newReminder = await createReminder({
+        contactName: selectedRelationship.contactName,
+        type: 'follow_up',
+        date: combinedDateTime.toISOString(),
+        frequency: selectedRelationship.reminderFrequency,
+        tags: selectedRelationship.tags,
+        notes: reminderNote.trim(),
+      });
+      
+      console.log('✅ Reminder created successfully:', newReminder);
+      setShowAddReminderModal(false);
+      Alert.alert('Success', 'Reminder added successfully!');
+    } catch (error) {
+      console.error('❌ Error adding reminder:', error);
+      Alert.alert('Error', `Failed to add reminder: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setReminderDate(selectedDate);
+    }
+  };
+
+  const onTimeChange = (event: any, selectedTime?: Date) => {
+    setShowTimePicker(Platform.OS === 'ios');
+    if (selectedTime) {
+      setReminderTime(selectedTime);
+    }
   };
 
   const selectContact = (contact: Contact) => {
@@ -157,13 +859,68 @@ export default function RelationshipsScreen() {
   };
 
   const editRelationship = (relationship: Relationship) => {
-    setSelectedContact({ id: relationship.contactId, name: relationship.contactName });
+    console.log('🔍 editRelationship called with:', relationship);
+    console.log('🔍 relationship.tags:', relationship.tags);
+    console.log('🔍 relationship.tags type:', typeof relationship.tags);
+    console.log('🔍 relationship.tags length:', relationship.tags?.length);
+    console.log('🔍 predefinedTags:', predefinedTags);
+    
+    // Check each tag individually
+    relationship.tags?.forEach((tag, index) => {
+      console.log(`🔍 Tag ${index}: "${tag}" (type: ${typeof tag})`);
+      console.log(`🔍 Is "${tag}" in predefinedTags?`, predefinedTags.includes(tag));
+    });
+    
+    // Filter tags first
+    const filteredTags = relationship.tags?.filter(tag => predefinedTags.includes(tag)) || [];
+    console.log('🔍 filteredTags:', filteredTags);
+    console.log('🔍 filteredTags length:', filteredTags.length);
+    
+    // Find the device contact to populate contact fields
+    const deviceContact = deviceContacts.find(contact => 
+      contact.name === relationship.contactName
+    );
+    
+    // Set all form data including tags
+    setSelectedContact({ 
+      id: relationship.contactId, 
+      name: relationship.contactName,
+      phoneNumbers: deviceContact?.phoneNumbers?.map(p => ({ number: p.number || '', label: p.label })) || [],
+      emails: deviceContact?.emails?.map(e => ({ email: e.email || '', label: e.label })) || [],
+      website: '', // Website not available in Expo Contacts
+      linkedin: '', // LinkedIn not available in Expo Contacts
+      twitter: '', // Twitter not available in Expo Contacts
+      instagram: '', // Instagram not available in Expo Contacts
+      facebook: '', // Facebook not available in Expo Contacts
+      company: deviceContact?.company || '',
+      jobTitle: deviceContact?.jobTitle || '',
+      address: deviceContact?.addresses?.[0]?.street || '',
+      birthday: deviceContact?.birthday ? 
+        `${deviceContact.birthday.month}/${deviceContact.birthday.day}/${deviceContact.birthday.year}` : '',
+      notes: deviceContact?.note || '',
+    });
+    
+    // Set contact edit fields from device contact
+    setEditContactPhone(deviceContact?.phoneNumbers?.[0]?.number || '');
+    setEditContactEmail(deviceContact?.emails?.[0]?.email || '');
+    setEditContactWebsite(''); // Website not available in Expo Contacts
+    setEditContactLinkedin(''); // LinkedIn not available in Expo Contacts
+    setEditContactTwitter(''); // Twitter not available in Expo Contacts
+    setEditContactInstagram(''); // Instagram not available in Expo Contacts
+    setEditContactFacebook(''); // Facebook not available in Expo Contacts
+    setEditContactCompany(deviceContact?.company || '');
+    setEditContactJobTitle(deviceContact?.jobTitle || '');
+    setEditContactAddress(deviceContact?.addresses?.[0]?.street || '');
+    setEditContactBirthday(deviceContact?.birthday ? 
+      `${deviceContact.birthday.month}/${deviceContact.birthday.day}/${deviceContact.birthday.year}` : '');
+    setEditContactNotes(deviceContact?.note || '');
+    
     setLastContactOption(getLastContactOptionFromDate(relationship.lastContactDate));
     setContactMethod(relationship.lastContactMethod as ContactMethod);
     setReminderFrequency(relationship.reminderFrequency as ReminderFrequency);
-    setSelectedTags(relationship.tags);
     setNotes(relationship.notes);
     setFamilyInfo(relationship.familyInfo);
+    setTagsForEditing(filteredTags); // Set tags using stable function
     setShowContactList(false);
     setShowAddModal(true);
   };
@@ -231,6 +988,11 @@ export default function RelationshipsScreen() {
   };
 
   const saveRelationship = async () => {
+    if (!currentUser) {
+      Alert.alert('Authentication Error', 'Please log in to save relationships.');
+      return;
+    }
+    
     if (!selectedContact) return;
     
     if (selectedTags.length === 0) {
@@ -242,14 +1004,38 @@ export default function RelationshipsScreen() {
       Alert.alert('Missing Date', 'Please select a custom date.');
       return;
     }
+
+    if (isSaving) return; // Prevent multiple submissions
+    
+    setIsSaving(true);
     
     const lastDate = getLastContactDate(lastContactOption);
     const nextReminderDate = calculateNextReminderDate(lastDate, reminderFrequency);
     
-    const relationshipData: Relationship = {
-      id: Date.now().toString(),
-      contactId: selectedContact.id,
-      contactName: selectedContact.name,
+    // Update selectedContact with form data
+    const updatedContact = {
+      ...selectedContact,
+      phoneNumbers: editContactPhone.trim() ? [{ number: editContactPhone.trim(), label: 'mobile' }] : selectedContact.phoneNumbers || [],
+      emails: editContactEmail.trim() ? [{ email: editContactEmail.trim(), label: 'work' }] : selectedContact.emails || [],
+      website: editContactWebsite.trim() || selectedContact.website,
+      linkedin: editContactLinkedin.trim() || selectedContact.linkedin,
+      twitter: editContactTwitter.trim() || selectedContact.twitter,
+      instagram: editContactInstagram.trim() || selectedContact.instagram,
+      facebook: editContactFacebook.trim() || selectedContact.facebook,
+      company: editContactCompany.trim() || selectedContact.company,
+      jobTitle: editContactJobTitle.trim() || selectedContact.jobTitle,
+      address: editContactAddress.trim() || selectedContact.address,
+      birthday: editContactBirthday.trim() || selectedContact.birthday,
+      notes: editContactNotes.trim() || selectedContact.notes,
+      updatedAt: new Date().toISOString(),
+    };
+    
+    // Update the selectedContact state
+    setSelectedContact(updatedContact);
+
+    const relationshipData = {
+      contactId: updatedContact.id,
+      contactName: updatedContact.name,
       lastContactDate: lastDate.toISOString(),
       lastContactMethod: contactMethod,
       reminderFrequency,
@@ -259,52 +1045,283 @@ export default function RelationshipsScreen() {
       familyInfo,
     };
 
-    // Check if editing existing relationship
-    const existingIndex = relationships.findIndex(r => r.contactId === selectedContact.id);
-    let updatedRelationships;
-    
-    if (existingIndex >= 0) {
-      updatedRelationships = [...relationships];
-      updatedRelationships[existingIndex] = { ...relationshipData, id: relationships[existingIndex].id };
-    } else {
-      updatedRelationships = [...relationships, relationshipData];
-    }
-    
-    setRelationships(updatedRelationships);
-    
     try {
-      await AsyncStorage.setItem('relationships', JSON.stringify(updatedRelationships));
+      // Check if editing existing relationship by both contactId and contactName
+      const existingRelationship = relationships.find(r => 
+        r.contactId === updatedContact.id || 
+        r.contactName.toLowerCase() === updatedContact.name.toLowerCase()
+      );
       
-      // Save reminder if frequency is not 'never'
-      if (reminderFrequency !== 'never') {
-        const reminders = await AsyncStorage.getItem('reminders') || '[]';
-        const parsedReminders = JSON.parse(reminders);
+      if (existingRelationship) {
+        // Update existing relationship
+        await updateRelationship(existingRelationship.id, relationshipData);
         
-        // Remove existing reminder for this contact
-        const filteredReminders = parsedReminders.filter((r: any) => 
-          !r.contactName || r.contactName !== selectedContact.name
+        // Update device contact if it exists
+        const deviceContact = deviceContacts.find(contact => 
+          contact.name === updatedContact.name
         );
         
-        const newReminder = {
-          id: Date.now().toString() + '_reminder',
-          contactName: selectedContact.name,
+        if (deviceContact && hasPermission && (editContactPhone.trim() || editContactEmail.trim() || editContactCompany.trim())) {
+          // Parse the name into givenName and familyName
+          const fullName = updatedContact.name.trim();
+          const nameParts = fullName.split(' ');
+          const givenName = nameParts[0] || '';
+          const familyName = nameParts.slice(1).join(' ') || '';
+
+          const contactUpdateData: any = {
+            id: (deviceContact as any).id,
+            [Contacts.Fields.FirstName]: givenName,
+            [Contacts.Fields.LastName]: familyName,
+            [Contacts.Fields.Name]: fullName,
+          };
+
+          // Add phone number if provided
+          if (editContactPhone.trim()) {
+            contactUpdateData[Contacts.Fields.PhoneNumbers] = [{ 
+              number: editContactPhone.trim(), 
+              label: 'mobile',
+              isPrimary: false
+            }];
+          }
+
+          // Add email if provided
+          if (editContactEmail.trim()) {
+            contactUpdateData[Contacts.Fields.Emails] = [{ 
+              email: editContactEmail.trim(), 
+              label: 'work',
+              isPrimary: false
+            }];
+          }
+
+          // Add company and job title
+          if (editContactCompany.trim() || editContactJobTitle.trim()) {
+            contactUpdateData[Contacts.Fields.Company] = editContactCompany.trim() || '';
+            contactUpdateData[Contacts.Fields.JobTitle] = editContactJobTitle.trim() || '';
+          }
+
+          // Add address if provided
+          if (editContactAddress.trim()) {
+            contactUpdateData[Contacts.Fields.Addresses] = [{ 
+              street: editContactAddress.trim(),
+              city: '',
+              state: '',
+              postalCode: '',
+              country: '',
+              label: 'home',
+              isPrimary: false
+            }];
+          }
+
+          // Add birthday if provided
+          if (editContactBirthday.trim()) {
+            contactUpdateData[Contacts.Fields.Birthday] = { 
+              day: 1, 
+              month: 1, 
+              year: new Date().getFullYear()
+            };
+          }
+
+          // Add notes if provided
+          if (editContactNotes.trim()) {
+            contactUpdateData[Contacts.Fields.Note] = editContactNotes.trim();
+          }
+
+          // Update the device contact
+          try {
+            const updateSuccess = await updateDeviceContact(deviceContact, contactUpdateData);
+            if (updateSuccess) {
+              console.log('✅ Device contact updated successfully');
+            } else {
+              console.log('⚠️ Device contact update failed, but continuing with relationship save');
+            }
+          } catch (updateError) {
+            console.error('❌ Failed to update device contact:', updateError);
+            console.log('⚠️ Continuing with relationship save despite contact update failure');
+          }
+        }
+      } else {
+        // Create new relationship
+        await createRelationship(relationshipData);
+        
+        // COMMENTED OUT: Device contact creation/update for new relationships
+        // This prevents automatic creation or updating of device contacts when creating relationships
+        /*
+        // Create or update device contact with form data if permission is granted
+        if (hasPermission && (editContactPhone.trim() || editContactEmail.trim() || editContactCompany.trim())) {
+          // Check if device contact already exists
+          const existingDeviceContact = deviceContacts.find(contact => 
+            contact.name === updatedContact.name
+          );
+          
+          if (existingDeviceContact) {
+            // Update existing device contact
+            const contactUpdateData: any = {
+              id: (existingDeviceContact as any).id,
+              [Contacts.Fields.FirstName]: updatedContact.name.split(' ')[0] || '',
+              [Contacts.Fields.LastName]: updatedContact.name.split(' ').slice(1).join(' ') || '',
+              [Contacts.Fields.Name]: updatedContact.name,
+            };
+
+            // Add phone number if provided
+            if (editContactPhone.trim()) {
+              contactUpdateData[Contacts.Fields.PhoneNumbers] = [{ 
+                number: editContactPhone.trim(), 
+                label: 'mobile',
+                isPrimary: false
+              }];
+            }
+
+            // Add email if provided
+            if (editContactEmail.trim()) {
+              contactUpdateData[Contacts.Fields.Emails] = [{ 
+                email: editContactEmail.trim(), 
+                label: 'work',
+                isPrimary: false
+              }];
+            }
+
+            // Add company and job title
+            if (editContactCompany.trim() || editContactJobTitle.trim()) {
+              contactUpdateData[Contacts.Fields.Company] = editContactCompany.trim() || '';
+              contactUpdateData[Contacts.Fields.JobTitle] = editContactJobTitle.trim() || '';
+            }
+
+            // Add address if provided
+            if (editContactAddress.trim()) {
+              contactUpdateData[Contacts.Fields.Addresses] = [{ 
+                street: editContactAddress.trim(),
+                city: '',
+                state: '',
+                postalCode: '',
+                country: '',
+                label: 'home',
+                isPrimary: false
+              }];
+            }
+
+            // Add birthday if provided
+            if (editContactBirthday.trim()) {
+              contactUpdateData[Contacts.Fields.Birthday] = { 
+                day: 1, 
+                month: 1, 
+                year: new Date().getFullYear()
+              };
+            }
+
+            // Add notes if provided
+            if (editContactNotes.trim()) {
+              contactUpdateData[Contacts.Fields.Note] = editContactNotes.trim();
+            }
+
+            // Update the device contact
+            try {
+              const updateSuccess = await updateDeviceContact(existingDeviceContact, contactUpdateData);
+              if (updateSuccess) {
+                console.log('✅ Device contact updated successfully');
+              } else {
+                console.log('⚠️ Device contact update failed, but continuing with relationship save');
+              }
+            } catch (updateError) {
+              console.error('❌ Failed to update device contact:', updateError);
+              console.log('⚠️ Continuing with relationship save despite contact update failure');
+            }
+          } else {
+            // Create new device contact
+            const fullName = updatedContact.name.trim();
+            const nameParts = fullName.split(' ');
+            const givenName = nameParts[0] || '';
+            const familyName = nameParts.slice(1).join(' ') || '';
+
+            const contactData: any = {
+              [Contacts.Fields.FirstName]: givenName,
+              [Contacts.Fields.LastName]: familyName,
+              [Contacts.Fields.Name]: fullName,
+            };
+
+            // Add phone number if provided
+            if (editContactPhone.trim()) {
+              contactData[Contacts.Fields.PhoneNumbers] = [{ 
+                number: editContactPhone.trim(), 
+                label: 'mobile',
+                isPrimary: false
+              }];
+            }
+
+            // Add email if provided
+            if (editContactEmail.trim()) {
+              contactData[Contacts.Fields.Emails] = [{ 
+                email: editContactEmail.trim(), 
+                label: 'work',
+                isPrimary: false
+              }];
+            }
+
+            // Add company and job title
+            if (editContactCompany.trim() || editContactJobTitle.trim()) {
+              contactData[Contacts.Fields.Company] = editContactCompany.trim() || '';
+              contactData[Contacts.Fields.JobTitle] = editContactJobTitle.trim() || '';
+            }
+
+            // Add address if provided
+            if (editContactAddress.trim()) {
+              contactData[Contacts.Fields.Addresses] = [{ 
+                street: editContactAddress.trim(),
+                city: '',
+                state: '',
+                postalCode: '',
+                country: '',
+                label: 'home',
+                isPrimary: false
+              }];
+            }
+
+            // Add birthday if provided
+            if (editContactBirthday.trim()) {
+              contactData[Contacts.Fields.Birthday] = { 
+                day: 1, 
+                month: 1, 
+                year: new Date().getFullYear()
+              };
+            }
+
+            // Add notes if provided
+            if (editContactNotes.trim()) {
+              contactData[Contacts.Fields.Note] = editContactNotes.trim();
+            }
+
+            try {
+              console.log('📱 Creating device contact with data:', contactData);
+              const contactId = await Contacts.addContactAsync(contactData);
+              console.log('✅ Contact added to device contacts with ID:', contactId);
+            } catch (contactError) {
+              console.error('❌ Error adding contact to device:', contactError);
+              console.error('❌ Contact data that failed:', contactData);
+            }
+          }
+        }
+        */
+      }
+      
+      // Create reminder if frequency is not 'never'
+      if (reminderFrequency !== 'never') {
+        await createReminder({
+          contactName: updatedContact.name,
           type: 'Follow-up',
           date: nextReminderDate,
           frequency: reminderFrequency,
           tags: selectedTags,
-          isOverdue: false,
-          isThisWeek: false,
-        };
-        
-        filteredReminders.push(newReminder);
-        await AsyncStorage.setItem('reminders', JSON.stringify(filteredReminders));
+          notes: `Follow-up reminder for ${updatedContact.name}`,
+        });
       }
       
       resetForm();
       setShowAddModal(false);
       Alert.alert('Success', 'Relationship saved successfully!');
     } catch (error) {
+      console.error('Error saving relationship:', error);
       Alert.alert('Error', 'Failed to save relationship.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -317,7 +1334,20 @@ export default function RelationshipsScreen() {
     setNotes('');
     setFamilyInfo({ kids: '', siblings: '', spouse: '' });
     setCustomDate('');
-    setNewTag('');
+    
+    // Reset contact edit fields
+    setEditContactPhone('');
+    setEditContactEmail('');
+    setEditContactWebsite('');
+    setEditContactLinkedin('');
+    setEditContactTwitter('');
+    setEditContactInstagram('');
+    setEditContactFacebook('');
+    setEditContactCompany('');
+    setEditContactJobTitle('');
+    setEditContactAddress('');
+    setEditContactBirthday('');
+    setEditContactNotes('');
   };
 
   const toggleTag = (tag: string) => {
@@ -328,30 +1358,799 @@ export default function RelationshipsScreen() {
     );
   };
 
-  const addNewTag = () => {
-    if (newTag.trim() && !selectedTags.includes(newTag.trim())) {
-      setSelectedTags(prev => [...prev, newTag.trim()]);
-      setNewTag('');
+
+
+  const createNewContactAndRelationship = async () => {
+    if (!newContactName.trim()) {
+      Alert.alert('Error', 'Please enter a contact name.');
+      return;
+    }
+
+    // Check and request permission if needed
+    if (!hasPermission) {
+      const { status } = await Contacts.requestPermissionsAsync();
+      setHasPermission(status === 'granted');
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Contact access is needed to add contacts to your device. You can still create the relationship without device contact access.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Continue Anyway', onPress: () => proceedWithContactCreation() }
+          ]
+        );
+        return;
+      }
+    }
+
+    await proceedWithContactCreation();
+  };
+
+  const updateDeviceContact = async (contact: Contacts.Contact, contactData: any) => {
+    if (!hasPermission) {
+      console.log('⚠️ No permission to update device contact');
+      return false;
+    }
+
+    try {
+      console.log('📱 Updating device contact:', contact.name);
+      console.log('📱 Contact data:', contactData);
+      
+      // Create update object with proper Expo Contacts structure
+      const updatedContact: any = {
+        id: (contact as any).id,
+        contactType: contact.contactType || 'person',
+      };
+
+      // Add name fields
+      if (contactData[Contacts.Fields.Name]) {
+        updatedContact.name = contactData[Contacts.Fields.Name];
+      }
+      if (contactData[Contacts.Fields.FirstName]) {
+        updatedContact.firstName = contactData[Contacts.Fields.FirstName];
+      }
+      if (contactData[Contacts.Fields.LastName]) {
+        updatedContact.lastName = contactData[Contacts.Fields.LastName];
+      }
+
+      // Add phone numbers with proper structure
+      if (contactData[Contacts.Fields.PhoneNumbers] && contactData[Contacts.Fields.PhoneNumbers].length > 0) {
+        updatedContact.phoneNumbers = contactData[Contacts.Fields.PhoneNumbers].map((phone: any) => ({
+          number: phone.number,
+          label: phone.label || 'mobile',
+          isPrimary: false, // Don't set isPrimary to avoid conflicts
+        }));
+      }
+
+      // Add emails with proper structure
+      if (contactData[Contacts.Fields.Emails] && contactData[Contacts.Fields.Emails].length > 0) {
+        updatedContact.emails = contactData[Contacts.Fields.Emails].map((email: any) => ({
+          email: email.email,
+          label: email.label || 'work',
+          isPrimary: false, // Don't set isPrimary to avoid conflicts
+        }));
+      }
+
+      // Add company and job title
+      if (contactData[Contacts.Fields.Company]) {
+        updatedContact.company = contactData[Contacts.Fields.Company];
+      }
+      if (contactData[Contacts.Fields.JobTitle]) {
+        updatedContact.jobTitle = contactData[Contacts.Fields.JobTitle];
+      }
+
+      // Add addresses with proper structure
+      if (contactData[Contacts.Fields.Addresses] && contactData[Contacts.Fields.Addresses].length > 0) {
+        updatedContact.addresses = contactData[Contacts.Fields.Addresses].map((address: any) => ({
+          street: address.street,
+          city: address.city || '',
+          state: address.state || '',
+          postalCode: address.postalCode || '',
+          country: address.country || '',
+          label: address.label || 'home',
+          isPrimary: false, // Don't set isPrimary to avoid conflicts
+        }));
+      }
+
+      // Add note
+      if (contactData[Contacts.Fields.Note]) {
+        updatedContact.note = contactData[Contacts.Fields.Note];
+      }
+      
+      console.log('📱 Final update object:', updatedContact);
+      await Contacts.updateContactAsync(updatedContact);
+      console.log('✅ Device contact updated successfully');
+      return true;
+    } catch (error) {
+      console.error('❌ Error updating device contact:', error);
+      console.error('❌ Contact data that failed:', contactData);
+      return false;
     }
   };
 
-  const deleteRelationship = async (relationshipId: string) => {
+  const proceedWithContactCreation = async () => {
+
+    // Check if relationship already exists by name
+    const existingRelationship = relationships.find(r => 
+      r.contactName.toLowerCase() === newContactName.trim().toLowerCase()
+    );
+    
+    if (existingRelationship) {
+      Alert.alert(
+        'Relationship Exists',
+        `You already have a relationship with ${newContactName.trim()}. Would you like to edit it?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Edit', onPress: () => editRelationship(existingRelationship) },
+        ]
+      );
+      return;
+    }
+
+    try {
+      // Create contact in device contacts if permission is granted
+      if (hasPermission) {
+        // Parse the name into givenName and familyName
+        const fullName = newContactName.trim();
+        const nameParts = fullName.split(' ');
+        const givenName = nameParts[0] || '';
+        const familyName = nameParts.slice(1).join(' ') || '';
+
+        const contactData: any = {
+          [Contacts.Fields.FirstName]: givenName,
+          [Contacts.Fields.LastName]: familyName,
+          [Contacts.Fields.Name]: fullName,
+        };
+
+        // Add phone number if provided
+        if (newContactPhone.trim()) {
+          contactData[Contacts.Fields.PhoneNumbers] = [{ 
+            number: newContactPhone.trim(), 
+            label: 'mobile',
+            isPrimary: true
+          }];
+        }
+
+        // Add email if provided
+        if (newContactEmail.trim()) {
+          contactData[Contacts.Fields.Emails] = [{ 
+            email: newContactEmail.trim(), 
+            label: 'work',
+            isPrimary: true
+          }];
+        }
+
+        // Add company and job title as organization info
+        if (newContactCompany.trim() || newContactJobTitle.trim()) {
+          contactData[Contacts.Fields.Company] = newContactCompany.trim() || '';
+          contactData[Contacts.Fields.JobTitle] = newContactJobTitle.trim() || '';
+        }
+
+        // Add address if provided
+        if (newContactAddress.trim()) {
+          contactData[Contacts.Fields.Addresses] = [{ 
+            street: newContactAddress.trim(), 
+            label: 'home',
+            isPrimary: true
+          }];
+        }
+
+        // Add birthday if provided
+        if (newContactBirthday.trim()) {
+          contactData[Contacts.Fields.Birthday] = { 
+            day: 1, 
+            month: 1, 
+            year: new Date().getFullYear() // Default year, user can edit later
+          };
+        }
+
+        // Add notes if provided
+        if (newContactNotes.trim()) {
+          contactData[Contacts.Fields.Note] = newContactNotes.trim();
+        }
+
+        try {
+          console.log('📱 Creating device contact with data:', contactData);
+          const contactId = await Contacts.addContactAsync(contactData);
+          console.log('✅ Contact added to device contacts with ID:', contactId);
+        } catch (contactError) {
+          console.error('❌ Error adding contact to device:', contactError);
+          console.error('❌ Contact data that failed:', contactData);
+          // Continue with relationship creation even if device contact fails
+        }
+      } else {
+        console.log('⚠️ No permission to add contact to device');
+      }
+
+      // Create a contact object for the relationship
+      const newContact = {
+        id: `new_${Date.now()}`, // Generate a temporary ID
+        name: newContactName.trim(),
+        phoneNumbers: newContactPhone.trim() ? [{ number: newContactPhone.trim(), label: 'mobile' }] : [],
+        emails: newContactEmail.trim() ? [{ email: newContactEmail.trim(), label: 'work' }] : [],
+        website: newContactWebsite.trim() || undefined,
+        linkedin: newContactLinkedin.trim() || undefined,
+        twitter: newContactTwitter.trim() || undefined,
+        instagram: newContactInstagram.trim() || undefined,
+        facebook: newContactFacebook.trim() || undefined,
+        company: newContactCompany.trim() || undefined,
+        jobTitle: newContactJobTitle.trim() || undefined,
+        address: newContactAddress.trim() || undefined,
+        birthday: newContactBirthday.trim() || undefined,
+        notes: newContactNotes.trim() || undefined,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Set the new contact as selected and open the relationship form
+      setSelectedContact(newContact);
+      
+      // Populate form fields with the new contact data
+      setEditContactPhone(newContactPhone.trim());
+      setEditContactEmail(newContactEmail.trim());
+      setEditContactWebsite(newContactWebsite.trim());
+      setEditContactLinkedin(newContactLinkedin.trim());
+      setEditContactTwitter(newContactTwitter.trim());
+      setEditContactInstagram(newContactInstagram.trim());
+      setEditContactFacebook(newContactFacebook.trim());
+      setEditContactCompany(newContactCompany.trim());
+      setEditContactJobTitle(newContactJobTitle.trim());
+      setEditContactAddress(newContactAddress.trim());
+      setEditContactBirthday(newContactBirthday.trim());
+      setEditContactNotes(newContactNotes.trim());
+      
+      setShowNewContactModal(false);
+      setShowAddModal(true);
+
+      // Reset the new contact form
+      setNewContactName('');
+      setNewContactPhone('');
+      setNewContactEmail('');
+      setNewContactWebsite('');
+      setNewContactLinkedin('');
+      setNewContactTwitter('');
+      setNewContactInstagram('');
+      setNewContactFacebook('');
+      setNewContactCompany('');
+      setNewContactJobTitle('');
+      setNewContactAddress('');
+      setNewContactBirthday('');
+      setNewContactNotes('');
+
+      const successMessage = hasPermission 
+        ? 'Contact created and added to device contacts!'
+        : 'Contact created! (Device contact access not granted)';
+      Alert.alert('Success', successMessage);
+    } catch (error) {
+      console.error('Error creating contact:', error);
+      Alert.alert('Error', 'Failed to create contact. Please try again.');
+    }
+  };
+
+  // Get activities for the selected relationship
+  const getContactActivities = () => {
+    if (!selectedRelationship) return [];
+    
+    // Filter activities that are related to this contact
+    const contactActivities = activities.filter(activity => {
+      if (activity.type === 'interaction' || activity.type === 'reminder') {
+        return (activity as any).contactName === selectedRelationship.contactName;
+      }
+      // For notes, check if they have the same contactId or contactName
+      if (activity.type === 'note') {
+        const noteActivity = activity as any;
+        // Check if note has contact information and matches
+        if (noteActivity.contactId || noteActivity.contactName) {
+          return noteActivity.contactId === selectedRelationship.contactId || 
+                 noteActivity.contactName === selectedRelationship.contactName;
+        }
+        // For notes without contact info, we'll show them for now (backward compatibility)
+        // In the future, you might want to filter these out or handle them differently
+        return false;
+      }
+      return false;
+    });
+
+    // Debug logging (can be removed after testing)
+    if (__DEV__) {
+      console.log('Debug - Total activities:', activities.length);
+      console.log('Debug - All activities:', activities.map(a => ({ 
+        type: a.type, 
+        contactName: (a as any).contactName, 
+        contactId: (a as any).contactId,
+        id: a.id 
+      })));
+      console.log('Debug - Selected relationship:', { 
+        contactName: selectedRelationship.contactName, 
+        contactId: selectedRelationship.contactId 
+      });
+      console.log('Debug - Contact activities before filter:', contactActivities.length);
+      console.log('Debug - Contact activities details:', contactActivities.map(a => ({ 
+        type: a.type, 
+        contactName: (a as any).contactName, 
+        contactId: (a as any).contactId,
+        id: a.id 
+      })));
+      console.log('Debug - Activity filter:', activityFilter);
+      console.log('Debug - Contact activities types:', contactActivities.map(a => a.type));
+    }
+
+    // Apply type filter
+    if (activityFilter === 'all') {
+      if (__DEV__) {
+        console.log('Debug - Returning all contact activities:', contactActivities.length);
+      }
+      return contactActivities;
+    }
+    
+    const filteredActivities = contactActivities.filter(activity => {
+      const matches = activity.type === activityFilter;
+      if (__DEV__) {
+        console.log(`Debug - Activity type: "${activity.type}", Filter: "${activityFilter}", Matches: ${matches}`);
+      }
+      return matches;
+    });
+    
+    if (__DEV__) {
+      console.log('Debug - Filtered activities:', filteredActivities.length);
+    }
+    return filteredActivities;
+  };
+
+  // Handle editing functions
+  const openEditNoteModal = () => {
+    setEditedNote(selectedRelationship?.notes || '');
+    setShowEditNoteModal(true);
+  };
+
+  const closeEditNoteModal = () => {
+    setEditedNote('');
+    setShowEditNoteModal(false);
+  };
+
+  const saveNote = async () => {
+    if (!selectedRelationship || !currentUser) return;
+    
+    try {
+      await updateRelationship(selectedRelationship.id, { notes: editedNote });
+      setShowEditNoteModal(false);
+      setEditedNote('');
+    } catch (error) {
+      console.error('Error updating note:', error);
+      Alert.alert('Error', 'Failed to update note. Please try again.');
+    }
+  };
+
+  const openEditFamilyInfoModal = () => {
+    setEditedFamilyInfo(selectedRelationship?.familyInfo || { kids: '', siblings: '', spouse: '' });
+    setShowEditFamilyInfoModal(true);
+  };
+
+  const closeEditFamilyInfoModal = () => {
+    setEditedFamilyInfo({ kids: '', siblings: '', spouse: '' });
+    setShowEditFamilyInfoModal(false);
+  };
+
+  const saveFamilyInfo = async () => {
+    if (!selectedRelationship || !currentUser) return;
+    
+    try {
+      await updateRelationship(selectedRelationship.id, { familyInfo: editedFamilyInfo });
+      setShowEditFamilyInfoModal(false);
+      setEditedFamilyInfo({ kids: '', siblings: '', spouse: '' });
+    } catch (error) {
+      console.error('Error updating family info:', error);
+      Alert.alert('Error', 'Failed to update family info. Please try again.');
+    }
+  };
+
+  // Activity creation functions
+  const openAddActivityModal = () => {
+    setShowAddActivityModal(true);
+    setActiveActivityTab('note');
+    resetActivityForm();
+  };
+
+  // Date picker openers (matching reminders.tsx approach)
+  const openInteractionDatePicker = () => {
+    setShowInteractionDatePicker(true);
+  };
+
+  const openInteractionTimePicker = () => {
+    setShowInteractionTimePicker(true);
+  };
+
+  const openReminderDatePicker = () => {
+    setShowReminderDatePicker(true);
+  };
+
+  const openReminderTimePicker = () => {
+    setShowReminderTimePicker(true);
+  };
+
+  const closeAddActivityModal = () => {
+    setShowAddActivityModal(false);
+    resetActivityForm();
+  };
+
+  const openEditActivityModal = (activity: any) => {
+    setSelectedActivity(activity);
+    
+    // Populate edit form based on activity type
+    if (activity.type === 'note') {
+      setEditNoteTitle(activity.title || '');
+      setEditNoteContent(activity.content || '');
+      setEditNoteTags(activity.tags || []);
+    } else if (activity.type === 'interaction') {
+      setEditInteractionType(activity.interactionType || 'call');
+      setEditInteractionDate(new Date(activity.date || activity.createdAt.seconds * 1000));
+      setEditInteractionNotes(activity.description || '');
+      setEditInteractionDuration(activity.duration?.toString() || '');
+      setEditInteractionLocation(activity.location || '');
+    } else if (activity.type === 'reminder') {
+      setEditReminderTitle(activity.title || '');
+      setEditReminderDate(new Date(activity.reminderDate || activity.createdAt.seconds * 1000));
+      setEditReminderType(activity.reminderType || 'follow_up');
+      setEditReminderFrequency(activity.reminderFrequency || 'month');
+    }
+    
+    setShowEditActivityModal(true);
+  };
+
+  const closeEditActivityModal = () => {
+    setShowEditActivityModal(false);
+    setSelectedActivity(null);
+    setEditValidationErrors({});
+    resetEditActivityForm();
+  };
+
+  const resetEditActivityForm = () => {
+    setEditNoteTitle('');
+    setEditNoteContent('');
+    setEditNoteTags([]);
+    setEditInteractionType('call');
+    setEditInteractionDate(new Date());
+    setEditInteractionNotes('');
+    setEditInteractionDuration('');
+    setEditInteractionLocation('');
+    setEditReminderTitle('');
+    setEditReminderDate(new Date());
+    setEditReminderType('follow_up');
+    setEditReminderFrequency('month');
+  };
+
+  const handleDeleteActivity = async (activity: any) => {
     Alert.alert(
-      'Delete Relationship',
-      'Are you sure you want to delete this relationship?',
+      'Delete Activity',
+      `Are you sure you want to delete this ${activity.type} activity?\n\nTap to edit, long press to delete.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            const updatedRelationships = relationships.filter(r => r.id !== relationshipId);
-            setRelationships(updatedRelationships);
-            await AsyncStorage.setItem('relationships', JSON.stringify(updatedRelationships));
+            try {
+              const success = await deleteActivity(activity.id);
+              if (success) {
+                Alert.alert('Success', 'Activity deleted successfully!');
+              } else {
+                Alert.alert('Error', 'Failed to delete activity.');
+              }
+            } catch (error) {
+              console.error('Error deleting activity:', error);
+              Alert.alert('Error', 'Failed to delete activity.');
+            }
           }
         },
       ]
     );
+  };
+
+  const resetActivityForm = () => {
+    setNoteTitle('');
+    setNoteContent('');
+    setNoteTags([]);
+    setInteractionType('call');
+    setInteractionDate(new Date());
+    setInteractionNotes('');
+    setInteractionDuration('');
+    setInteractionLocation('');
+    setActivityReminderTitle('');
+    setActivityReminderDate(new Date());
+    setActivityReminderType('follow_up');
+    setActivityReminderFrequency('month');
+    setActivityReminderNotes('');
+    setValidationErrors({});
+    setShowInteractionDatePicker(false);
+    setShowInteractionTimePicker(false);
+    setShowReminderDatePicker(false);
+    setShowReminderTimePicker(false);
+  };
+
+  // Date picker handlers (matching reminders.tsx approach)
+  const onInteractionDateChange = (event: any, selectedDate?: Date) => {
+    setShowInteractionDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setInteractionDate(selectedDate);
+    }
+  };
+
+  const onInteractionTimeChange = (event: any, selectedTime?: Date) => {
+    setShowInteractionTimePicker(Platform.OS === 'ios');
+    if (selectedTime) {
+      setInteractionDate(prev => {
+        const newDate = new Date(prev);
+        newDate.setHours(selectedTime.getHours());
+        newDate.setMinutes(selectedTime.getMinutes());
+        return newDate;
+      });
+    }
+  };
+
+  const onReminderDateChange = (event: any, selectedDate?: Date) => {
+    setShowReminderDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setActivityReminderDate(selectedDate);
+    }
+  };
+
+  const onReminderTimeChange = (event: any, selectedTime?: Date) => {
+    setShowReminderTimePicker(Platform.OS === 'ios');
+    if (selectedTime) {
+      setActivityReminderDate(prev => {
+        const newDate = new Date(prev);
+        newDate.setHours(selectedTime.getHours());
+        newDate.setMinutes(selectedTime.getMinutes());
+        return newDate;
+      });
+    }
+  };
+
+  const validateActivityForm = () => {
+    const errors: Record<string, string> = {};
+
+    if (activeActivityTab === 'note') {
+      if (!noteTitle.trim()) {
+        errors.noteTitle = 'Note title is required';
+      }
+      if (!noteContent.trim()) {
+        errors.noteContent = 'Note content is required';
+      }
+    } else if (activeActivityTab === 'interaction') {
+      if (!interactionNotes.trim()) {
+        errors.interactionNotes = 'Interaction notes are required';
+      }
+      if (interactionDate > new Date()) {
+        errors.interactionDate = 'Interaction date cannot be in the future';
+      }
+    } else if (activeActivityTab === 'reminder') {
+      if (!activityReminderTitle.trim()) {
+        errors.reminderTitle = 'Reminder title is required';
+      }
+      if (activityReminderDate <= new Date()) {
+        errors.reminderDate = 'Reminder date must be in the future';
+      }
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const validateEditActivityForm = () => {
+    const errors: Record<string, string> = {};
+
+    if (selectedActivity?.type === 'note') {
+      if (!editNoteTitle.trim()) {
+        errors.editNoteTitle = 'Note title is required';
+      }
+      if (!editNoteContent.trim()) {
+        errors.editNoteContent = 'Note content is required';
+      }
+    } else if (selectedActivity?.type === 'interaction') {
+      if (!editInteractionNotes.trim()) {
+        errors.editInteractionNotes = 'Interaction notes are required';
+      }
+
+      // Check if interaction date is in the future
+      const now = new Date();
+      const interactionDate = new Date(editInteractionDate);
+      // Set time to start of day for accurate comparison
+      now.setHours(0, 0, 0, 0);
+      interactionDate.setHours(0, 0, 0, 0);
+      
+      if (interactionDate > now) {
+        errors.editInteractionDate = 'Interaction date cannot be in the future';
+      }
+      
+      // Validate duration if provided
+      if (editInteractionDuration.trim() && (isNaN(parseInt(editInteractionDuration)) || parseInt(editInteractionDuration) < 0)) {
+        errors.editInteractionDuration = 'Duration must be a valid positive number';
+      }
+    } else if (selectedActivity?.type === 'reminder') {
+      if (!editReminderTitle.trim()) {
+        errors.editReminderTitle = 'Reminder title is required';
+      }
+      
+      // Check if reminder date is in the future
+      const now = new Date();
+      const reminderDate = new Date(editReminderDate);
+      // Set time to start of day for accurate comparison
+      now.setHours(0, 0, 0, 0);
+      reminderDate.setHours(0, 0, 0, 0);
+      
+      if (reminderDate <= now) {
+        errors.editReminderDate = 'Reminder date must be in the future';
+      }
+    }
+
+    setEditValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const createNoteActivity = async () => {
+    if (!selectedRelationship || !currentUser) return;
+
+    try {
+      await createActivity({
+        type: 'note',
+        title: noteTitle,
+        description: noteContent.substring(0, 100) + (noteContent.length > 100 ? '...' : ''),
+        tags: noteTags,
+        content: noteContent,
+        category: 'general',
+        contactId: selectedRelationship.contactId,
+        contactName: selectedRelationship.contactName,
+      });
+      
+      Alert.alert('Success', 'Note activity created successfully!');
+      closeAddActivityModal();
+    } catch (error) {
+      console.error('Error creating note activity:', error);
+      Alert.alert('Error', 'Failed to create note activity. Please try again.');
+    }
+  };
+
+  const createInteractionActivity = async () => {
+    if (!selectedRelationship || !currentUser) return;
+
+    try {
+      // Create the activity
+      await createActivity({
+        type: 'interaction',
+        title: `${interactionType} with ${selectedRelationship.contactName}`,
+        description: interactionNotes,
+        tags: [],
+        contactId: selectedRelationship.contactId,
+        contactName: selectedRelationship.contactName,
+        interactionType: interactionType,
+        date: interactionDate.toISOString(),
+        duration: interactionDuration ? parseInt(interactionDuration) : undefined,
+        location: interactionLocation,
+      });
+
+      // Check if this interaction is more recent than the current lastContactDate
+      const currentLastContactDate = new Date(selectedRelationship.lastContactDate);
+      const newInteractionDate = new Date(interactionDate);
+      
+      if (newInteractionDate > currentLastContactDate) {
+        // Update the relationship with the new last contact information
+        await updateRelationship(selectedRelationship.id, {
+          lastContactDate: newInteractionDate.toISOString(),
+          lastContactMethod: interactionType,
+        });
+        
+        // Update the selected relationship state to reflect the changes
+        setSelectedRelationship(prev => prev ? {
+          ...prev,
+          lastContactDate: newInteractionDate.toISOString(),
+          lastContactMethod: interactionType,
+        } : null);
+        
+        Alert.alert('Success', 'Interaction activity created and last contact date updated!');
+      } else {
+        Alert.alert('Success', 'Interaction activity created! (Last contact date not updated - this interaction is older than the current last contact)');
+      }
+      closeAddActivityModal();
+    } catch (error) {
+      console.error('Error creating interaction activity:', error);
+      Alert.alert('Error', 'Failed to create interaction activity. Please try again.');
+    }
+  };
+
+  const createReminderActivity = async () => {
+    if (!selectedRelationship || !currentUser) return;
+
+    try {
+      // Create activity
+      await createActivity({
+        type: 'reminder',
+        title: activityReminderTitle,
+        description: activityReminderNotes,
+        tags: [],
+        contactId: selectedRelationship.contactId,
+        contactName: selectedRelationship.contactName,
+        reminderDate: activityReminderDate.toISOString(),
+        reminderType: activityReminderType,
+        frequency: activityReminderFrequency,
+      });
+
+      // Create reminder in reminders collection
+      await createReminder({
+        contactName: selectedRelationship.contactName,
+        type: activityReminderType,
+        date: activityReminderDate.toISOString(),
+        frequency: activityReminderFrequency,
+        tags: [],
+        notes: activityReminderNotes,
+      });
+      
+      Alert.alert('Success', 'Reminder activity created and scheduled successfully!');
+      closeAddActivityModal();
+    } catch (error) {
+      console.error('Error creating reminder activity:', error);
+      Alert.alert('Error', 'Failed to create reminder activity. Please try again.');
+    }
+  };
+
+  const handleCreateActivity = async () => {
+    if (!validateActivityForm()) {
+      return;
+    }
+
+    if (activeActivityTab === 'note') {
+      await createNoteActivity();
+    } else if (activeActivityTab === 'interaction') {
+      await createInteractionActivity();
+    } else if (activeActivityTab === 'reminder') {
+      await createReminderActivity();
+    }
+  };
+
+  const handleUpdateActivity = async () => {
+    if (!selectedActivity) return;
+
+    // Validate the form before proceeding
+    if (!validateEditActivityForm()) {
+      return;
+    }
+
+    try {
+      let updateData: any = {};
+
+      if (selectedActivity.type === 'note') {
+        updateData = {
+          title: editNoteTitle,
+          content: editNoteContent,
+          tags: editNoteTags,
+        };
+      } else if (selectedActivity.type === 'interaction') {
+        updateData = {
+          interactionType: editInteractionType,
+          date: editInteractionDate.toISOString(),
+          description: editInteractionNotes,
+          duration: editInteractionDuration ? parseInt(editInteractionDuration) : undefined,
+          location: editInteractionLocation,
+        };
+      } else if (selectedActivity.type === 'reminder') {
+        updateData = {
+          title: editReminderTitle,
+          reminderDate: editReminderDate.toISOString(),
+          reminderType: editReminderType,
+          reminderFrequency: editReminderFrequency,
+        };
+      }
+
+      const success = await updateActivity(selectedActivity.id, updateData);
+      if (success) {
+        Alert.alert('Success', 'Activity updated successfully!');
+        closeEditActivityModal();
+      } else {
+        Alert.alert('Error', 'Failed to update activity.');
+      }
+    } catch (error) {
+      console.error('Error updating activity:', error);
+      Alert.alert('Error', 'Failed to update activity.');
+    }
   };
 
   const formatDate = (dateString: string): string => {
@@ -362,11 +2161,188 @@ export default function RelationshipsScreen() {
     });
   };
 
+  // Render activity filter dropdown
+  const renderActivityDropdown = () => {
+    const selectedOption = activityFilterOptions.find(option => option.key === activityFilter);
+    
+    return (
+      <View 
+        style={styles.dropdownContainer}
+        onTouchStart={(e) => {
+          // Prevent event propagation when dropdown is open
+          if (showActivityDropdown) {
+            e.stopPropagation();
+          }
+        }}
+      >
+        <TouchableOpacity 
+          style={styles.dropdownButton}
+          onPress={() => {
+            // Determine if dropdown should open above or below
+            // If there are no activities, we're likely at the bottom, so open above
+            const contactActivities = getContactActivities();
+            const shouldOpenAbove = contactActivities.length === 0;
+            setDropdownPosition(shouldOpenAbove ? 'above' : 'below');
+            const newState = !showActivityDropdown;
+            if (__DEV__) {
+              console.log('Debug - Toggling dropdown to:', newState);
+            }
+            setShowActivityDropdown(newState);
+          }}
+        >
+          <Text style={styles.dropdownButtonText}>
+            {selectedOption?.icon} {selectedOption?.label}
+          </Text>
+          <Text style={[styles.dropdownArrow, showActivityDropdown && styles.dropdownArrowOpen]}>
+            ▼
+          </Text>
+        </TouchableOpacity>
+        
+        {showActivityDropdown && (
+          <View 
+            style={[
+              styles.dropdownMenu,
+              dropdownPosition === 'above' && styles.dropdownMenuAbove
+            ]}
+            onTouchStart={(e) => {
+              // Prevent event propagation to avoid closing the dropdown
+              e.stopPropagation();
+            }}
+          >
+            <ScrollView 
+              style={styles.dropdownScrollView}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled={true}
+            >
+              {activityFilterOptions.map((option) => (
+                <TouchableOpacity
+                  key={option.key}
+                  style={[
+                    styles.dropdownItem,
+                    activityFilter === option.key && styles.dropdownItemSelected
+                  ]}
+                  onPress={() => {
+                    if (__DEV__) {
+                      console.log('Debug - Changing filter to:', option.key);
+                    }
+                    setActivityFilter(option.key as any);
+                    setShowActivityDropdown(false);
+                  }}
+                >
+                  <Text style={styles.dropdownItemIcon}>{option.icon}</Text>
+                  <Text style={[
+                    styles.dropdownItemText,
+                    activityFilter === option.key && styles.dropdownItemTextSelected
+                  ]}>
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  // Render activity card based on type
+  const renderActivityCard = (activity: any) => {
+    const getActivityIcon = () => {
+      switch (activity.type) {
+        case 'note':
+          return '📝';
+        case 'interaction':
+          return '🤝';
+        case 'reminder':
+          return '⏰';
+        default:
+          return '📄';
+      }
+    };
+
+    const getActivityTitle = () => {
+      switch (activity.type) {
+        case 'note':
+          return activity.title;
+        case 'interaction':
+          return `${activity.interactionType} with ${activity.contactName}`;
+        case 'reminder':
+          return `Reminder: ${activity.title}`;
+        default:
+          return activity.title;
+      }
+    };
+
+    const getActivitySubtitle = () => {
+      switch (activity.type) {
+        case 'note':
+          return activity.content?.substring(0, 50) + (activity.content?.length > 50 ? '...' : '');
+        case 'interaction':
+          return activity.description;
+        case 'reminder':
+          return activity.isCompleted ? 'Completed' : 'Pending';
+        default:
+          return activity.description;
+      }
+    };
+
+    const getActivityTime = () => {
+      // Safely handle different timestamp formats
+      let date: Date;
+      if (!activity.createdAt) {
+        date = new Date();
+      } else if (activity.createdAt instanceof Date) {
+        date = activity.createdAt;
+      } else if (activity.createdAt && typeof activity.createdAt === 'object' && 'seconds' in activity.createdAt) {
+        // Firebase Timestamp object
+        date = new Date(activity.createdAt.seconds * 1000);
+      } else if (typeof activity.createdAt === 'string') {
+        date = new Date(activity.createdAt);
+      } else if (typeof activity.createdAt === 'number') {
+        date = new Date(activity.createdAt);
+      } else {
+        date = new Date(); // Fallback
+      }
+      
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    };
+
+    return (
+      <TouchableOpacity 
+        key={activity.id} 
+        style={styles.activityCard}
+        onPress={() => openEditActivityModal(activity)}
+        onLongPress={() => {
+          Vibration.vibrate(100); // Haptic feedback
+          handleDeleteActivity(activity);
+        }}
+        activeOpacity={0.7}
+      >
+        <View style={styles.activityIcon}>
+          <Text style={styles.activityIconText}>{getActivityIcon()}</Text>
+        </View>
+        <View style={styles.activityContent}>
+          <Text style={styles.activityCardTitle}>{getActivityTitle()}</Text>
+          <Text style={styles.activityCardSubtitle}>{getActivitySubtitle()}</Text>
+        </View>
+        <View style={styles.activityActions}>
+          <Text style={styles.activityTime}>{getActivityTime()}</Text>
+          <Text style={styles.activityHint}>Tap to edit • Long press to delete</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   const renderRelationship = ({ item }: { item: Relationship }) => (
     <TouchableOpacity 
       style={styles.relationshipCard}
-      onPress={() => editRelationship(item)}
-      onLongPress={() => deleteRelationship(item.id)}
+      onPress={() => showRelationshipDetails(item)}
+      onLongPress={() => handleDeleteRelationship(item.id, item.contactName)}
     >
       <View style={styles.relationshipHeader}>
         <Text style={styles.contactName}>{item.contactName}</Text>
@@ -420,10 +2396,10 @@ export default function RelationshipsScreen() {
     </TouchableOpacity>
   );
 
-  const renderContact = ({ item }: { item: Contact }) => (
+  const renderDeviceContact = ({ item }: { item: Contacts.Contact }) => (
     <TouchableOpacity 
       style={styles.contactItem} 
-      onPress={() => selectContact(item)}
+      onPress={() => handleDeviceContactSelect(item)}
     >
       <View style={styles.contactItemContent}>
         <Text style={styles.contactItemName}>{item.name}</Text>
@@ -434,17 +2410,69 @@ export default function RelationshipsScreen() {
           <Text style={styles.contactItemEmail}>{item.emails[0].email}</Text>
         )}
       </View>
-      <ChevronRight size={16} color="#9CA3AF" />
+      <View style={styles.deviceContactAction}>
+        <Text style={styles.deviceContactActionText}>Select</Text>
+        <ChevronRight size={16} color="#10B981" />
+      </View>
     </TouchableOpacity>
   );
+
+  // Debug logging
+  useEffect(() => {
+    console.log('🔍 Debug Info:');
+    console.log('Current User:', currentUser ? `${currentUser.email} (${currentUser.uid})` : 'Not authenticated');
+    console.log('Is Loading Relationships:', isLoadingRelationships);
+    console.log('Relationships Count:', relationships.length);
+    console.log('Relationships Data:', relationships);
+  }, [currentUser, isLoadingRelationships, relationships]);
+
+
+  // Show loading if user authentication or relationships are loading
+  if (isLoadingRelationships) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Relationships</Text>
+        </View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ fontSize: 16, color: '#6B7280' }}>Loading relationships...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Show message if user is not authenticated
+  if (!currentUser) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Relationships</Text>
+        </View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ fontSize: 16, color: '#6B7280' }}>Please log in to view relationships</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Relationships</Text>
-        <TouchableOpacity style={styles.addButton} onPress={openAddRelationship}>
-          <Plus size={20} color="#ffffff" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity style={styles.addButton} onPress={openAddRelationship}>
+            <Plus size={20} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Status Bar */}
+      <View style={styles.statusBar}>
+        <Text style={styles.statusText}>
+          {isLoadingRelationships ? 'Loading...' : 
+           !currentUser ? 'Not logged in' : 
+           `Found ${relationships.length} relationships`}
+        </Text>
       </View>
 
       <View style={styles.content}>
@@ -456,6 +2484,10 @@ export default function RelationshipsScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContainer}
           />
+        ) : isLoadingRelationships ? (
+          <View style={styles.loadingState}>
+            <Text style={styles.loadingText}>Loading relationships...</Text>
+          </View>
         ) : (
           <View style={styles.emptyState}>
             <Users size={48} color="#9CA3AF" />
@@ -476,9 +2508,18 @@ export default function RelationshipsScreen() {
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Select Contact</Text>
-            <TouchableOpacity onPress={() => setShowContactList(false)}>
-              <X size={24} color="#6B7280" />
-            </TouchableOpacity>
+            <View style={styles.headerActions}>
+              <TouchableOpacity 
+                style={styles.createNewButton}
+                onPress={() => setShowNewContactModal(true)}
+              >
+                <Plus size={20} color="#3B82F6" />
+                <Text style={styles.createNewButtonText}>New</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowContactList(false)}>
+                <X size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
           </View>
           
           <View style={styles.searchContainer}>
@@ -487,18 +2528,226 @@ export default function RelationshipsScreen() {
               style={styles.searchInput}
               value={contactSearchQuery}
               onChangeText={setContactSearchQuery}
-              placeholder="Search contacts..."
+              placeholder="Search device contacts..."
               placeholderTextColor="#9CA3AF"
             />
           </View>
           
-          <FlatList
-            data={filteredContacts}
-            renderItem={renderContact}
-            keyExtractor={(item) => item.id}
-            style={styles.contactList}
-            showsVerticalScrollIndicator={false}
-          />
+          {isLoadingDeviceContacts ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>Loading device contacts...</Text>
+            </View>
+          ) : filteredDeviceContacts.length > 0 ? (
+            <FlatList
+              data={filteredDeviceContacts}
+              renderItem={renderDeviceContact}
+              keyExtractor={(item, index) => `device_${index}_${item.name}`}
+              style={styles.contactList}
+              showsVerticalScrollIndicator={false}
+            />
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>
+                {contactSearchQuery ? 'No device contacts found' : 'No device contacts available'}
+              </Text>
+              <Text style={styles.emptySubtitle}>
+                {contactSearchQuery 
+                  ? `No device contacts match "${contactSearchQuery}"`
+                  : 'Allow contact access to see your device contacts here'
+                }
+              </Text>
+              {!hasPermission && (
+                <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+                  <Text style={styles.permissionButtonText}>Grant Permission</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </SafeAreaView>
+      </Modal>
+
+      {/* Create New Contact Modal */}
+      <Modal visible={showNewContactModal} animationType="slide">
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Create New Contact</Text>
+            <TouchableOpacity onPress={() => setShowNewContactModal(false)}>
+              <X size={24} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Contact Information</Text>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Name *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newContactName}
+                  onChangeText={setNewContactName}
+                  placeholder="Enter contact name"
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Phone Number</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newContactPhone}
+                  onChangeText={setNewContactPhone}
+                  placeholder="Enter phone number"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Email</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newContactEmail}
+                  onChangeText={setNewContactEmail}
+                  placeholder="Enter email address"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Company</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newContactCompany}
+                  onChangeText={setNewContactCompany}
+                  placeholder="Enter company name"
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Job Title</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newContactJobTitle}
+                  onChangeText={setNewContactJobTitle}
+                  placeholder="Enter job title"
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Website</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newContactWebsite}
+                  onChangeText={setNewContactWebsite}
+                  placeholder="Enter website URL"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="url"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>LinkedIn</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newContactLinkedin}
+                  onChangeText={setNewContactLinkedin}
+                  placeholder="Enter LinkedIn profile URL"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="url"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>X (Twitter)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newContactTwitter}
+                  onChangeText={setNewContactTwitter}
+                  placeholder="Enter X/Twitter handle or URL"
+                  placeholderTextColor="#9CA3AF"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Instagram</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newContactInstagram}
+                  onChangeText={setNewContactInstagram}
+                  placeholder="Enter Instagram handle or URL"
+                  placeholderTextColor="#9CA3AF"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Facebook</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newContactFacebook}
+                  onChangeText={setNewContactFacebook}
+                  placeholder="Enter Facebook profile URL"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="url"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Address</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newContactAddress}
+                  onChangeText={setNewContactAddress}
+                  placeholder="Enter address"
+                  placeholderTextColor="#9CA3AF"
+                  multiline
+                  numberOfLines={2}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Birthday</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newContactBirthday}
+                  onChangeText={setNewContactBirthday}
+                  placeholder="Enter birthday (MM/DD/YYYY)"
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Notes</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={newContactNotes}
+                  onChangeText={setNewContactNotes}
+                  placeholder="Enter additional notes"
+                  placeholderTextColor="#9CA3AF"
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+              </View>
+
+              <TouchableOpacity 
+                style={[styles.saveButton, !newContactName.trim() && styles.saveButtonDisabled]}
+                onPress={createNewContactAndRelationship}
+                disabled={!newContactName.trim()}
+              >
+                <Text style={styles.saveButtonText}>Create Contact & Add Relationship</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         </SafeAreaView>
       </Modal>
 
@@ -580,6 +2829,159 @@ export default function RelationshipsScreen() {
               </View>
             </View>
 
+            {/* Contact Information Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Contact Information</Text>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Phone Number</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editContactPhone}
+                  onChangeText={setEditContactPhone}
+                  placeholder="Enter phone number"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Email</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editContactEmail}
+                  onChangeText={setEditContactEmail}
+                  placeholder="Enter email address"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Company</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editContactCompany}
+                  onChangeText={setEditContactCompany}
+                  placeholder="Enter company name"
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Job Title</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editContactJobTitle}
+                  onChangeText={setEditContactJobTitle}
+                  placeholder="Enter job title"
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Website</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editContactWebsite}
+                  onChangeText={setEditContactWebsite}
+                  placeholder="Enter website URL"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="url"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>LinkedIn</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editContactLinkedin}
+                  onChangeText={setEditContactLinkedin}
+                  placeholder="Enter LinkedIn profile URL"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="url"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>X (Twitter)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editContactTwitter}
+                  onChangeText={setEditContactTwitter}
+                  placeholder="Enter X/Twitter handle or URL"
+                  placeholderTextColor="#9CA3AF"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Instagram</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editContactInstagram}
+                  onChangeText={setEditContactInstagram}
+                  placeholder="Enter Instagram handle or URL"
+                  placeholderTextColor="#9CA3AF"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Facebook</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editContactFacebook}
+                  onChangeText={setEditContactFacebook}
+                  placeholder="Enter Facebook profile URL"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="url"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Address</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editContactAddress}
+                  onChangeText={setEditContactAddress}
+                  placeholder="Enter address"
+                  placeholderTextColor="#9CA3AF"
+                  multiline
+                  numberOfLines={2}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Birthday</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editContactBirthday}
+                  onChangeText={setEditContactBirthday}
+                  placeholder="Enter birthday (MM/DD/YYYY)"
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Notes</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={editContactNotes}
+                  onChangeText={setEditContactNotes}
+                  placeholder="Enter additional notes"
+                  placeholderTextColor="#9CA3AF"
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+              </View>
+            </View>
+
             {/* Reminder Frequency Section */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Reminder frequency</Text>
@@ -608,36 +3010,29 @@ export default function RelationshipsScreen() {
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Tags</Text>
               <View style={styles.tagsGrid}>
-                {predefinedTags.map((tag) => (
-                  <TouchableOpacity
-                    key={tag}
-                    style={[
-                      styles.tagButton,
-                      selectedTags.includes(tag) && styles.selectedTag
-                    ]}
-                    onPress={() => toggleTag(tag)}
-                  >
-                    <Text style={[
-                      styles.tagButtonText,
-                      selectedTags.includes(tag) && styles.selectedTagText
-                    ]}>
-                      {tag}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              
-              <View style={styles.newTagContainer}>
-                <TextInput
-                  style={styles.newTagInput}
-                  value={newTag}
-                  onChangeText={setNewTag}
-                  placeholder="Add new tag"
-                  placeholderTextColor="#9CA3AF"
-                />
-                <TouchableOpacity style={styles.addTagButton} onPress={addNewTag}>
-                  <Plus size={16} color="#3B82F6" />
-                </TouchableOpacity>
+                {predefinedTags.map((tag) => {
+                  const isSelected = selectedTags.includes(tag);
+                  console.log(`🔍 Rendering tag "${tag}": isSelected=${isSelected}`);
+                  console.log(`🔍 selectedTags array:`, selectedTags);
+                  console.log(`🔍 selectedTags.includes("${tag}"):`, selectedTags.includes(tag));
+                  return (
+                    <TouchableOpacity
+                      key={tag}
+                      style={[
+                        styles.tagButton,
+                        isSelected && styles.selectedTag
+                      ]}
+                      onPress={() => toggleTag(tag)}
+                    >
+                      <Text style={[
+                        styles.tagButtonText,
+                        isSelected && styles.selectedTagText
+                      ]}>
+                        {tag}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
 
@@ -683,12 +3078,859 @@ export default function RelationshipsScreen() {
               />
             </View>
 
-            <TouchableOpacity style={styles.saveButton} onPress={saveRelationship}>
-              <Text style={styles.saveButtonText}>Save Relationship</Text>
+            <TouchableOpacity 
+              style={[styles.saveButton, isSaving && styles.saveButtonDisabled]} 
+              onPress={saveRelationship}
+              disabled={isSaving}
+            >
+              <Text style={styles.saveButtonText}>
+                {isSaving ? 'Saving...' : 'Save Relationship'}
+              </Text>
             </TouchableOpacity>
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      {/* Relationship Detail Modal */}
+      <Modal visible={showRelationshipDetail} animationType="slide">
+        <SafeAreaView 
+          style={styles.detailModalContainer}
+        >
+          <View style={styles.detailHeader}>
+            <TouchableOpacity onPress={() => setShowRelationshipDetail(false)}>
+              <X size={24} color="#ffffff" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowDetailActions(true)}>
+              <Text style={styles.detailHeaderText}>⋯</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <View 
+            style={styles.detailContent}
+            onTouchStart={() => {
+              // Close dropdown when tapping outside of it
+              if (showActivityDropdown) {
+                setShowActivityDropdown(false);
+              }
+            }}
+          >
+            {/* Profile Section */}
+            <View style={styles.profileSection}>
+              <View style={styles.profileImage}>
+                <Text style={styles.profileInitials}>
+                  {selectedRelationship?.contactName?.split(' ').map(n => n[0]).join('').toUpperCase() || 'AA'}
+                </Text>
+              </View>
+              <Text style={styles.profileName}>{selectedRelationship?.contactName}</Text>
+              <Text style={styles.profileCompany}>No company info</Text>
+              
+              
+              
+              
+              
+              
+              <View style={styles.actionButtons}>
+                <TouchableOpacity 
+                  style={styles.getInTouchButton}
+                  onPress={() => setShowContactActions(true)}
+                >
+                  <Text style={styles.getInTouchText}>Get in touch</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.moreButton}
+                  onPress={() => setShowMoreActions(true)}
+                >
+                  <Text style={styles.moreButtonText}>⋯</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            
+            {/* Tabs */}
+            {/* <View style={styles.tabBar}>
+              <TouchableOpacity style={styles.activeTab}>
+                <Text style={styles.activeTabText}>Notes</Text>
+              </TouchableOpacity>
+              
+            </View> */}
+            
+            {/* Content */}
+            <ScrollView 
+              style={styles.detailScrollView}
+              showsVerticalScrollIndicator={true}
+              bounces={true}
+              contentContainerStyle={styles.detailScrollContent}
+              
+            >
+              {/* General Note Card */}
+              <TouchableOpacity style={styles.noteCard} onPress={openEditNoteModal}>
+                <View style={styles.noteHeader}>
+                  <View style={styles.noteIcon}>
+                    <Text style={styles.noteIconText}>📝</Text>
+                  </View>
+                  <Text style={styles.noteTitle}>General Note</Text>
+                </View>
+                <Text style={styles.noteContent}>
+                  {selectedRelationship?.notes || 'No notes added yet'}
+                </Text>
+              </TouchableOpacity>
+              
+              {/* Family Info Card */}
+              <TouchableOpacity style={styles.noteCard} onPress={openEditFamilyInfoModal}>
+                <View style={styles.noteHeader}>
+                  <View style={styles.noteIcon}>
+                    <Text style={styles.noteIconText}>👨‍👩‍👧‍👦</Text>
+                  </View>
+                  <Text style={styles.noteTitle}>Family Info</Text>
+                </View>
+                <Text style={styles.noteContent}>
+                  {selectedRelationship?.familyInfo ? 
+                    `Kids: ${selectedRelationship.familyInfo.kids || 'Not specified'}\n` +
+                    `Siblings: ${selectedRelationship.familyInfo.siblings || 'Not specified'}\n` +
+                    `Spouse: ${selectedRelationship.familyInfo.spouse || 'Not specified'}` :
+                    'Notes on kids, siblings, spouse...'
+                  }
+                </Text>
+              </TouchableOpacity>
+              
+              {/* Activity Section */}
+              <View style={styles.activitySection}>
+                <View style={styles.activityHeader}>
+                  <Text style={styles.activityTitle}>Activity</Text>
+                  {renderActivityDropdown()}
+                </View>
+                
+                {/* Activity Cards */}
+                {getContactActivities().length > 0 ? (
+                  getContactActivities().map(activity => renderActivityCard(activity))
+                ) : (
+                  <View style={styles.noActivityCard}>
+                    <Text style={styles.noActivityText}>
+                      No {activityFilter === 'all' ? '' : activityFilter} activities found
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </ScrollView>
+            
+            {/* Bottom Input */}
+            <View style={styles.bottomInput}>
+              <TouchableOpacity style={styles.inputMenuButton}>
+                <Text style={styles.inputMenuText}>☰</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.inputField}
+                onPress={openAddActivityModal}
+              >
+                <Text style={styles.inputFieldPlaceholder}>Anything to note?</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Frequency Selection Modal */}
+      <Modal visible={showFrequencyModal} animationType="slide" transparent>
+        <View style={styles.frequencyModalOverlay}>
+          <View style={styles.frequencyModalContainer}>
+            <View style={styles.frequencyModalHeader}>
+              <Text style={styles.frequencyModalTitle}>Change Reminder Frequency</Text>
+              <TouchableOpacity onPress={() => setShowFrequencyModal(false)}>
+                <X size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.frequencyOptions}>
+              {reminderFrequencies.map((frequency) => (
+                <TouchableOpacity
+                  key={frequency.key}
+                  style={[
+                    styles.frequencyOption,
+                    selectedRelationship?.reminderFrequency === frequency.key && styles.frequencyOptionSelected
+                  ]}
+                  onPress={() => handleFrequencyChange(frequency.key as ReminderFrequency)}
+                >
+                  <Text style={[
+                    styles.frequencyOptionText,
+                    selectedRelationship?.reminderFrequency === frequency.key && styles.frequencyOptionTextSelected
+                  ]}>
+                    {frequency.label}
+                  </Text>
+                  {selectedRelationship?.reminderFrequency === frequency.key && (
+                    <Text style={styles.frequencyCheckmark}>✓</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Contact Actions Modal */}
+      <Modal visible={showContactActions} animationType="slide" transparent>
+        <View style={styles.contactActionsOverlay}>
+          <View style={styles.contactActionsContainer}>
+            <View style={styles.contactActionsHeader}>
+              <Text style={styles.contactActionsTitle}>Get in touch with {selectedRelationship?.contactName}</Text>
+              <TouchableOpacity onPress={() => setShowContactActions(false)}>
+                <X size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.contactActionsList}>
+              <TouchableOpacity style={styles.contactActionItem} onPress={handleCall}>
+                <View style={styles.contactActionIcon}>
+                  <Phone size={24} color="#10B981" />
+                </View>
+                <View style={styles.contactActionContent}>
+                  <Text style={styles.contactActionTitle}>Call</Text>
+                  <Text style={styles.contactActionSubtitle}>Make a phone call</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.contactActionItem} onPress={handleMessage}>
+                <View style={styles.contactActionIcon}>
+                  <MessageCircle size={24} color="#3B82F6" />
+                </View>
+                <View style={styles.contactActionContent}>
+                  <Text style={styles.contactActionTitle}>Message</Text>
+                  <Text style={styles.contactActionSubtitle}>Send SMS</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.contactActionItem} onPress={handleWhatsApp}>
+                <View style={styles.contactActionIcon}>
+                  <Text style={styles.whatsappIcon}>📱</Text>
+                </View>
+                <View style={styles.contactActionContent}>
+                  <Text style={styles.contactActionTitle}>WhatsApp</Text>
+                  <Text style={styles.contactActionSubtitle}>Send WhatsApp message</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.contactActionItem} onPress={handleEmail}>
+                <View style={styles.contactActionIcon}>
+                  <Mail size={24} color="#EF4444" />
+                </View>
+                <View style={styles.contactActionContent}>
+                  <Text style={styles.contactActionTitle}>Email</Text>
+                  <Text style={styles.contactActionSubtitle}>Send email</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* More Actions Modal */}
+      <Modal visible={showMoreActions} animationType="slide" transparent>
+        <View style={styles.moreActionsOverlay}>
+          <View style={styles.moreActionsContainer}>
+            <View style={styles.moreActionsHeader}>
+              <Text style={styles.moreActionsTitle}>Find {selectedRelationship?.contactName}</Text>
+              <TouchableOpacity onPress={() => setShowMoreActions(false)}>
+                <X size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.moreActionsList}>
+              <TouchableOpacity style={styles.moreActionItem} onPress={handleFindOnLinkedIn}>
+                <View style={styles.moreActionIcon}>
+                  <Text style={styles.linkedinIcon}>💼</Text>
+                </View>
+                <View style={styles.moreActionContent}>
+                  <Text style={styles.moreActionTitle}>Find on LinkedIn</Text>
+                  <Text style={styles.moreActionSubtitle}>Search professional profile</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.moreActionItem} onPress={handleFindOnX}>
+                <View style={styles.moreActionIcon}>
+                  <Text style={styles.xIcon}>𝕏</Text>
+                </View>
+                <View style={styles.moreActionContent}>
+                  <Text style={styles.moreActionTitle}>Find on X</Text>
+                  <Text style={styles.moreActionSubtitle}>Search on X (Twitter)</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.moreActionItem} onPress={handleFindOnFacebook}>
+                <View style={styles.moreActionIcon}>
+                  <Text style={styles.facebookIcon}>📘</Text>
+                </View>
+                <View style={styles.moreActionContent}>
+                  <Text style={styles.moreActionTitle}>Find on Facebook</Text>
+                  <Text style={styles.moreActionSubtitle}>Search Facebook profile</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.moreActionItem} onPress={handleFindOnGoogle}>
+                <View style={styles.moreActionIcon}>
+                  <Text style={styles.googleIcon}>🔍</Text>
+                </View>
+                <View style={styles.moreActionContent}>
+                  <Text style={styles.moreActionTitle}>Google Search</Text>
+                  <Text style={styles.moreActionSubtitle}>Search on Google</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Detail Actions Modal */}
+      <Modal visible={showDetailActions} animationType="slide" transparent>
+        <View style={styles.detailActionsOverlay}>
+          <View style={styles.detailActionsContainer}>
+            <View style={styles.detailActionsHeader}>
+              <Text style={styles.detailActionsTitle}>Relationship Actions</Text>
+              <TouchableOpacity onPress={() => setShowDetailActions(false)}>
+                <X size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.detailActionsList}>
+              <TouchableOpacity style={styles.detailActionItem} onPress={handleEditRelationship}>
+                <View style={styles.detailActionIcon}>
+                  <Text style={styles.editIcon}>✏️</Text>
+                </View>
+                <View style={styles.detailActionContent}>
+                  <Text style={styles.detailActionTitle}>Edit</Text>
+                  <Text style={styles.detailActionSubtitle}>Edit relationship details</Text>
+                </View>
+              </TouchableOpacity>
+
+              
+
+              <TouchableOpacity style={styles.detailActionItem} onPress={handleShareRelationship}>
+                <View style={styles.detailActionIcon}>
+                  <Text style={styles.shareIcon}>📤</Text>
+                </View>
+                <View style={styles.detailActionContent}>
+                  <Text style={styles.detailActionTitle}>Share</Text>
+                  <Text style={styles.detailActionSubtitle}>Share contact information</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.detailActionItem} 
+                onPress={() => handleDeleteRelationship(selectedRelationship?.id || '', selectedRelationship?.contactName || '')}
+              >
+                <View style={styles.detailActionIcon}>
+                  <Text style={styles.removeIcon}>🗑️</Text>
+                </View>
+                <View style={styles.detailActionContent}>
+                  <Text style={styles.detailActionTitle}>Delete</Text>
+                  <Text style={styles.detailActionSubtitle}>Delete relationship and all data</Text>
+                </View>
+              </TouchableOpacity>
+
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add Reminder Modal */}
+      <Modal visible={showAddReminderModal} animationType="slide" transparent>
+        <View style={styles.addReminderOverlay}>
+          <View style={styles.addReminderContainer}>
+            <View style={styles.addReminderHeader}>
+              <Text style={styles.addReminderTitle}>Add Reminder</Text>
+              <TouchableOpacity onPress={() => setShowAddReminderModal(false)}>
+                <X size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.addReminderContent}>
+              <View style={styles.reminderForm}>
+                <Text style={styles.reminderFormLabel}>Contact</Text>
+                <Text style={styles.reminderContactName}>{selectedRelationship?.contactName}</Text>
+                
+                <Text style={styles.reminderFormLabel}>Date</Text>
+                <TouchableOpacity 
+                  style={styles.dateTimeButton}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Calendar size={20} color="#6B7280" />
+                  <Text style={styles.dateTimeButtonText}>
+                    {reminderDate.toLocaleDateString()}
+                  </Text>
+                </TouchableOpacity>
+                
+                <Text style={styles.reminderFormLabel}>Time</Text>
+                <TouchableOpacity 
+                  style={styles.dateTimeButton}
+                  onPress={() => setShowTimePicker(true)}
+                >
+                  <Calendar size={20} color="#6B7280" />
+                  <Text style={styles.dateTimeButtonText}>
+                    {reminderTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </TouchableOpacity>
+                
+                <Text style={styles.reminderFormLabel}>Note *</Text>
+                <TextInput
+                  style={styles.reminderNoteInput}
+                  value={reminderNote}
+                  onChangeText={setReminderNote}
+                  placeholder="Enter a note for this reminder (required)..."
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+              </View>
+            </ScrollView>
+            
+            <View style={styles.addReminderActions}>
+              <TouchableOpacity 
+                style={styles.cancelButton}
+                onPress={() => setShowAddReminderModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.createReminderButton}
+                onPress={handleCreateReminder}
+              >
+                <Text style={styles.createReminderButtonText}>Create Reminder</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Note Modal */}
+      <Modal visible={showEditNoteModal} animationType="slide" transparent>
+        <TouchableOpacity 
+          style={styles.editModalOverlay}
+          activeOpacity={1}
+          onPress={closeEditNoteModal}
+        >
+          <TouchableOpacity 
+            style={styles.editModalContainer}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.editModalHeader}>
+              <TouchableOpacity onPress={closeEditNoteModal}>
+                <X size={24} color="#6B7280" />
+              </TouchableOpacity>
+              <Text style={styles.editModalTitle}>Edit General Note</Text>
+              <TouchableOpacity onPress={saveNote} style={styles.editModalSaveButton}>
+                <Text style={styles.editModalSaveButtonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.editModalContent}>
+              <Text style={styles.editNoteLabel}>Note for {selectedRelationship?.contactName}</Text>
+              <TextInput
+                style={styles.editNoteInput}
+                value={editedNote}
+                onChangeText={setEditedNote}
+                placeholder="Add your notes here..."
+                placeholderTextColor="#9CA3AF"
+                multiline
+                textAlignVertical="top"
+              />
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Edit Family Info Modal */}
+      <Modal visible={showEditFamilyInfoModal} animationType="slide" transparent>
+        <TouchableOpacity 
+          style={styles.editModalOverlay}
+          activeOpacity={1}
+          onPress={closeEditFamilyInfoModal}
+        >
+          <TouchableOpacity 
+            style={styles.editModalContainer}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.editModalHeader}>
+              <TouchableOpacity onPress={closeEditFamilyInfoModal}>
+                <X size={24} color="#6B7280" />
+              </TouchableOpacity>
+              <Text style={styles.editModalTitle}>Edit Family Info</Text>
+              <TouchableOpacity onPress={saveFamilyInfo} style={styles.editModalSaveButton}>
+                <Text style={styles.editModalSaveButtonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.editModalContent}>
+              <Text style={styles.editFamilyInfoLabel}>Family information for {selectedRelationship?.contactName}</Text>
+              <Text style={styles.editFamilyInfoSubtitle}>Add details about their family members</Text>
+              
+              <View style={styles.familyInfoCard}>
+                <View style={styles.familyInfoField}>
+                  <Text style={styles.familyInfoFieldLabel}>👶 Kids</Text>
+                  <TextInput
+                    style={styles.familyInfoFieldInput}
+                    value={editedFamilyInfo.kids}
+                    onChangeText={(text) => setEditedFamilyInfo(prev => ({ ...prev, kids: text }))}
+                    placeholder="e.g., 2 kids, ages 5 and 8"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                </View>
+                
+                <View style={styles.familyInfoField}>
+                  <Text style={styles.familyInfoFieldLabel}>👨‍👩‍👧‍👦 Siblings</Text>
+                  <TextInput
+                    style={styles.familyInfoFieldInput}
+                    value={editedFamilyInfo.siblings}
+                    onChangeText={(text) => setEditedFamilyInfo(prev => ({ ...prev, siblings: text }))}
+                    placeholder="e.g., 1 brother, 2 sisters"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                </View>
+                
+                <View style={styles.familyInfoField}>
+                  <Text style={styles.familyInfoFieldLabel}>💍 Spouse</Text>
+                  <TextInput
+                    style={styles.familyInfoFieldInput}
+                    value={editedFamilyInfo.spouse}
+                    onChangeText={(text) => setEditedFamilyInfo(prev => ({ ...prev, spouse: text }))}
+                    placeholder="e.g., Married to Sarah"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                </View>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Add Activity Modal */}
+      <AddActivityModal
+        visible={showAddActivityModal}
+        onClose={closeAddActivityModal}
+        contactId={selectedRelationship?.contactId}
+        contactName={selectedRelationship?.contactName}
+        onActivityCreated={() => {
+          // Refresh activities or perform any additional logic
+        }}
+      />
+
+      {/* Edit Activity Modal */}
+      <Modal visible={showEditActivityModal} animationType="slide" transparent>
+        <View style={styles.addActivityOverlay}>
+          <View style={styles.addActivityContainer}>
+            <View style={styles.addActivityHeader}>
+              <TouchableOpacity onPress={closeEditActivityModal}>
+                <X size={24} color="#6B7280" />
+              </TouchableOpacity>
+              <Text style={styles.addActivityTitle}>Edit Activity</Text>
+              <TouchableOpacity onPress={handleUpdateActivity} style={styles.addActivitySaveButton}>
+                <Text style={styles.addActivitySaveButtonText}>Update</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.addActivityContent} showsVerticalScrollIndicator={false}>
+              {selectedActivity?.type === 'note' && (
+                <View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Title *</Text>
+                    <TextInput
+                      style={[styles.input, editValidationErrors.editNoteTitle && styles.inputError]}
+                      value={editNoteTitle}
+                      onChangeText={(text) => {
+                        setEditNoteTitle(text);
+                        if (editValidationErrors.editNoteTitle) {
+                          setEditValidationErrors(prev => ({ ...prev, editNoteTitle: '' }));
+                        }
+                      }}
+                      placeholder="Enter note title"
+                      placeholderTextColor="#9CA3AF"
+                    />
+                    {editValidationErrors.editNoteTitle && (
+                      <Text style={styles.errorText}>{editValidationErrors.editNoteTitle}</Text>
+                    )}
+                  </View>
+                  
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Content *</Text>
+                    <TextInput
+                      style={[styles.input, styles.textArea, editValidationErrors.editNoteContent && styles.inputError]}
+                      value={editNoteContent}
+                      onChangeText={(text) => {
+                        setEditNoteContent(text);
+                        if (editValidationErrors.editNoteContent) {
+                          setEditValidationErrors(prev => ({ ...prev, editNoteContent: '' }));
+                        }
+                      }}
+                      placeholder="Enter note content"
+                      placeholderTextColor="#9CA3AF"
+                      multiline
+                      numberOfLines={4}
+                      textAlignVertical="top"
+                    />
+                    {editValidationErrors.editNoteContent && (
+                      <Text style={styles.errorText}>{editValidationErrors.editNoteContent}</Text>
+                    )}
+                  </View>
+                </View>
+              )}
+              
+              {selectedActivity?.type === 'interaction' && (
+                <View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Interaction Type *</Text>
+                    <View style={styles.interactionTypeButtons}>
+                      {(['call', 'text', 'email', 'inPerson'] as const).map((type) => (
+                        <TouchableOpacity
+                          key={type}
+                          style={[styles.interactionTypeButton, editInteractionType === type && styles.activeInteractionTypeButton]}
+                          onPress={() => setEditInteractionType(type)}
+                        >
+                          <Text style={[styles.interactionTypeButtonText, editInteractionType === type && styles.activeInteractionTypeButtonText]}>
+                            {type === 'call' ? '📞' : type === 'text' ? '💬' : type === 'email' ? '📧' : '🤝'} {type}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                  
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Date & Time *</Text>
+                    <View style={styles.dateTimeRow}>
+                      <TouchableOpacity style={[styles.dateTimeButton, editValidationErrors.editInteractionDate && styles.inputError]} onPress={() => setShowEditInteractionDatePicker(true)}>
+                        <Calendar size={16} color="#6B7280" />
+                        <Text style={styles.dateTimeButtonText}>
+                          {editInteractionDate.toLocaleDateString()}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    {editValidationErrors.editInteractionDate && (
+                      <Text style={styles.errorText}>{editValidationErrors.editInteractionDate}</Text>
+                    )}
+                  </View>
+                  
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Notes *</Text>
+                    <TextInput
+                      style={[styles.input, styles.textArea, editValidationErrors.editInteractionNotes && styles.inputError]}
+                      value={editInteractionNotes}
+                      onChangeText={(text) => {
+                        setEditInteractionNotes(text);
+                        if (editValidationErrors.editInteractionNotes) {
+                          setEditValidationErrors(prev => ({ ...prev, editInteractionNotes: '' }));
+                        }
+                      }}
+                      placeholder="Add notes about the interaction"
+                      placeholderTextColor="#9CA3AF"
+                      multiline
+                      numberOfLines={3}
+                      textAlignVertical="top"
+                    />
+                    {editValidationErrors.editInteractionNotes && (
+                      <Text style={styles.errorText}>{editValidationErrors.editInteractionNotes}</Text>
+                    )}
+                  </View>
+                  
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Duration (minutes)</Text>
+                    <TextInput
+                      style={[styles.input, editValidationErrors.editInteractionDuration && styles.inputError]}
+                      value={editInteractionDuration}
+                      onChangeText={(text) => {
+                        setEditInteractionDuration(text);
+                        if (editValidationErrors.editInteractionDuration) {
+                          setEditValidationErrors(prev => ({ ...prev, editInteractionDuration: '' }));
+                        }
+                      }}
+                      placeholder="Enter duration in minutes"
+                      placeholderTextColor="#9CA3AF"
+                      keyboardType="numeric"
+                    />
+                    {editValidationErrors.editInteractionDuration && (
+                      <Text style={styles.errorText}>{editValidationErrors.editInteractionDuration}</Text>
+                    )}
+                  </View>
+                  
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Location</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editInteractionLocation}
+                      onChangeText={setEditInteractionLocation}
+                      placeholder="Enter location"
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+                </View>
+              )}
+              
+              {selectedActivity?.type === 'reminder' && (
+                <View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Title *</Text>
+                    <TextInput
+                      style={[styles.input, editValidationErrors.editReminderTitle && styles.inputError]}
+                      value={editReminderTitle}
+                      onChangeText={(text) => {
+                        setEditReminderTitle(text);
+                        if (editValidationErrors.editReminderTitle) {
+                          setEditValidationErrors(prev => ({ ...prev, editReminderTitle: '' }));
+                        }
+                      }}
+                      placeholder="Enter reminder title"
+                      placeholderTextColor="#9CA3AF"
+                    />
+                    {editValidationErrors.editReminderTitle && (
+                      <Text style={styles.errorText}>{editValidationErrors.editReminderTitle}</Text>
+                    )}
+                  </View>
+                  
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Date & Time *</Text>
+                    <View style={styles.dateTimeRow}>
+                      <TouchableOpacity style={[styles.dateTimeButton, editValidationErrors.editReminderDate && styles.inputError]} onPress={() => setShowEditReminderDatePicker(true)}>
+                        <Calendar size={16} color="#6B7280" />
+                        <Text style={styles.dateTimeButtonText}>
+                          {editReminderDate.toLocaleDateString()}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    {editValidationErrors.editReminderDate && (
+                      <Text style={styles.errorText}>{editValidationErrors.editReminderDate}</Text>
+                    )}
+                  </View>
+                  
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Type</Text>
+                    <View style={styles.reminderTypeButtons}>
+                      {reminderTypes.map((type) => (
+                        <TouchableOpacity
+                          key={type.key}
+                          style={[styles.reminderTypeButton, editReminderType === type.key && styles.activeReminderTypeButton]}
+                          onPress={() => setEditReminderType(type.key)}
+                        >
+                          <Text style={[styles.reminderTypeButtonText, editReminderType === type.key && styles.activeReminderTypeButtonText]}>
+                            {type.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                  
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Frequency</Text>
+                    <View style={styles.frequencyButtons}>
+                      {reminderFrequencies.map((freq) => (
+                        <TouchableOpacity
+                          key={freq.key}
+                          style={[styles.frequencyButton, editReminderFrequency === freq.key && styles.activeFrequencyButton]}
+                          onPress={() => setEditReminderFrequency(freq.key as any)}
+                        >
+                          <Text style={[styles.frequencyButtonText, editReminderFrequency === freq.key && styles.activeFrequencyButtonText]}>
+                            {freq.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Activity Date Pickers */}
+      {showInteractionDatePicker && (
+        <DateTimePicker
+          value={interactionDate}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onInteractionDateChange}
+          maximumDate={new Date()}
+        />
+      )}
+
+      {showInteractionTimePicker && (
+        <DateTimePicker
+          value={interactionDate}
+          mode="time"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onInteractionTimeChange}
+        />
+      )}
+
+      {showReminderDatePicker && (
+        <DateTimePicker
+          value={activityReminderDate}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onReminderDateChange}
+          minimumDate={new Date()}
+        />
+      )}
+
+      {showReminderTimePicker && (
+        <DateTimePicker
+          value={activityReminderDate}
+          mode="time"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onReminderTimeChange}
+        />
+      )}
+
+      {/* Date Picker */}
+      {showDatePicker && (
+        <DateTimePicker
+          value={reminderDate}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onDateChange}
+          minimumDate={new Date()}
+        />
+      )}
+
+      {/* Time Picker */}
+      {showTimePicker && (
+        <DateTimePicker
+          value={reminderTime}
+          mode="time"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onTimeChange}
+        />
+      )}
+
+      {/* Edit Activity Date Pickers */}
+      {showEditInteractionDatePicker && (
+        <DateTimePicker
+          value={editInteractionDate}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={(event, selectedDate) => {
+            setShowEditInteractionDatePicker(Platform.OS === 'ios');
+            if (selectedDate) {
+              setEditInteractionDate(selectedDate);
+              if (editValidationErrors.editInteractionDate) {
+                setEditValidationErrors(prev => ({ ...prev, editInteractionDate: '' }));
+              }
+            }
+          }}
+        />
+      )}
+
+      {showEditReminderDatePicker && (
+        <DateTimePicker
+          value={editReminderDate}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={(event, selectedDate) => {
+            setShowEditReminderDatePicker(Platform.OS === 'ios');
+            if (selectedDate) {
+              setEditReminderDate(selectedDate);
+              if (editValidationErrors.editReminderDate) {
+                setEditValidationErrors(prev => ({ ...prev, editReminderDate: '' }));
+              }
+            }
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -705,6 +3947,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 16,
     paddingBottom: 20,
+  },
+  statusBar: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 24,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  statusText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
   },
   title: {
     fontSize: 28,
@@ -838,6 +4092,31 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#111827',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  createNewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 4,
+  },
+  createNewButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -981,26 +4260,6 @@ const styles = StyleSheet.create({
   selectedTagText: {
     color: '#ffffff',
   },
-  newTagContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  newTagInput: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
-    color: '#111827',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  addTagButton: {
-    backgroundColor: '#EEF2FF',
-    padding: 12,
-    borderRadius: 8,
-  },
   familyInputs: {
     gap: 12,
   },
@@ -1012,6 +4271,10 @@ const styles = StyleSheet.create({
     color: '#111827',
     borderWidth: 1,
     borderColor: '#E5E7EB',
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
   },
   notesInput: {
     minHeight: 80,
@@ -1029,5 +4292,1302 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  saveButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+    opacity: 0.6,
+  },
+  deviceContactAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  deviceContactActionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#10B981',
+  },
+  permissionButton: {
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  permissionButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  loadingState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#6B7280',
+  },
+  // Relationship Detail Modal Styles
+  detailModalContainer: {
+    flex: 1,
+    backgroundColor: '#3B82F6',
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 20,
+  },
+  detailHeaderText: {
+    fontSize: 20,
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
+  detailContent: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
+  },
+  profileSection: {
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    alignItems: 'center',
+  },
+  profileImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#8B5CF6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  profileInitials: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  profileName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 4,
+  },
+  profileCompany: {
+    fontSize: 16,
+    color: '#E5E7EB',
+    marginBottom: 16,
+  },
+  addTagButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginBottom: 20,
+  },
+  addTagText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3B82F6',
+    marginLeft: 4,
+  },
+  profileInfo: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#ffffff',
+    marginLeft: 8,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+  },
+  getInTouchButton: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    marginRight: 12,
+  },
+  getInTouchText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#3B82F6',
+    textAlign: 'center',
+  },
+  moreButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  moreButtonText: {
+    fontSize: 20,
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  activeTab: {
+    paddingBottom: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: '#3B82F6',
+    marginRight: 24,
+  },
+  activeTabText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#3B82F6',
+  },
+  inactiveTab: {
+    paddingBottom: 12,
+  },
+  inactiveTabText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+  detailScrollView: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  detailScrollContent: {
+    paddingBottom: 20,
+    flexGrow: 1,
+    paddingTop:16
+  },
+  noteCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  noteHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  noteIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#EBF4FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  noteIconText: {
+    fontSize: 16,
+  },
+  noteTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  noteContent: {
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
+  },
+  activityHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  activityTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  activityFilter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  activityFilterText: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginRight: 4,
+  },
+  activityFilterArrow: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  activityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  activityIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#ECFDF5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityCardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  activityCardSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  activityTime: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  activityHint: {
+    fontSize: 10,
+    color: '#9CA3AF',
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  activityIconText: {
+    fontSize: 20,
+  },
+  activityActions: {
+    alignItems: 'flex-end',
+  },
+  noActivityCard: {
+    backgroundColor: '#F9FAFB',
+    padding: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  noActivityText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontStyle: 'italic',
+  },
+  // Dropdown styles
+  dropdownContainer: {
+    position: 'relative',
+    zIndex: 1000,
+    alignSelf: 'flex-end',
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    minWidth: 140,
+  },
+  dropdownButtonText: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+    flex: 1,
+  },
+  dropdownArrow: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginLeft: 8,
+    transform: [{ rotate: '0deg' }],
+  },
+  dropdownArrowOpen: {
+    transform: [{ rotate: '180deg' }],
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: '100%',
+    right: 0,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    minWidth: 160,
+    marginTop: 4,
+    maxHeight: 200,
+    zIndex: 1001,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  dropdownItemSelected: {
+    backgroundColor: '#F3F4F6',
+  },
+  dropdownItemIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  dropdownItemText: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  dropdownItemTextSelected: {
+    color: '#3B82F6',
+    fontWeight: '600',
+  },
+  dropdownScrollView: {
+    maxHeight: 180,
+  },
+  dropdownMenuAbove: {
+    top: 'auto',
+    bottom: '100%',
+    marginTop: 0,
+    marginBottom: 4,
+  },
+  // Edit functionality styles
+  editButton: {
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  editButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  editActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editSaveButton: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  editSaveButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  editCancelButton: {
+    backgroundColor: '#6B7280',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  editCancelButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  noteInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: '#374151',
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  familyInfoInputs: {
+    gap: 12,
+  },
+  familyInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  familyInfoLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    minWidth: 60,
+  },
+  familyInfoInput: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: '#374151',
+  },
+  // Tap hint and edit modal styles
+  tapHint: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontStyle: 'italic',
+  },
+  editNoteContainer: {
+    padding: 20,
+  },
+  editNoteLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 12,
+  },
+  editNoteInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: '#374151',
+    minHeight: 120,
+    textAlignVertical: 'top',
+  },
+  editFamilyInfoContainer: {
+    padding: 20,
+  },
+  editFamilyInfoLabel: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  editFamilyInfoSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  modalScrollView: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  // Compact edit modal styles
+  editModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  editModalContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    width: '100%',
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  editModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  editModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 16,
+  },
+  editModalSaveButton: {
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  editModalSaveButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  editModalContent: {
+    padding: 20,
+  },
+  editModalScrollView: {
+    maxHeight: 400,
+  },
+  // Enhanced family info modal styles
+  familyInfoCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+  },
+  familyInfoField: {
+    marginBottom: 20,
+  },
+  familyInfoFieldLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  familyInfoFieldInput: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#374151',
+    minHeight: 48,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  // Activity creation modal styles
+  addActivityOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  addActivityContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    width: '100%',
+    height: '85%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  addActivityHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  addActivityTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 16,
+  },
+  addActivitySaveButton: {
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  addActivitySaveButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  activityTypeTabs: {
+    minHeight:70,
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    marginHorizontal: 12,
+    marginVertical: 8,
+    borderRadius: 10,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  activityTypeTab: {
+    flex: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  animatedTabButton: {
+    flex: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 40,
+    position: 'relative',
+    backgroundColor: 'transparent',
+  },
+  activeActivityTypeTab: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+  },
+  tabIconContainer: {
+    marginBottom: 1,
+    padding: 2,
+    borderRadius: 4,
+    backgroundColor: 'rgba(100, 116, 139, 0.1)',
+  },
+  activeTabIconContainer: {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    transform: [{ scale: 1.05 }],
+  },
+  tabIcon: {
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  activityTypeTabText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#64748B',
+    textAlign: 'center',
+    letterSpacing: 0,
+    lineHeight: 12,
+  },
+  activeActivityTypeTabText: {
+    color: '#3B82F6',
+    fontWeight: '600',
+  },
+  addActivityContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  activitySection: {
+    paddingTop: 20,
+    paddingBottom: 20,
+  },
+  activitySectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 16,
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+    marginBottom: 6,
+  },
+  activityInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#374151',
+    minHeight: 48,
+  },
+  activityTextArea: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#374151',
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#EF4444',
+    marginTop: 4,
+  },
+  interactionTypeButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  interactionTypeButton: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  activeInteractionTypeButton: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#3B82F6',
+  },
+  interactionTypeButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  activeInteractionTypeButtonText: {
+    color: '#ffffff',
+  },
+  reminderTypeButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  reminderTypeButton: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  activeReminderTypeButton: {
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
+  },
+  reminderTypeButtonText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6B7280',
+    textTransform: 'capitalize',
+  },
+  activeReminderTypeButtonText: {
+    color: '#ffffff',
+  },
+  frequencyButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  frequencyButton: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  activeFrequencyButton: {
+    backgroundColor: '#8B5CF6',
+    borderColor: '#8B5CF6',
+  },
+  frequencyButtonText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+  activeFrequencyButtonText: {
+    color: '#ffffff',
+  },
+  inputFieldPlaceholder: {
+    fontSize: 16,
+    color: '#9CA3AF',
+  },
+  bottomInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  inputMenuButton: {
+    marginRight: 12,
+  },
+  inputMenuText: {
+    fontSize: 18,
+    color: '#6B7280',
+  },
+  inputField: {
+    flex: 1,
+    fontSize: 16,
+    color: '#111827',
+  },
+  editHint: {
+    fontSize: 12,
+    color: '#E5E7EB',
+    marginLeft: 8,
+    fontStyle: 'italic',
+  },
+  // Frequency Modal Styles
+  frequencyModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  frequencyModalContainer: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 34, // Safe area padding
+  },
+  frequencyModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  frequencyModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  frequencyOptions: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  frequencyOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: '#F9FAFB',
+  },
+  frequencyOptionSelected: {
+    backgroundColor: '#EBF4FF',
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+  },
+  frequencyOptionText: {
+    fontSize: 16,
+    color: '#111827',
+  },
+  frequencyOptionTextSelected: {
+    color: '#3B82F6',
+    fontWeight: '600',
+  },
+  frequencyCheckmark: {
+    fontSize: 16,
+    color: '#3B82F6',
+    fontWeight: 'bold',
+  },
+  // Contact Actions Modal Styles
+  contactActionsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  contactActionsContainer: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 34, // Safe area padding
+  },
+  contactActionsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  contactActionsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    flex: 1,
+  },
+  contactActionsList: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  contactActionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: '#F9FAFB',
+  },
+  contactActionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  whatsappIcon: {
+    fontSize: 24,
+  },
+  contactActionContent: {
+    flex: 1,
+  },
+  contactActionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  contactActionSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  // More Actions Modal Styles
+  moreActionsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  moreActionsContainer: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 34, // Safe area padding
+  },
+  moreActionsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  moreActionsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    flex: 1,
+  },
+  moreActionsList: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  moreActionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: '#F9FAFB',
+  },
+  moreActionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  linkedinIcon: {
+    fontSize: 24,
+  },
+  xIcon: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#000000',
+  },
+  facebookIcon: {
+    fontSize: 24,
+  },
+  googleIcon: {
+    fontSize: 24,
+  },
+  moreActionContent: {
+    flex: 1,
+  },
+  moreActionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  moreActionSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  // Detail Actions Modal Styles
+  detailActionsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  detailActionsContainer: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 34, // Safe area padding
+  },
+  detailActionsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  detailActionsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    flex: 1,
+  },
+  detailActionsList: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  detailActionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: '#F9FAFB',
+  },
+  detailActionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  editIcon: {
+    fontSize: 24,
+  },
+  shareIcon: {
+    fontSize: 24,
+  },
+  removeIcon: {
+    fontSize: 24,
+  },
+  reminderIcon: {
+    fontSize: 24,
+  },
+  detailActionContent: {
+    flex: 1,
+  },
+  detailActionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  detailActionSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  // Add Reminder Modal Styles
+  addReminderOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addReminderContainer: {
+    flex:1,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    width: '90%',
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  addReminderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  addReminderTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#111827',
+    flex: 1,
+  },
+  addReminderContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  reminderForm: {
+    paddingVertical: 16,
+  },
+  reminderFormLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+    marginTop: 16,
+  },
+  reminderContactName: {
+    fontSize: 16,
+    color: '#6B7280',
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  dateTimeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+  dateTimeButtonText: {
+    fontSize: 16,
+    color: '#374151',
+    marginLeft: 8,
+    flex: 1,
+  },
+  dateTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reminderNoteInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#374151',
+    minHeight: 80,
+    marginBottom: 16,
+  },
+  addReminderActions: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    gap: 12,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  createReminderButton: {
+    flex: 1,
+    backgroundColor: '#3B82F6',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  createReminderButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 });

@@ -9,6 +9,7 @@ import {
   Alert,
   Switch,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNotifications } from '../hooks/useNotifications';
 import type { NotificationData } from '../services/NotificationService';
 
@@ -197,23 +198,24 @@ export const NotificationExample: React.FC = () => {
 
   if (!isInitialized) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <Text style={styles.loadingText}>Initializing notifications...</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (!hasPermission) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <Text style={styles.errorText}>Notification permissions not granted</Text>
         <Text style={styles.subText}>Please enable notifications in your device settings</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      <ScrollView style={styles.scrollView}>
       <Text style={styles.title}>Notification Scheduler</Text>
 
       <View style={styles.section}>
@@ -311,15 +313,19 @@ export const NotificationExample: React.FC = () => {
           <Text style={styles.buttonText}>Cancel All Notifications</Text>
         </TouchableOpacity>
       )}
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
     backgroundColor: '#f5f5f5',
+  },
+  scrollView: {
+    flex: 1,
+    padding: 20,
   },
   title: {
     fontSize: 24,

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../hooks/useAuth';
 import { useUser } from '../hooks/useUser';
 
@@ -71,7 +72,7 @@ export const AuthExample: React.FC = () => {
 
   if (currentUser) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <Text style={styles.title}>Welcome!</Text>
         <Text style={styles.subtitle}>You are logged in as: {currentUser.email}</Text>
         
@@ -82,8 +83,6 @@ export const AuthExample: React.FC = () => {
             <Text style={styles.profileText}>Name: {userProfile.name}</Text>
             <Text style={styles.profileText}>Email: {userProfile.email}</Text>
             {userProfile.phone && <Text style={styles.profileText}>Phone: {userProfile.phone}</Text>}
-            {userProfile.age && <Text style={styles.profileText}>Age: {userProfile.age}</Text>}
-            {userProfile.gender && <Text style={styles.profileText}>Gender: {userProfile.gender}</Text>}
           </View>
         ) : (
           <Text>No profile data available</Text>
@@ -92,12 +91,12 @@ export const AuthExample: React.FC = () => {
         <TouchableOpacity style={styles.button} onPress={handleSignOut}>
           <Text style={styles.buttonText}>Sign Out</Text>
         </TouchableOpacity>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Authentication Example</Text>
       
       {/* Login Form */}
@@ -177,7 +176,7 @@ export const AuthExample: React.FC = () => {
           </Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
