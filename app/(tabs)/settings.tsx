@@ -193,7 +193,7 @@ export default function SettingsScreen() {
         
 
         {/* Appearance Section */}
-        <View style={styles.section}>
+        {/* <View style={styles.section}>
           <Text style={styles.sectionTitle}>Appearance</Text>
           <SettingItem
             icon={darkMode ? Moon : Sun}
@@ -209,7 +209,7 @@ export default function SettingsScreen() {
             }
             showChevron={false}
           />
-        </View>
+        </View> */}
 
         {/* Privacy & Security Section */}
         <View style={styles.section}>
@@ -220,12 +220,12 @@ export default function SettingsScreen() {
             subtitle="Learn how we protect your data"
             onPress={() => Alert.alert('Privacy Policy', 'Privacy policy will be available soon.')}
           />
-          <SettingItem
+          {/* <SettingItem
             icon={Shield}
             title="Data Export"
             subtitle="Export your data"
             onPress={() => Alert.alert('Data Export', 'Data export feature will be available soon.')}
-          />
+          /> */}
         </View>
 
         {/* Help & Support Section */}

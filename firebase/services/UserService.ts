@@ -1,4 +1,3 @@
-import type { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import {
   collection,
   deleteDoc,
@@ -8,7 +7,9 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
-} from '@react-native-firebase/firestore';
+  DocumentSnapshot,
+  Unsubscribe,
+} from 'firebase/firestore';
 import { db } from '../config';
 import type { User } from '../types';
 
@@ -70,11 +71,11 @@ export default class UsersService {
   /**
    * Subscribe to a user's profile document
    */
-  static subscribeToUser(userId: string, callback: (user: User) => void) {
+  static subscribeToUser(userId: string, callback: (user: User) => void): Unsubscribe {
     const userDocRef = doc(collection(db, this.COLLECTION_NAME), userId);
     return onSnapshot(
       userDocRef,
-      (snap: FirebaseFirestoreTypes.DocumentSnapshot) => {
+      (snap: DocumentSnapshot) => {
         if (snap.exists()) {
           const data = snap.data() || {};
           callback({ id: snap.id, ...data } as User);

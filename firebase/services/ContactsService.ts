@@ -1,4 +1,4 @@
-import type { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+import type { DocumentSnapshot, QuerySnapshot, Unsubscribe } from 'firebase/firestore';
 import {
   collection,
   deleteDoc,
@@ -12,7 +12,7 @@ import {
   updateDoc,
   where,
   orderBy,
-} from '@react-native-firebase/firestore';
+} from 'firebase/firestore';
 import { db } from '../config';
 import type { Contact, ContactInteraction } from '../types';
 import * as ExpoContacts from 'expo-contacts';

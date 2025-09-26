@@ -1,4 +1,4 @@
-import type { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+import type { DocumentSnapshot, QuerySnapshot, Unsubscribe } from 'firebase/firestore';
 import {
   doc,
   getDoc,
@@ -6,7 +6,7 @@ import {
   updateDoc,
   deleteDoc,
   serverTimestamp,
-} from '@react-native-firebase/firestore';
+} from 'firebase/firestore';
 import { db } from '../config';
 import type { BusinessCard } from '../types';
 

@@ -12,9 +12,10 @@ import {
   Platform,
   Linking,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { Calendar, Clock, Filter, Search, X, Plus, Bell, CircleCheck as CheckCircle, CircleAlert as AlertCircle, ChevronDown, Users, Phone, MessageCircle, Mail } from 'lucide-react-native';
+import WebCompatibleDateTimePicker from '../../components/WebCompatibleDateTimePicker';
+import { Calendar, Clock, Filter, Search, X, Plus, Bell, CircleCheck as CheckCircle, CircleAlert as AlertCircle, ChevronDown, Users, Phone, MessageCircle, Mail, ArrowLeft } from 'lucide-react-native';
 import { useRemindersInfinite } from '../../firebase/hooks/useRemindersInfinite';
 import { useAuth } from '../../firebase/hooks/useAuth';
 import { useRelationships } from '../../firebase/hooks/useRelationships';
@@ -24,6 +25,7 @@ import * as Contacts from 'expo-contacts';
 
 
 export default function RemindersScreen() {
+  const router = useRouter();
   const { currentUser } = useAuth();
   
   const { relationships, isLoading: relationshipsLoading } = useRelationships();
@@ -965,26 +967,76 @@ export default function RemindersScreen() {
               </View>
               
               <Text style={styles.reminderFormLabel}>Date *</Text>
-              <TouchableOpacity 
-                style={styles.dateTimeButton}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Calendar size={20} color="#6B7280" />
-                <Text style={styles.dateTimeButtonText}>
-                  {reminderDate.toLocaleDateString()}
-                </Text>
-              </TouchableOpacity>
+              {Platform.OS === 'web' ? (
+                <View style={styles.webDateTimeInput}>
+                  <input
+                    type="date"
+                    value={reminderDate.toISOString().slice(0, 10)}
+                    onChange={(e) => {
+                      const selectedDate = new Date(e.target.value);
+                      selectedDate.setHours(reminderTime.getHours(), reminderTime.getMinutes());
+                      setReminderDate(selectedDate);
+                    }}
+                    min={new Date().toISOString().slice(0, 10)}
+                    style={{
+                      padding: '12px',
+                      border: '1px solid #D1D5DB',
+                      borderRadius: '8px',
+                      fontSize: '16px',
+                      backgroundColor: '#ffffff',
+                      color: '#111827',
+                      outline: 'none',
+                      width: '100%',
+                    }}
+                  />
+                </View>
+              ) : (
+                <TouchableOpacity 
+                  style={styles.dateTimeButton}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Calendar size={20} color="#6B7280" />
+                  <Text style={styles.dateTimeButtonText}>
+                    {reminderDate.toLocaleDateString()}
+                  </Text>
+                </TouchableOpacity>
+              )}
               
               <Text style={styles.reminderFormLabel}>Time *</Text>
-              <TouchableOpacity 
-                style={styles.dateTimeButton}
-                onPress={() => setShowTimePicker(true)}
-              >
-                <Clock size={20} color="#6B7280" />
-                <Text style={styles.dateTimeButtonText}>
-                  {reminderTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </Text>
-              </TouchableOpacity>
+              {Platform.OS === 'web' ? (
+                <View style={styles.webDateTimeInput}>
+                  <input
+                    type="time"
+                    value={reminderTime.toTimeString().slice(0, 5)}
+                    onChange={(e) => {
+                      const [hours, minutes] = e.target.value.split(':').map(Number);
+                      const newTime = new Date(reminderTime);
+                      newTime.setHours(hours, minutes);
+                      setReminderTime(newTime);
+                    }}
+                    style={{
+                      padding: '12px',
+                      border: '1px solid #D1D5DB',
+                      borderRadius: '8px',
+                      fontSize: '16px',
+                      backgroundColor: '#ffffff',
+                      color: '#111827',
+                      outline: 'none',
+                      width: '100%',
+                    }}
+                  />
+                </View>
+              ) : (
+                <TouchableOpacity 
+                  style={styles.dateTimeButton}
+                  onPress={() => setShowTimePicker(true)}
+                >
+                  <Clock size={20} color="#6B7280" />
+                  <Text style={styles.dateTimeButtonText}>
+                    {reminderTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </TouchableOpacity>
+              )}
               
               <Text style={styles.helperText}>
                 Please select a future date and time for your reminder
@@ -1244,26 +1296,76 @@ export default function RemindersScreen() {
               </View>
               
               <Text style={styles.reminderFormLabel}>Date *</Text>
-              <TouchableOpacity 
-                style={styles.dateTimeButton}
-                onPress={() => setShowEditDatePicker(true)}
-              >
-                <Calendar size={20} color="#6B7280" />
-                <Text style={styles.dateTimeButtonText}>
-                  {editReminderDate.toLocaleDateString()}
-                </Text>
-              </TouchableOpacity>
+              {Platform.OS === 'web' ? (
+                <View style={styles.webDateTimeInput}>
+                  <input
+                    type="date"
+                    value={editReminderDate.toISOString().slice(0, 10)}
+                    onChange={(e) => {
+                      const selectedDate = new Date(e.target.value);
+                      selectedDate.setHours(editReminderTime.getHours(), editReminderTime.getMinutes());
+                      setEditReminderDate(selectedDate);
+                    }}
+                    min={new Date().toISOString().slice(0, 10)}
+                    style={{
+                      padding: '12px',
+                      border: '1px solid #D1D5DB',
+                      borderRadius: '8px',
+                      fontSize: '16px',
+                      backgroundColor: '#ffffff',
+                      color: '#111827',
+                      outline: 'none',
+                      width: '100%',
+                    }}
+                  />
+                </View>
+              ) : (
+                <TouchableOpacity 
+                  style={styles.dateTimeButton}
+                  onPress={() => setShowEditDatePicker(true)}
+                >
+                  <Calendar size={20} color="#6B7280" />
+                  <Text style={styles.dateTimeButtonText}>
+                    {editReminderDate.toLocaleDateString()}
+                  </Text>
+                </TouchableOpacity>
+              )}
               
               <Text style={styles.reminderFormLabel}>Time *</Text>
-              <TouchableOpacity 
-                style={styles.dateTimeButton}
-                onPress={() => setShowEditTimePicker(true)}
-              >
-                <Clock size={20} color="#6B7280" />
-                <Text style={styles.dateTimeButtonText}>
-                  {editReminderTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </Text>
-              </TouchableOpacity>
+              {Platform.OS === 'web' ? (
+                <View style={styles.webDateTimeInput}>
+                  <input
+                    type="time"
+                    value={editReminderTime.toTimeString().slice(0, 5)}
+                    onChange={(e) => {
+                      const [hours, minutes] = e.target.value.split(':').map(Number);
+                      const newTime = new Date(editReminderTime);
+                      newTime.setHours(hours, minutes);
+                      setEditReminderTime(newTime);
+                    }}
+                    style={{
+                      padding: '12px',
+                      border: '1px solid #D1D5DB',
+                      borderRadius: '8px',
+                      fontSize: '16px',
+                      backgroundColor: '#ffffff',
+                      color: '#111827',
+                      outline: 'none',
+                      width: '100%',
+                    }}
+                  />
+                </View>
+              ) : (
+                <TouchableOpacity 
+                  style={styles.dateTimeButton}
+                  onPress={() => setShowEditTimePicker(true)}
+                >
+                  <Clock size={20} color="#6B7280" />
+                  <Text style={styles.dateTimeButtonText}>
+                    {editReminderTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </TouchableOpacity>
+              )}
               
               <Text style={styles.helperText}>
                 Please select a future date and time for your reminder
@@ -1397,7 +1499,12 @@ export default function RemindersScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Reminders</Text>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <ArrowLeft size={24} color="#374151" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Reminders</Text>
+        </View>
         <View style={styles.headerActions}>
           <TouchableOpacity 
             style={styles.iconButton}
@@ -1425,7 +1532,7 @@ export default function RemindersScreen() {
         style={{ marginVertical: 8}}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', gap:8, paddingHorizontal:10, paddingVertical:10 }}>
-          {(['all', 'upcoming', 'thisWeek', 'missed'] as ReminderTab[]).map((tab) => (
+          {(['all', 'thisWeek', 'upcoming', 'missed'] as ReminderTab[]).map((tab) => (
             <TouchableOpacity
               key={tab}
               style={[
@@ -1519,9 +1626,9 @@ export default function RemindersScreen() {
       {renderContactPickerModal()}
       {renderContactActionsModal()}
 
-      {/* Date Picker */}
-      {showDatePicker && (
-        <DateTimePicker
+      {/* Date Pickers for Native Platforms */}
+      {Platform.OS !== 'web' && showDatePicker && (
+        <WebCompatibleDateTimePicker
           value={reminderDate}
           mode="date"
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
@@ -1530,9 +1637,9 @@ export default function RemindersScreen() {
         />
       )}
 
-      {/* Time Picker */}
-      {showTimePicker && (
-        <DateTimePicker
+      {/* Time Picker for Native Platforms */}
+      {Platform.OS !== 'web' && showTimePicker && (
+        <WebCompatibleDateTimePicker
           value={reminderTime}
           mode="time"
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
@@ -1540,9 +1647,9 @@ export default function RemindersScreen() {
         />
       )}
 
-      {/* Edit Date Picker */}
-      {showEditDatePicker && (
-        <DateTimePicker
+      {/* Edit Date Picker for Native Platforms */}
+      {Platform.OS !== 'web' && showEditDatePicker && (
+        <WebCompatibleDateTimePicker
           value={editReminderDate}
           mode="date"
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
@@ -1551,9 +1658,9 @@ export default function RemindersScreen() {
         />
       )}
 
-      {/* Edit Time Picker */}
-      {showEditTimePicker && (
-        <DateTimePicker
+      {/* Edit Time Picker for Native Platforms */}
+      {Platform.OS !== 'web' && showEditTimePicker && (
+        <WebCompatibleDateTimePicker
           value={editReminderTime}
           mode="time"
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
@@ -1576,6 +1683,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 16,
     paddingBottom: 8,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 12,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
   },
   title: {
     fontSize: 32,
@@ -2014,6 +2132,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 8,
+    maxWidth:500
   },
   addReminderHeader: {
     flexDirection: 'row',
@@ -2124,6 +2243,9 @@ const styles = StyleSheet.create({
     color: '#374151',
     marginLeft: 8,
     flex: 1,
+  },
+  webDateTimeInput: {
+    // Container for web datetime inputs
   },
   helperText: {
     fontSize: 12,

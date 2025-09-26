@@ -1,4 +1,4 @@
-import type { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+import type { DocumentSnapshot, QuerySnapshot, Unsubscribe } from 'firebase/firestore';
 import {
   collection,
   deleteDoc,
@@ -12,7 +12,7 @@ import {
   updateDoc,
   where,
   orderBy,
-} from '@react-native-firebase/firestore';
+} from 'firebase/firestore';
 import { db } from '../config';
 import type { Relationship, LastContactOption, ContactMethod, ReminderFrequency } from '../types';
 
@@ -30,6 +30,20 @@ export interface CreateRelationshipData {
     siblings: string;
     spouse: string;
   };
+  contactData?: {
+    phoneNumbers?: { number: string; label?: string }[];
+    emails?: { email: string; label?: string }[];
+    website?: string;
+    linkedin?: string;
+    twitter?: string;
+    instagram?: string;
+    facebook?: string;
+    company?: string;
+    jobTitle?: string;
+    address?: string;
+    birthday?: string;
+    notes?: string;
+  };
 }
 
 export interface UpdateRelationshipData {
@@ -45,6 +59,20 @@ export interface UpdateRelationshipData {
     kids: string;
     siblings: string;
     spouse: string;
+  };
+  contactData?: {
+    phoneNumbers?: { number: string; label?: string }[];
+    emails?: { email: string; label?: string }[];
+    website?: string;
+    linkedin?: string;
+    twitter?: string;
+    instagram?: string;
+    facebook?: string;
+    company?: string;
+    jobTitle?: string;
+    address?: string;
+    birthday?: string;
+    notes?: string;
   };
 }
 
@@ -316,11 +344,29 @@ class RelationshipsService {
       const relationships = await this.getRelationships(userId);
       const lowercaseQuery = query.toLowerCase();
 
-      return relationships.filter(r =>
-        r.contactName.toLowerCase().includes(lowercaseQuery) ||
-        r.tags.some(tag => tag.toLowerCase().includes(lowercaseQuery)) ||
-        r.notes.toLowerCase().includes(lowercaseQuery)
-      );
+      return relationships.filter(r => {
+        // Search in basic relationship data
+        const basicMatch = r.contactName.toLowerCase().includes(lowercaseQuery) ||
+          r.tags.some(tag => tag.toLowerCase().includes(lowercaseQuery)) ||
+          r.notes.toLowerCase().includes(lowercaseQuery);
+        
+        // Search in contact data if available
+        const contactDataMatch = r.contactData ? (
+          r.contactData.company?.toLowerCase().includes(lowercaseQuery) ||
+          r.contactData.jobTitle?.toLowerCase().includes(lowercaseQuery) ||
+          r.contactData.website?.toLowerCase().includes(lowercaseQuery) ||
+          r.contactData.linkedin?.toLowerCase().includes(lowercaseQuery) ||
+          r.contactData.twitter?.toLowerCase().includes(lowercaseQuery) ||
+          r.contactData.instagram?.toLowerCase().includes(lowercaseQuery) ||
+          r.contactData.facebook?.toLowerCase().includes(lowercaseQuery) ||
+          r.contactData.address?.toLowerCase().includes(lowercaseQuery) ||
+          r.contactData.notes?.toLowerCase().includes(lowercaseQuery) ||
+          r.contactData.emails?.some(email => email.email.toLowerCase().includes(lowercaseQuery)) ||
+          r.contactData.phoneNumbers?.some(phone => phone.number.includes(lowercaseQuery))
+        ) : false;
+        
+        return basicMatch || contactDataMatch;
+      });
     } catch (error) {
       console.error('Error searching relationships:', error);
       return [];

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,100 +13,30 @@ import {
   FlatList,
 } from 'react-native';
 import WebCompatibleDateTimePicker from './WebCompatibleDateTimePicker';
-import { X, ChevronDown, Search } from 'lucide-react-native';
+import { X, ChevronDown, Search, Calendar, Clock } from 'lucide-react-native';
 import { useActivity } from '../firebase/hooks/useActivity';
 import { useRelationships } from '../firebase/hooks/useRelationships';
 import { useAuth } from '../firebase/hooks/useAuth';
 import ReminderNotificationService from '../services/ReminderNotificationService';
 
-interface AddActivityModalProps {
+interface EditActivityModalProps {
   visible: boolean;
   onClose: () => void;
-  contactId?: string;
-  contactName?: string;
-  onActivityCreated?: () => void;
-  editingActivity?: any; // Activity being edited
+  activity: any; // Activity being edited
   onActivityUpdated?: () => void; // Callback when activity is updated
 }
 
-export default function AddActivityModal({
+export default function EditActivityModal({
   visible,
   onClose,
-  contactId = '',
-  contactName = '',
-  onActivityCreated,
-  editingActivity,
+  activity,
   onActivityUpdated,
-}: AddActivityModalProps) {
-  const { createActivity, updateActivity } = useActivity();
-  const { relationships, createRelationship } = useRelationships();
+}: EditActivityModalProps) {
+  const { updateActivity } = useActivity();
+  const { relationships } = useRelationships();
   const { currentUser } = useAuth();
-  
-  // Debug relationships loading
-  console.log('🔗 Relationships loaded:', relationships.length);
-  console.log('🔗 Relationships data:', relationships);
-  
-  // Monitor relationships changes
-  useEffect(() => {
-    console.log('🔄 Relationships updated:', relationships.length);
-    if (relationships.length > 0) {
-      console.log('✅ Relationships available for search');
-    } else {
-      console.log('⚠️ No relationships available');
-    }
-  }, [relationships]);
-
-  // Helper function to ensure relationship exists for a contact
-  const ensureRelationshipExists = async (contactName: string) => {
-    try {
-      // Check if relationship already exists
-      const existingRelationship = relationships.find(rel => 
-        rel.contactName.toLowerCase() === contactName.toLowerCase()
-      );
-      
-      if (existingRelationship) {
-        console.log('✅ Relationship already exists for:', contactName);
-        return existingRelationship;
-      }
-      
-      // Create new relationship
-      console.log('🔄 Creating new relationship for:', contactName);
-      const newRelationship = await createRelationship({
-        contactId: `contact_${Date.now()}`, // Generate unique ID
-        contactName: contactName,
-        lastContactDate: new Date().toISOString(),
-        lastContactMethod: 'other',
-        reminderFrequency: 'month',
-        nextReminderDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
-        tags: [],
-        notes: '',
-        familyInfo: { kids: '', siblings: '', spouse: '' },
-        contactData: {
-          phoneNumbers: [],
-          emails: [],
-          website: '',
-          linkedin: '',
-          twitter: '',
-          instagram: '',
-          facebook: '',
-          company: '',
-          jobTitle: '',
-          address: '',
-          birthday: '',
-          notes: '',
-        },
-      });
-      
-      console.log('✅ New relationship created for:', contactName);
-      return newRelationship;
-    } catch (error) {
-      console.error('❌ Error creating relationship for:', contactName, error);
-      // Don't throw error, just log it and continue
-      return null;
-    }
-  };
-  
   const reminderNotificationService = ReminderNotificationService.getInstance();
+  
   const [activeActivityTab, setActiveActivityTab] = useState<
     'note' | 'interaction' | 'reminder'
   >('note');
@@ -118,11 +48,6 @@ export default function AddActivityModal({
     id: string;
     name: string;
   } | null>(null);
-  
-  // Direct contact search states
-  const [showContactSearch, setShowContactSearch] = useState(false);
-  const [filteredContacts, setFilteredContacts] = useState<Array<{id: string; name: string}>>([]);
-  const searchContainerRef = useRef<any>(null);
 
   // Animation states for tabs
   const tabAnimations = useRef({
@@ -135,18 +60,6 @@ export default function AddActivityModal({
   const [noteTitle, setNoteTitle] = useState('');
   const [noteContent, setNoteContent] = useState('');
   const [noteTags, setNoteTags] = useState<string[]>([]);
-
-  // Local contact name state for when not provided by parent
-  const [localContactName, setLocalContactName] = useState(contactName);
-
-  // Determine if contact is provided by parent (read-only) or needs to be selected
-  const isContactProvided = contactId && contactName;
-  const currentContactId = isContactProvided
-    ? contactId
-    : selectedContact?.id || '';
-  const currentContactName = isContactProvided
-    ? contactName
-    : selectedContact?.name || localContactName;
 
   // Interaction activity states
   const [interactionType, setInteractionType] = useState<
@@ -186,53 +99,55 @@ export default function AddActivityModal({
   const [showReminderDatePicker, setShowReminderDatePicker] = useState(false);
   const [showReminderTimePicker, setShowReminderTimePicker] = useState(false);
 
-  // Update contact name when prop changes
-  useEffect(() => {
-    setLocalContactName(contactName);
-  }, [contactName]);
-
   // Populate form when editing an activity
   useEffect(() => {
-    if (editingActivity && visible) {
-      setActiveActivityTab(editingActivity.type);
+    if (activity && visible) {
+      // Set the activity type tab based on the activity being edited
+      setActiveActivityTab(activity.type);
 
-      if (editingActivity.type === 'note') {
-        setNoteTitle(editingActivity.title || '');
+      // Set contact information if available
+      if (activity.contactId && activity.contactName) {
+        setSelectedContact({
+          id: activity.contactId,
+          name: activity.contactName,
+        });
+      }
+
+      if (activity.type === 'note') {
+        // setNoteTitle(activity.title || '');
         setNoteContent(
-          editingActivity.content || editingActivity.description || ''
+          activity.content || activity.description || ''
         );
-      } else if (editingActivity.type === 'interaction') {
-        setInteractionType(editingActivity.interactionType || 'call');
+        setNoteTags(activity.tags || []);
+      } else if (activity.type === 'interaction') {
+        setInteractionType(activity.interactionType || 'call');
         setInteractionDate(
-          editingActivity.date ? new Date(editingActivity.date) : new Date()
+          activity.date ? new Date(activity.date) : new Date()
         );
-        setInteractionNotes(editingActivity.description || '');
-        setInteractionDuration(editingActivity.duration?.toString() || '');
-        setInteractionLocation(editingActivity.location || '');
-      } else if (editingActivity.type === 'reminder') {
-        setActivityReminderTitle(editingActivity.title || '');
+        setInteractionNotes(activity.description || '');
+        setInteractionDuration(activity.duration?.toString() || '');
+        setInteractionLocation(activity.location || '');
+      } else if (activity.type === 'reminder') {
+        // setActivityReminderTitle(activity.title || '');
         setActivityReminderDate(
-          editingActivity.reminderDate
-            ? new Date(editingActivity.reminderDate)
+          activity.reminderDate
+            ? new Date(activity.reminderDate)
             : new Date()
         );
-        setActivityReminderType(editingActivity.reminderType || 'follow_up');
-        setActivityReminderFrequency(editingActivity.frequency || 'month');
-        setActivityReminderNotes(editingActivity.description || '');
+        setActivityReminderType(activity.reminderType || 'follow_up');
+        setActivityReminderFrequency(activity.frequency || 'month');
+        setActivityReminderNotes(activity.description || '');
       }
     }
-  }, [editingActivity, visible]);
+  }, [activity, visible]);
 
   const resetActivityForm = () => {
     setNoteTitle('');
     setNoteContent('');
     setNoteTags([]);
-    setLocalContactName(contactName);
     setSelectedContact(null);
     setContactSearchQuery('');
     setShowContactPicker(false);
-    setShowContactSearch(false);
-    setFilteredContacts([]);
     setInteractionType('call');
     setInteractionDate(new Date());
     setInteractionNotes('');
@@ -248,6 +163,16 @@ export default function AddActivityModal({
   };
 
   const handleTabSwitch = (tab: 'note' | 'interaction' | 'reminder') => {
+    // Prevent changing activity type during editing
+    if (activity && activity.type !== tab) {
+      Alert.alert(
+        'Cannot Change Activity Type',
+        'You cannot change the activity type while editing. Please create a new activity if you need a different type.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     setActiveActivityTab(tab);
 
     // Animate tab switches
@@ -371,21 +296,21 @@ export default function AddActivityModal({
     const errors: Record<string, string> = {};
 
     if (activeActivityTab === 'note') {
-      if (!currentContactName.trim()) {
-        errors.contactName = 'Contact name is required';
-      }
       // if (!noteTitle.trim()) {
       //   errors.noteTitle = 'Note title is required';
+      // } else if (noteTitle.trim().length < 3) {
+      //   errors.noteTitle = 'Note title must be at least 3 characters';
       // }
       if (!noteContent.trim()) {
         errors.noteContent = 'Note content is required';
+      } else if (noteContent.trim().length < 10) {
+        errors.noteContent = 'Note content must be at least 10 characters';
       }
     } else if (activeActivityTab === 'interaction') {
-      if (!currentContactName.trim()) {
-        errors.contactName = 'Contact name is required for interactions';
-      }
       if (!interactionNotes.trim()) {
         errors.interactionNotes = 'Interaction notes are required';
+      } else if (interactionNotes.trim().length < 10) {
+        errors.interactionNotes = 'Interaction notes must be at least 10 characters';
       }
       if (!interactionDate) {
         errors.interactionDate = 'Interaction date is required';
@@ -399,12 +324,17 @@ export default function AddActivityModal({
           errors.interactionDate = 'Interaction date must be in the past or present';
         }
       }
-    } else if (activeActivityTab === 'reminder') {
-      if (!currentContactName.trim()) {
-        errors.contactName = 'Contact name is required for reminders';
+      // Validate duration if provided
+      if (interactionDuration && isNaN(parseInt(interactionDuration))) {
+        errors.interactionDuration = 'Duration must be a valid number';
+      } else if (interactionDuration && parseInt(interactionDuration) < 0) {
+        errors.interactionDuration = 'Duration cannot be negative';
       }
+    } else if (activeActivityTab === 'reminder') {
       // if (!activityReminderTitle.trim()) {
       //   errors.reminderTitle = 'Reminder title is required';
+      // } else if (activityReminderTitle.trim().length < 3) {
+      //   errors.reminderTitle = 'Reminder title must be at least 3 characters';
       // }
       if (!activityReminderDate) {
         errors.reminderDate = 'Reminder date is required';
@@ -415,6 +345,11 @@ export default function AddActivityModal({
         if (reminderDateTime <= now) {
           errors.reminderDate = 'Reminder date must be in the future';
         }
+        // Check if reminder date is not too far in the future (e.g., 10 years)
+        const tenYearsFromNow = new Date(now.getTime() + 10 * 365 * 24 * 60 * 60 * 1000);
+        if (reminderDateTime > tenYearsFromNow) {
+          errors.reminderDate = 'Reminder date cannot be more than 10 years in the future';
+        }
       }
     }
 
@@ -422,185 +357,95 @@ export default function AddActivityModal({
     return Object.keys(errors).length === 0;
   };
 
-  const createNoteActivity = async () => {
-    if (!currentContactName.trim()) {
-      Alert.alert('Error', 'Contact name is required');
-      return;
-    }
-
+  const updateNoteActivity = async () => {
     try {
-      // Ensure relationship exists for the contact
-      await ensureRelationshipExists(currentContactName);
-      
       const activityData = {
-        type: 'note' as const,
         // title: noteTitle.trim(),
-        // title: '', // Default empty title
         description: noteContent.trim(),
         content: noteContent.trim(),
         tags: noteTags,
-        contactId: currentContactId,
-        contactName: currentContactName,
+        // Preserve contact information if available
+        ...(activity.contactId && { contactId: activity.contactId }),
+        ...(activity.contactName && { contactName: activity.contactName }),
       };
 
-      const result = await createActivity(activityData);
+      const result = await updateActivity(activity.id, activityData);
 
-      Alert.alert('Success', 'Note activity created successfully!');
+      Alert.alert('Success', 'Note activity updated successfully!');
       onClose();
       resetActivityForm();
-      onActivityCreated?.();
+      onActivityUpdated?.();
     } catch (error) {
-      console.error('Error creating note activity:', error);
-      Alert.alert('Error', 'Failed to create note activity. Please try again.');
+      console.error('Error updating note activity:', error);
+      Alert.alert('Error', 'Failed to update note activity. Please try again.');
     }
   };
 
-  const createInteractionActivity = async () => {
-    if (!currentContactName.trim()) {
-      Alert.alert('Error', 'Contact name is required for interactions');
-      return;
-    }
-
+  const updateInteractionActivity = async () => {
     try {
-      // Ensure relationship exists for the contact
-      await ensureRelationshipExists(currentContactName);
-      
       const activityData = {
-        type: 'interaction' as const,
-        // title: `${interactionType} with ${currentContactName}`,
+        // title: `${interactionType} with ${activity.contactName || selectedContact?.name || 'Contact'}`,
         description: interactionNotes.trim(),
-        contactId: currentContactId,
-        contactName: currentContactName,
         interactionType: interactionType,
         date: interactionDate.toISOString(),
         duration: interactionDuration ? parseInt(interactionDuration) : 0,
         location: interactionLocation.trim(),
-        tags: [],
+        // Preserve contact information
+        contactId: activity.contactId || selectedContact?.id,
+        contactName: activity.contactName || selectedContact?.name,
       };
 
-      const result = await createActivity(activityData);
+      const result = await updateActivity(activity.id, activityData);
 
-      Alert.alert('Success', 'Interaction activity created successfully!');
+      Alert.alert('Success', 'Interaction activity updated successfully!');
       onClose();
       resetActivityForm();
-      onActivityCreated?.();
+      onActivityUpdated?.();
     } catch (error) {
-      console.error('Error creating interaction activity:', error);
+      console.error('Error updating interaction activity:', error);
       Alert.alert(
         'Error',
-        'Failed to create interaction activity. Please try again.'
+        'Failed to update interaction activity. Please try again.'
       );
     }
   };
 
-  const createReminderActivity = async () => {
-    if (!currentContactName.trim()) {
-      Alert.alert('Error', 'Contact name is required for reminders');
-      return;
-    }
-
+  const updateReminderActivity = async () => {
     if (!currentUser?.uid) {
       Alert.alert('Error', 'User not authenticated');
       return;
     }
 
     try {
-      // Ensure relationship exists for the contact
-      await ensureRelationshipExists(currentContactName);
-      
-      // First create the reminder document and schedule notifications
-      const reminderData = {
-        contactName: currentContactName,
-        type: activityReminderType,
-        date: activityReminderDate.toISOString(),
-        frequency: activityReminderFrequency,
-        tags: [],
-        notes: activityReminderNotes.trim(),
-        contactId: currentContactId,
-        isOverdue: false,
-        isThisWeek: false,
-      };
-
-      const reminderWithNotifications =
-        await reminderNotificationService.createReminderWithNotifications(
-          currentUser.uid,
-          reminderData,
-          [15, 30, 60] // 15 min, 30 min, 1 hour before due date
-        );
-
-      // Get the reminder document ID
-      const reminderId = reminderWithNotifications.id;
-
-      // Now create the activity with reference to the reminder document
-      const activityData = {
-        type: 'reminder' as const,
-        // title: activityReminderTitle.trim(),
-        // title: '', // Default empty title
-        description: activityReminderNotes.trim(),
-        contactId: currentContactId,
-        contactName: currentContactName,
-        reminderDate: activityReminderDate.toISOString(),
-        reminderType: activityReminderType,
-        frequency: activityReminderFrequency,
-        reminderId: reminderId, // Reference to the reminder document
-        tags: [],
-      };
-
-      const activity = await createActivity(activityData);
-
-      Alert.alert(
-        'Success',
-        'Reminder activity created and notifications scheduled successfully!'
-      );
-      onClose();
-      resetActivityForm();
-      onActivityCreated?.();
-    } catch (error) {
-      console.error('Error creating reminder activity:', error);
-      Alert.alert(
-        'Error',
-        'Failed to create reminder activity. Please try again.'
-      );
-    }
-  };
-
-  const updateReminderActivity = async () => {
-    if (!editingActivity || !currentUser?.uid) {
-      Alert.alert('Error', 'Invalid activity or user not authenticated');
-      return;
-    }
-
-    try {
-      // Ensure relationship exists for the contact
-      await ensureRelationshipExists(currentContactName);
-      
       // Update the activity
       const activityUpdates = {
         // title: activityReminderTitle.trim(),
-        // title: '', // Default empty title
         description: activityReminderNotes.trim(),
         reminderDate: activityReminderDate.toISOString(),
         reminderType: activityReminderType,
         frequency: activityReminderFrequency,
+        // Preserve contact information
+        contactId: activity.contactId || selectedContact?.id,
+        contactName: activity.contactName || selectedContact?.name,
       };
 
-      await updateActivity(editingActivity.id, activityUpdates);
+      await updateActivity(activity.id, activityUpdates);
 
       // Update the reminder document and reschedule notifications using the stored reminderId
       const reminderData = {
-        contactName: currentContactName,
+        contactName: activity.contactName || selectedContact?.name,
         type: activityReminderType,
         date: activityReminderDate.toISOString(),
         frequency: activityReminderFrequency,
         tags: [],
         notes: activityReminderNotes.trim(),
-        contactId: currentContactId,
+        contactId: activity.contactId || selectedContact?.id,
         isOverdue: false,
         isThisWeek: false,
       };
 
       // Use the reminderId from the activity document to update the correct reminder
-      const reminderId = editingActivity.reminderId;
+      const reminderId = activity.reminderId;
 
       if (reminderId) {
         try {
@@ -636,47 +481,17 @@ export default function AddActivityModal({
     }
   };
 
-  const handleCreateActivity = async () => {
+  const handleUpdateActivity = async () => {
     if (!validateActivityForm()) {
       return;
     }
 
-    if (editingActivity) {
-      // Handle editing existing activities
-      if (activeActivityTab === 'reminder') {
-        await updateReminderActivity();
-      } else {
-        // For notes and interactions, use the existing update logic
-        const updates =
-          activeActivityTab === 'note'
-            ? { /* title: noteTitle.trim(), */ /* title: '', */ description: noteContent.trim() }
-            : {
-                // title: `${interactionType} with ${currentContactName}`,
-                // title: '', // Default empty title
-                description: interactionNotes.trim(),
-                interactionType,
-                date: interactionDate.toISOString(),
-                duration: interactionDuration
-                  ? parseInt(interactionDuration)
-                  : 0,
-                location: interactionLocation.trim(),
-              };
-
-        await updateActivity(editingActivity.id, updates);
-        Alert.alert('Success', 'Activity updated successfully!');
-        onClose();
-        resetActivityForm();
-        onActivityUpdated?.();
-      }
-    } else {
-      // Handle creating new activities
-      if (activeActivityTab === 'note') {
-        await createNoteActivity();
-      } else if (activeActivityTab === 'interaction') {
-        await createInteractionActivity();
-      } else if (activeActivityTab === 'reminder') {
-        await createReminderActivity();
-      }
+    if (activeActivityTab === 'note') {
+      await updateNoteActivity();
+    } else if (activeActivityTab === 'interaction') {
+      await updateInteractionActivity();
+    } else if (activeActivityTab === 'reminder') {
+      await updateReminderActivity();
     }
   };
 
@@ -691,113 +506,10 @@ export default function AddActivityModal({
     setContactSearchQuery('');
   };
 
-  const handleContactPickerToggle = () => {
-    if (!isContactProvided) {
-      setShowContactPicker(!showContactPicker);
-    }
-  };
-
-  // Direct contact search functions
-  const handleContactSearch = (query: string) => {
-    console.log('🔍 Searching for:', query);
-    console.log('📊 Total relationships available:', relationships.length);
-    console.log('📊 Relationships data:', relationships);
-    setContactSearchQuery(query);
-    if (query.trim()) {
-      const filtered = relationships
-        .filter(rel => 
-          rel.contactName.toLowerCase().includes(query.toLowerCase())
-        )
-        .map(rel => ({
-          id: rel.contactId,
-          name: rel.contactName
-        }))
-        .slice(0, 5); // Limit to 5 results
-      console.log('📋 Filtered contacts:', filtered);
-      console.log('📋 Filtered contacts count:', filtered.length);
-      setFilteredContacts(filtered);
-      setShowContactSearch(true);
-      console.log('🔍 Contact search modal should be visible:', true);
-    } else {
-      setShowContactSearch(false);
-      setFilteredContacts([]);
-    }
-  };
-
-  const handleDirectContactSelect = async (contact: { id: string; name: string }) => {
-    console.log('🎯 Contact selected:', contact);
-    setSelectedContact(contact);
-    setShowContactSearch(false);
-    setContactSearchQuery(contact.name);
-    console.log('✅ Contact search closed and contact set');
-    
-    // Check if relationship exists, if not create it
-    const existingRelationship = relationships.find(rel => rel.contactId === contact.id);
-    if (!existingRelationship) {
-      try {
-        // Create a basic relationship
-        await createRelationship({
-          contactId: contact.id,
-          contactName: contact.name,
-          lastContactDate: new Date().toISOString(),
-          lastContactMethod: 'call',
-          reminderFrequency: 'month',
-          nextReminderDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
-          tags: [],
-          notes: '',
-          familyInfo: { kids: '', siblings: '', spouse: '' },
-          contactData: {
-            phoneNumbers: [],
-            emails: [],
-            website: '',
-            linkedin: '',
-            twitter: '',
-            instagram: '',
-            facebook: '',
-            company: '',
-            jobTitle: '',
-            address: '',
-            birthday: '',
-            notes: '',
-          },
-        });
-        console.log('✅ Relationship created for contact:', contact.name);
-      } catch (error) {
-        console.error('❌ Error creating relationship:', error);
-        // Continue with activity creation even if relationship creation fails
-      }
-    }
-  };
-
   const handleClose = () => {
     onClose();
     resetActivityForm();
   };
-
-  // Click outside handler for web
-  const handleClickOutside = useCallback((event: any) => {
-    if (Platform.OS === 'web' && searchContainerRef.current) {
-      // Check if click is outside the search container
-      const target = event.target;
-      const container = searchContainerRef.current;
-      
-      // Close dropdown if clicking outside
-      if (showContactSearch && !container.contains(target)) {
-        setShowContactSearch(false);
-        setFilteredContacts([]);
-      }
-    }
-  }, [showContactSearch]);
-
-  // Add click outside listener for web
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
-    }
-  }, [handleClickOutside]);
 
   return (
     <Modal
@@ -812,13 +524,9 @@ export default function AddActivityModal({
             <TouchableOpacity onPress={handleClose}>
               <X size={24} color="#6B7280" />
             </TouchableOpacity>
-            <Text style={styles.addActivityTitle}>
-              {editingActivity ? 'Edit Activity' : 'Add Activity'}
-            </Text>
+            <Text style={styles.addActivityTitle}>Edit Activity</Text>
             
           </View>
-
-          
 
           {/* Activity Content */}
           <ScrollView
@@ -826,74 +534,28 @@ export default function AddActivityModal({
             showsVerticalScrollIndicator={true}
             bounces={true}
           >
+            
 
             <View style={styles.activitySection}>
-              <Text style={styles.activitySectionTitle}>
-                {activeActivityTab === 'note'
-                  ? 'Create Note'
-                  : activeActivityTab === 'interaction'
-                  ? 'Log Interaction'
-                  : 'Set Reminder'}
-              </Text>
+              <View style={styles.activitySectionHeader}>
+                <Text style={styles.activitySectionTitle}>
+                  {activeActivityTab === 'note'
+                    ? 'Edit Note'
+                    : activeActivityTab === 'interaction'
+                    ? 'Edit Interaction'
+                    : 'Edit Reminder'}
+                </Text>
+                {activity && (
+                  <View style={styles.activityTypeIndicator}>
+                    <Text style={styles.activityTypeIndicatorText}>
+                      {activity.type === 'note' ? '📝' : activity.type === 'interaction' ? '🤝' : '⏰'} {activity.type.charAt(0).toUpperCase() + activity.type.slice(1)}
+                    </Text>
+                  </View>
+                )}
+              </View>
 
               {activeActivityTab === 'note' && (
                 <View>
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Contact Name *</Text>
-                    {isContactProvided ? (
-                      <TextInput
-                        style={[styles.activityInput, styles.readOnlyInput]}
-                        value={currentContactName}
-                        editable={false}
-                        placeholder="Contact name"
-                        placeholderTextColor="#9CA3AF"
-                      />
-                    ) : (
-                      <View ref={searchContainerRef} style={styles.contactSearchContainer}>
-                        <TextInput
-                          style={[
-                            styles.activityInput,
-                            validationErrors.contactName && styles.inputError,
-                          ]}
-                          value={contactSearchQuery}
-                          onChangeText={handleContactSearch}
-                          placeholder="Search contacts..."
-                          placeholderTextColor="#9CA3AF"
-                        />
-                        {showContactSearch && (
-                          <View style={styles.contactSearchResults}>
-                            {filteredContacts.length > 0 ? (
-                              <>
-                                
-                                {filteredContacts.map((contact) => (
-                                  <TouchableOpacity
-                                    key={contact.id}
-                                    style={styles.contactSearchItem}
-                                    onPress={() => handleDirectContactSelect(contact)}
-                                    activeOpacity={0.7}
-                                  >
-                                    <Text style={styles.contactSearchItemText}>
-                                      {contact.name}
-                                    </Text>
-                                  </TouchableOpacity>
-                                ))}
-                              </>
-                            ) : (
-                              <Text style={styles.debugText}>
-                                No contacts found (Total relationships: {relationships.length})
-                              </Text>
-                            )}
-                          </View>
-                        )}
-                      </View>
-                    )}
-                    {validationErrors.contactName && (
-                      <Text style={styles.errorText}>
-                        {validationErrors.contactName}
-                      </Text>
-                    )}
-                  </View>
-
                   {/* <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Title *</Text>
                     <TextInput
@@ -938,62 +600,6 @@ export default function AddActivityModal({
 
               {activeActivityTab === 'interaction' && (
                 <View>
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Contact Name *</Text>
-                    {isContactProvided ? (
-                      <TextInput
-                        style={[styles.activityInput, styles.readOnlyInput]}
-                        value={currentContactName}
-                        editable={false}
-                        placeholder="Contact name"
-                        placeholderTextColor="#9CA3AF"
-                      />
-                    ) : (
-                      <View ref={searchContainerRef} style={styles.contactSearchContainer}>
-                        <TextInput
-                          style={[
-                            styles.activityInput,
-                            validationErrors.contactName && styles.inputError,
-                          ]}
-                          value={contactSearchQuery}
-                          onChangeText={handleContactSearch}
-                          placeholder="Search contacts..."
-                          placeholderTextColor="#9CA3AF"
-                        />
-                        {showContactSearch && (
-                          <View style={styles.contactSearchResults}>
-                            {filteredContacts.length > 0 ? (
-                              <>
-                                
-                                {filteredContacts.map((contact) => (
-                                  <TouchableOpacity
-                                    key={contact.id}
-                                    style={styles.contactSearchItem}
-                                    onPress={() => handleDirectContactSelect(contact)}
-                                    activeOpacity={0.7}
-                                  >
-                                    <Text style={styles.contactSearchItemText}>
-                                      {contact.name}
-                                    </Text>
-                                  </TouchableOpacity>
-                                ))}
-                              </>
-                            ) : (
-                              <Text style={styles.debugText}>
-                                No contacts found (Total relationships: {relationships.length})
-                              </Text>
-                            )}
-                          </View>
-                        )}
-                      </View>
-                    )}
-                    {validationErrors.contactName && (
-                      <Text style={styles.errorText}>
-                        {validationErrors.contactName}
-                      </Text>
-                    )}
-                  </View>
-
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Interaction Type *</Text>
                     <View style={styles.interactionTypeButtons}>
@@ -1091,6 +697,7 @@ export default function AddActivityModal({
                           ]}
                           onPress={openInteractionDatePicker}
                         >
+                          <Calendar size={16} color="#6B7280" />
                           <Text style={styles.dateTimeButtonText}>
                             {interactionDate.toLocaleDateString()}
                           </Text>
@@ -1103,6 +710,7 @@ export default function AddActivityModal({
                           ]}
                           onPress={openInteractionTimePicker}
                         >
+                          <Clock size={16} color="#6B7280" />
                           <Text style={styles.dateTimeButtonText}>
                             {interactionDate.toLocaleTimeString([], {
                               hour: '2-digit',
@@ -1143,13 +751,27 @@ export default function AddActivityModal({
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Duration (minutes)</Text>
                     <TextInput
-                      style={styles.activityInput}
+                      style={[
+                        styles.activityInput,
+                        validationErrors.interactionDuration && styles.inputError,
+                      ]}
                       value={interactionDuration}
-                      onChangeText={setInteractionDuration}
+                      onChangeText={(text) => {
+                        setInteractionDuration(text);
+                        // Clear validation error when user types
+                        if (validationErrors.interactionDuration) {
+                          setValidationErrors((prev) => ({ ...prev, interactionDuration: '' }));
+                        }
+                      }}
                       placeholder="e.g., 30"
                       placeholderTextColor="#9CA3AF"
                       keyboardType="numeric"
                     />
+                    {validationErrors.interactionDuration && (
+                      <Text style={styles.errorText}>
+                        {validationErrors.interactionDuration}
+                      </Text>
+                    )}
                   </View>
 
                   <View style={styles.inputGroup}>
@@ -1167,62 +789,6 @@ export default function AddActivityModal({
 
               {activeActivityTab === 'reminder' && (
                 <View>
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Contact Name *</Text>
-                    {isContactProvided ? (
-                      <TextInput
-                        style={[styles.activityInput, styles.readOnlyInput]}
-                        value={currentContactName}
-                        editable={false}
-                        placeholder="Contact name"
-                        placeholderTextColor="#9CA3AF"
-                      />
-                    ) : (
-                      <View ref={searchContainerRef} style={styles.contactSearchContainer}>
-                        <TextInput
-                          style={[
-                            styles.activityInput,
-                            validationErrors.contactName && styles.inputError,
-                          ]}
-                          value={contactSearchQuery}
-                          onChangeText={handleContactSearch}
-                          placeholder="Search contacts..."
-                          placeholderTextColor="#9CA3AF"
-                        />
-                        {showContactSearch && (
-                          <View style={styles.contactSearchResults}>
-                            {filteredContacts.length > 0 ? (
-                              <>
-                                
-                                {filteredContacts.map((contact) => (
-                                  <TouchableOpacity
-                                    key={contact.id}
-                                    style={styles.contactSearchItem}
-                                    onPress={() => handleDirectContactSelect(contact)}
-                                    activeOpacity={0.7}
-                                  >
-                                    <Text style={styles.contactSearchItemText}>
-                                      {contact.name}
-                                    </Text>
-                                  </TouchableOpacity>
-                                ))}
-                              </>
-                            ) : (
-                              <Text style={styles.debugText}>
-                                No contacts found (Total relationships: {relationships.length})
-                              </Text>
-                            )}
-                          </View>
-                        )}
-                      </View>
-                    )}
-                    {validationErrors.contactName && (
-                      <Text style={styles.errorText}>
-                        {validationErrors.contactName}
-                      </Text>
-                    )}
-                  </View>
-
                   {/* <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Title *</Text>
                     <TextInput
@@ -1280,7 +846,6 @@ export default function AddActivityModal({
                               setValidationErrors((prev) => ({ ...prev, reminderDate: '' }));
                             }}
                             style={{
-                              
                               padding: '12px',
                               border: validationErrors.reminderDate ? '1px solid #EF4444' : '1px solid #D1D5DB',
                               borderRadius: '8px',
@@ -1302,6 +867,7 @@ export default function AddActivityModal({
                           ]}
                           onPress={openReminderDatePicker}
                         >
+                          <Calendar size={16} color="#6B7280" />
                           <Text style={styles.dateTimeButtonText}>
                             {activityReminderDate.toLocaleDateString()}
                           </Text>
@@ -1314,6 +880,7 @@ export default function AddActivityModal({
                           ]}
                           onPress={openReminderTimePicker}
                         >
+                          <Clock size={16} color="#6B7280" />
                           <Text style={styles.dateTimeButtonText}>
                             {activityReminderDate.toLocaleTimeString([], {
                               hour: '2-digit',
@@ -1428,97 +995,104 @@ export default function AddActivityModal({
             </View>
           </ScrollView>
 
-          {/* Activity Type Tabs - Fixed at top */}
-          <View style={{flexDirection: "row", justifyContent: "space-between"}}>
-          <View style={styles.activityTypeTabs}>
-            <Animated.View
-              style={[
-                { transform: [{ scale: tabAnimations.note }] },
-              ]}
-            >
-              <TouchableOpacity
+          <View style={{justifyContent: "space-between", flexDirection: "row"}}>
+            {/* Activity Type Tabs */}
+            <View style={styles.activityTypeTabs}>
+              <Animated.View
                 style={[
-                  styles.animatedTabButton,
-                  activeActivityTab === 'note' &&
-                    styles.activeActivityTypeTab,
+                  { transform: [{ scale: tabAnimations.note }] },
                 ]}
-                onPress={() => handleTabSwitch('note')}
-                activeOpacity={0.7}
               >
-                <View
+                <TouchableOpacity
                   style={[
-                    styles.tabIconContainer,
+                    styles.animatedTabButton,
                     activeActivityTab === 'note' &&
-                      styles.activeTabIconContainer,
+                      styles.activeActivityTypeTab,
+                    activity && activity.type !== 'note' && styles.disabledTab,
                   ]}
+                  onPress={() => handleTabSwitch('note')}
+                  activeOpacity={activity && activity.type !== 'note' ? 1 : 0.7}
+                  disabled={activity && activity.type !== 'note'}
                 >
-                  <Text style={styles.tabIcon}>📝</Text>
-                </View>
-                
-              </TouchableOpacity>
-            </Animated.View>
+                  <View
+                    style={[
+                      styles.tabIconContainer,
+                      activeActivityTab === 'note' &&
+                        styles.activeTabIconContainer,
+                      activity && activity.type !== 'note' && styles.disabledTabIcon,
+                    ]}
+                  >
+                    <Text style={styles.tabIcon}>📝</Text>
+                  </View>
+                  
+                </TouchableOpacity>
+              </Animated.View>
 
-            <Animated.View
-              style={[
-                { transform: [{ scale: tabAnimations.interaction }] },
-              ]}
-            >
-              <TouchableOpacity
+              <Animated.View
                 style={[
-                  styles.animatedTabButton,
-                  activeActivityTab === 'interaction' &&
-                    styles.activeActivityTypeTab,
+                  { transform: [{ scale: tabAnimations.interaction }] },
                 ]}
-                onPress={() => handleTabSwitch('interaction')}
-                activeOpacity={0.7}
               >
-                <View
+                <TouchableOpacity
                   style={[
-                    styles.tabIconContainer,
+                    styles.animatedTabButton,
                     activeActivityTab === 'interaction' &&
-                      styles.activeTabIconContainer,
+                      styles.activeActivityTypeTab,
+                    activity && activity.type !== 'interaction' && styles.disabledTab,
                   ]}
+                  onPress={() => handleTabSwitch('interaction')}
+                  activeOpacity={activity && activity.type !== 'interaction' ? 1 : 0.7}
+                  disabled={activity && activity.type !== 'interaction'}
                 >
-                  <Text style={styles.tabIcon}>🤝</Text>
-                </View>
-                
-              </TouchableOpacity>
-            </Animated.View>
+                  <View
+                    style={[
+                      styles.tabIconContainer,
+                      activeActivityTab === 'interaction' &&
+                        styles.activeTabIconContainer,
+                      activity && activity.type !== 'interaction' && styles.disabledTabIcon,
+                    ]}
+                  >
+                    <Text style={styles.tabIcon}>🤝</Text>
+                  </View>
+                  
+                </TouchableOpacity>
+              </Animated.View>
 
-            <Animated.View
-              style={[
-                { transform: [{ scale: tabAnimations.reminder }] },
-              ]}
-            >
-              <TouchableOpacity
+              <Animated.View
                 style={[
-                  styles.animatedTabButton,
-                  activeActivityTab === 'reminder' &&
-                    styles.activeActivityTypeTab,
+                  { transform: [{ scale: tabAnimations.reminder }] },
                 ]}
-                onPress={() => handleTabSwitch('reminder')}
-                activeOpacity={0.7}
               >
-                <View
+                <TouchableOpacity
                   style={[
-                    styles.tabIconContainer,
+                    styles.animatedTabButton,
                     activeActivityTab === 'reminder' &&
-                      styles.activeTabIconContainer,
+                      styles.activeActivityTypeTab,
+                    activity && activity.type !== 'reminder' && styles.disabledTab,
                   ]}
+                  onPress={() => handleTabSwitch('reminder')}
+                  activeOpacity={activity && activity.type !== 'reminder' ? 1 : 0.7}
+                  disabled={activity && activity.type !== 'reminder'}
                 >
-                  <Text style={styles.tabIcon}>⏰</Text>
-                </View>
-                
-              </TouchableOpacity>
-            </Animated.View>
-          </View>
-          <TouchableOpacity
-              onPress={handleCreateActivity}
+                  <View
+                    style={[
+                      styles.tabIconContainer,
+                      activeActivityTab === 'reminder' &&
+                        styles.activeTabIconContainer,
+                      activity && activity.type !== 'reminder' && styles.disabledTabIcon,
+                    ]}
+                  >
+                    <Text style={styles.tabIcon}>⏰</Text>
+                  </View>
+                  
+                </TouchableOpacity>
+              </Animated.View>
+            </View>
+            <TouchableOpacity
+              onPress={handleUpdateActivity}
               style={styles.addActivitySaveButton}
             >
-              <Text style={styles.addActivitySaveButtonText}>
-                {editingActivity ? 'Update' : 'Create'}
-              </Text>
+              <Text style={styles.addActivitySaveButtonText}>Update</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1561,69 +1135,6 @@ export default function AddActivityModal({
           onChange={handleReminderTimeChange}
         />
       )}
-
-      {/* Contact Picker Modal */}
-      <Modal
-        visible={showContactPicker}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowContactPicker(false)}
-      >
-        <View style={styles.contactPickerOverlay}>
-          <View style={styles.contactPickerContainer}>
-            <View style={styles.contactPickerHeader}>
-              <Text style={styles.contactPickerTitle}>Select Contact</Text>
-              <TouchableOpacity onPress={() => setShowContactPicker(false)}>
-                <X size={24} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.contactSearchContainer}>
-              <Search size={20} color="#6B7280" />
-              <TextInput
-                style={styles.contactSearchInput}
-                value={contactSearchQuery}
-                onChangeText={setContactSearchQuery}
-                placeholder="Search contacts..."
-                placeholderTextColor="#9CA3AF"
-              />
-            </View>
-
-            <FlatList
-              data={filteredRelationships}
-              keyExtractor={(item) => item.id}
-              style={styles.contactList}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.contactItem}
-                  onPress={() =>
-                    handleContactSelect({
-                      id: item.contactId,
-                      name: item.contactName,
-                    })
-                  }
-                >
-                  <View style={styles.contactItemContent}>
-                    <Text style={styles.contactItemName}>
-                      {item.contactName}
-                    </Text>
-                    <Text style={styles.contactItemType}>
-                      {item.lastContactMethod}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                <View style={styles.emptyContacts}>
-                  <Text style={styles.emptyContactsText}>
-                    No contacts found
-                  </Text>
-                </View>
-              }
-            />
-          </View>
-        </View>
-      </Modal>
     </Modal>
   );
 }
@@ -1650,7 +1161,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 20,
     elevation: 10,
-    
   },
   addActivityHeader: {
     flexDirection: 'row',
@@ -1659,25 +1169,26 @@ const styles = StyleSheet.create({
     padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
-    marginRight:16
   },
   addActivityTitle: {
     fontSize: 20,
     fontWeight: '600',
     color: '#111827',
+    marginLeft:16
   },
   addActivitySaveButton: {
     backgroundColor: '#3B82F6',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
-    alignSelf:"center",
+    alignSelf: "center",
     marginRight:16,
   },
   addActivitySaveButtonText: {
     color: '#ffffff',
     fontWeight: '600',
     fontSize: 16,
+    
   },
   // Activity Type Tabs
   activityTypeTabs: {
@@ -1686,11 +1197,12 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     gap: 12,
   },
-  // activityTypeTab: {
-  //   flex: 1,
-  // },
+  activityTypeTab: {
+    flex: 1,
+  },
   animatedTabButton: {
-    borderRadius: 20
+    alignItems: 'center',
+    borderRadius: 12,
   },
   activeActivityTypeTab: {
     backgroundColor: '#EBF8FF',
@@ -1719,18 +1231,47 @@ const styles = StyleSheet.create({
     color: '#3B82F6',
     fontWeight: '600',
   },
+  disabledTab: {
+    opacity: 0.4,
+  },
+  disabledTabIcon: {
+    opacity: 0.4,
+  },
+  disabledTabText: {
+    opacity: 0.4,
+  },
   // Activity Content
   addActivityContent: {
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
   activitySection: {
+    paddingBottom: 20,
+  },
+  activitySectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    marginTop:16
   },
   activitySectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#111827',
-    marginBottom: 20,
+  },
+  activityTypeIndicator: {
+    backgroundColor: '#EBF8FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+  },
+  activityTypeIndicatorText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#3B82F6',
   },
   inputGroup: {
     marginBottom: 16,
@@ -1806,6 +1347,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   dateTimeButtonText: {
     fontSize: 16,
@@ -1869,144 +1413,5 @@ const styles = StyleSheet.create({
   },
   activeFrequencyButtonText: {
     color: '#ffffff',
-  },
-  // Contact picker styles
-  readOnlyInput: {
-    backgroundColor: '#F9FAFB',
-    color: '#6B7280',
-  },
-  contactPickerButton: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    padding: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-  },
-  contactPickerText: {
-    fontSize: 16,
-    color: '#111827',
-    flex: 1,
-  },
-  placeholderText: {
-    color: '#9CA3AF',
-  },
-  contactPickerOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    overflow: "hidden",
-  },
-  contactPickerContainer: {
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    width: '100%',
-    height: '70%',
-    maxWidth: 400,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 10,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
-    overflow: 'hidden',
-  },
-  contactPickerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  contactPickerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  contactSearchContainer: {
-    position: 'relative',
-    zIndex: 1,
-  },
-  contactSearchResults: {
-    position: 'sticky',
-    top: '100%',
-    left: 0,
-    right: 0,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    marginTop: 4,
-    maxHeight: 200,
-    zIndex: 9999,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    // overflow: 'hidden',
-  },
-  contactSearchItem: {
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  contactSearchItemText: {
-    fontSize: 16,
-    color: '#111827',
-  },
-  debugText: {
-    fontSize: 12,
-    color: '#EF4444',
-    backgroundColor: '#FEF2F2',
-    padding: 8,
-    textAlign: 'center',
-    fontWeight: 'bold',
-  },
-  contactSearchInput: {
-    flex: 1,
-    marginLeft: 12,
-    fontSize: 16,
-    color: '#111827',
-  },
-  contactList: {
-    flex: 1,
-  },
-  contactItem: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  contactItemContent: {
-    flex: 1,
-  },
-  contactItemName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  contactItemType: {
-    fontSize: 14,
-    color: '#6B7280',
-    textTransform: 'capitalize',
-  },
-  emptyContacts: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-  },
-  emptyContactsText: {
-    fontSize: 16,
-    color: '#6B7280',
   },
 });

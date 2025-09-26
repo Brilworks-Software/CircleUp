@@ -71,6 +71,21 @@ export interface Relationship {
     siblings: string;
     spouse: string;
   };
+  // Contact data fields
+  contactData?: {
+    phoneNumbers?: { number: string; label?: string }[];
+    emails?: { email: string; label?: string }[];
+    website?: string;
+    linkedin?: string;
+    twitter?: string;
+    instagram?: string;
+    facebook?: string;
+    company?: string;
+    jobTitle?: string;
+    address?: string;
+    birthday?: string;
+    notes?: string;
+  };
 }
 
 export interface Reminder {
@@ -149,7 +164,7 @@ export type Activity = NoteActivity | InteractionActivity | ReminderActivity;
 
 export interface CreateActivityData {
   type: ActivityType;
-  title: string;
+  title?: string; // Made optional since we're commenting out title usage
   description: string;
   tags: string[];
   // Note specific

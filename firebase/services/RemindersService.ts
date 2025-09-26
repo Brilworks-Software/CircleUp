@@ -1,4 +1,3 @@
-import type { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import {
   collection,
   deleteDoc,
@@ -13,7 +12,10 @@ import {
   where,
   orderBy,
   addDoc,
-} from '@react-native-firebase/firestore';
+  DocumentSnapshot,
+  QuerySnapshot,
+  Unsubscribe,
+} from 'firebase/firestore';
 import { db } from '../config';
 import type { Reminder, ReminderTab, FilterType } from '../types';
 import NotificationService from '../../services/NotificationService';
@@ -869,7 +871,7 @@ class RemindersService {
   /**
    * Listen to reminders changes
    */
-  onRemindersSnapshot(userId: string, callback: (reminders: Reminder[]) => void): () => void {
+  onRemindersSnapshot(userId: string, callback: (reminders: Reminder[]) => void): Unsubscribe {
     const remindersRef = collection(db, this.COLLECTION_NAME);
     const q = query(
       remindersRef,

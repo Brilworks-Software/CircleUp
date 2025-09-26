@@ -20,8 +20,6 @@
       "expo-router",
       "expo-font",
       "expo-web-browser",
-      "@react-native-firebase/app",
-      "@react-native-firebase/auth",
       "expo-notifications",
       [
         "expo-splash-screen",

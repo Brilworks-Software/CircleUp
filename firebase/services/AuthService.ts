@@ -1,11 +1,12 @@
 import {
     createUserWithEmailAndPassword,
-    FirebaseAuthTypes,
     sendPasswordResetEmail,
     signInWithEmailAndPassword,
     signOut,
     onAuthStateChanged,
-  } from '@react-native-firebase/auth';
+    User,
+    UserCredential,
+  } from 'firebase/auth';
   import { auth } from '../config';
   import UsersService from './UserService';
   
@@ -24,16 +25,16 @@ export interface RegisterCredentials extends AuthCredentials {
   export interface AuthService {
     signIn: (
       credentials: AuthCredentials
-    ) => Promise<FirebaseAuthTypes.UserCredential>;
+    ) => Promise<UserCredential>;
     signUp: (
       credentials: RegisterCredentials
-    ) => Promise<FirebaseAuthTypes.UserCredential>;
+    ) => Promise<UserCredential>;
     signOut: () => Promise<void>;
     resetPassword: (email: string) => Promise<void>;
-    getCurrentUser: () => FirebaseAuthTypes.User | null;
+    getCurrentUser: () => User | null;
     deleteAccount: () => Promise<void>;
     reauthenticate: (password: string) => Promise<void>;
-    onAuthStateChanged: (callback: (user: FirebaseAuthTypes.User | null) => void) => () => void;
+    onAuthStateChanged: (callback: (user: User | null) => void) => () => void;
   }
   
   class FirebaseAuthService implements AuthService {
@@ -113,7 +114,7 @@ export interface RegisterCredentials extends AuthCredentials {
       return auth.currentUser;
     }
 
-    onAuthStateChanged(callback: (user: FirebaseAuthTypes.User | null) => void) {
+    onAuthStateChanged(callback: (user: User | null) => void) {
       return onAuthStateChanged(auth, callback);
     }
   

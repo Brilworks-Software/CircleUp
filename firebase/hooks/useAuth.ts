@@ -7,12 +7,12 @@ import {
 } from '../services/AuthService';
 import { useCreateUser } from './useUser';
 import { userStore } from '../stores/userStore';
-import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import type { User } from 'firebase/auth';
 
 export const useAuth = () => {
   const queryClient = useQueryClient();
   const createUserMutation = useCreateUser();
-  const [currentUser, setCurrentUser] = useState<FirebaseAuthTypes.User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoadingUser, setIsLoadingUser] = useState(true);
 
   // Set up real-time auth state listener

@@ -17,12 +17,6 @@
     "@lucide/lab": "^0.1.2",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/datetimepicker": "^8.4.5",
-    "@react-native-firebase/app": "^23.3.1",
-    "@react-native-firebase/auth": "^23.3.1",
-    "@react-native-firebase/database": "^23.3.1",
-    "@react-native-firebase/firestore": "^23.3.1",
-    "@react-native-firebase/messaging": "^23.3.1",
-    "@react-native-firebase/storage": "^23.3.1",
     "@react-navigation/bottom-tabs": "^7.2.0",
     "@react-navigation/native": "^7.0.14",
     "@tanstack/react-query": "^5.90.2",
@@ -42,6 +36,7 @@
     "expo-symbols": "~0.4.3",
     "expo-system-ui": "~5.0.5",
     "expo-web-browser": "~14.1.5",
+    "firebase": "^12.3.0",
     "lucide-react-native": "^0.475.0",
     "mobx": "^6.13.7",
     "react": "19.0.0",
@@ -60,6 +55,7 @@
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@types/react": "~19.0.10",
+    "dotenv": "^17.2.2",
     "typescript": "~5.8.3"
   },
   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"

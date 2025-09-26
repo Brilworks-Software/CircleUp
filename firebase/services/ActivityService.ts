@@ -1,4 +1,3 @@
-import type { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import {
   collection,
   deleteDoc,
@@ -15,7 +14,10 @@ import {
   addDoc,
   limit,
   startAfter,
-} from '@react-native-firebase/firestore';
+  DocumentSnapshot,
+  QuerySnapshot,
+  Unsubscribe,
+} from 'firebase/firestore';
 import { db } from '../config';
 import type { 
   Activity, 
@@ -77,7 +79,7 @@ class ActivityService {
       const baseData = {
         userId,
         type: activityData.type,
-        title: activityData.title,
+        // title: activityData.title,
         description: activityData.description,
         tags: activityData.tags || [],
         isArchived: false,
@@ -340,7 +342,7 @@ class ActivityService {
       const lowercaseQuery = searchQuery.toLowerCase();
 
       return activities.filter(activity => 
-        activity.title.toLowerCase().includes(lowercaseQuery) ||
+        // activity.title.toLowerCase().includes(lowercaseQuery) ||
         activity.description.toLowerCase().includes(lowercaseQuery) ||
         activity.tags.some(tag => tag.toLowerCase().includes(lowercaseQuery)) ||
         (activity.type === 'note' && (activity as any).content?.toLowerCase().includes(lowercaseQuery)) ||

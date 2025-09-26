@@ -14,15 +14,17 @@ import {
   Animated,
   Vibration,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import { useRouter } from 'expo-router';
+import WebCompatibleDateTimePicker from '../../components/WebCompatibleDateTimePicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Plus, Users, X, Calendar, MessageCircle, Phone, Mail, User, ChevronRight, Search, Filter } from 'lucide-react-native';
+import { Plus, Users, X, Calendar, Clock, MessageCircle, Phone, Mail, User, ChevronRight, Search, Filter, ArrowLeft } from 'lucide-react-native';
 import * as Contacts from 'expo-contacts';
 import { useRelationships } from '../../firebase/hooks/useRelationships';
 import { useReminders } from '../../firebase/hooks/useReminders';
 import { useAuth } from '../../firebase/hooks/useAuth';
 import { useActivity } from '../../firebase/hooks/useActivity';
 import AddActivityModal from '../../components/AddActivityModal';
+import EditActivityModal from '../../components/EditActivityModal';
 import ReminderNotificationService from '../../services/ReminderNotificationService';
 import type { Contact, Relationship } from '../../firebase/types';
 
@@ -30,7 +32,58 @@ type LastContactOption = 'today' | 'yesterday' | 'week' | 'month' | '3months' | 
 type ContactMethod = 'call' | 'text' | 'email' | 'inPerson';
 type ReminderFrequency = 'week' | 'month' | '3months' | '6months' | 'never';
 
+// Web-compatible alert function
+const showAlert = (title: string, message: string, buttons?: any[]) => {
+  if (Platform.OS === 'web') {
+    // Use browser's native confirm for simple alerts
+    if (!buttons || buttons.length === 0) {
+      window.alert(`${title}\n\n${message}`);
+      return;
+    }
+    
+    // For alerts with buttons, use confirm for simple cases
+    if (buttons.length === 2 && buttons[0].text === 'Cancel' && buttons[1].text === 'OK') {
+      const result = window.confirm(`${title}\n\n${message}`);
+      if (result && buttons[1].onPress) {
+        buttons[1].onPress();
+      }
+      return;
+    }
+    
+    // For relationship exists alerts with multiple options
+    if (buttons.length === 3 && buttons[1].text === 'Edit Existing' && buttons[2].text === 'Create New') {
+      const result = window.confirm(`${title}\n\n${message}\n\nClick OK to edit existing relationship, or Cancel to create a new one.`);
+      if (result) {
+        // Edit existing relationship
+        if (buttons[1].onPress) {
+          buttons[1].onPress();
+        }
+      } else {
+        // Create new relationship
+        if (buttons[2].onPress) {
+          buttons[2].onPress();
+        }
+      }
+      return;
+    }
+    
+    // For other complex alerts, use confirm as fallback
+    const result = window.confirm(`${title}\n\n${message}\n\nClick OK to continue or Cancel to abort.`);
+    if (result) {
+      // Find the first non-cancel button and execute it
+      const actionButton = buttons.find(btn => btn.text !== 'Cancel');
+      if (actionButton && actionButton.onPress) {
+        actionButton.onPress();
+      }
+    }
+  } else {
+    // Use React Native Alert for mobile
+    Alert.alert(title, message, buttons);
+  }
+};
+
 export default function RelationshipsScreen() {
+  const router = useRouter();
   const { currentUser } = useAuth();
   
   const { 
@@ -181,33 +234,16 @@ export default function RelationshipsScreen() {
   const [activityReminderDate, setActivityReminderDate] = useState(new Date());
   const [activityReminderType, setActivityReminderType] = useState('follow_up');
   const [activityReminderFrequency, setActivityReminderFrequency] = useState<'week' | 'month' | '3months' | '6months' | 'never'>('month');
-  
-  // Edit activity states
-  const [editNoteTitle, setEditNoteTitle] = useState('');
-  const [editNoteContent, setEditNoteContent] = useState('');
-  const [editNoteTags, setEditNoteTags] = useState<string[]>([]);
-  const [editInteractionType, setEditInteractionType] = useState<'call' | 'text' | 'email' | 'inPerson'>('call');
-  const [editInteractionDate, setEditInteractionDate] = useState(new Date());
-  const [editInteractionNotes, setEditInteractionNotes] = useState('');
-  const [editInteractionDuration, setEditInteractionDuration] = useState('');
-  const [editInteractionLocation, setEditInteractionLocation] = useState('');
-  const [editReminderTitle, setEditReminderTitle] = useState('');
-  const [editReminderDate, setEditReminderDate] = useState(new Date());
-  const [editReminderType, setEditReminderType] = useState('follow_up');
-  const [editReminderFrequency, setEditReminderFrequency] = useState<'week' | 'month' | '3months' | '6months' | 'never'>('month');
   const [activityReminderNotes, setActivityReminderNotes] = useState('');
   
   // Validation states
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
-  const [editValidationErrors, setEditValidationErrors] = useState<Record<string, string>>({});
   
   // Date picker states
   const [showInteractionDatePicker, setShowInteractionDatePicker] = useState(false);
   const [showInteractionTimePicker, setShowInteractionTimePicker] = useState(false);
   const [showReminderDatePicker, setShowReminderDatePicker] = useState(false);
   const [showReminderTimePicker, setShowReminderTimePicker] = useState(false);
-  const [showEditInteractionDatePicker, setShowEditInteractionDatePicker] = useState(false);
-  const [showEditReminderDatePicker, setShowEditReminderDatePicker] = useState(false);
 
   const predefinedTags = ['Client', 'College', 'Family', 'Favorite', 'Friends', 'Prospect'];
   const lastContactOptions = [
@@ -279,8 +315,13 @@ export default function RelationshipsScreen() {
 
   const checkPermission = async () => {
     try {
-      const { status } = await Contacts.getPermissionsAsync();
-      setHasPermission(status === 'granted');
+      if (Platform.OS === 'web') {
+        // For web, check if Web Contacts API is available
+        setHasPermission('contacts' in navigator);
+      } else {
+        const { status } = await Contacts.getPermissionsAsync();
+        setHasPermission(status === 'granted');
+      }
     } catch (error) {
       console.error('Error checking contacts permission:', error);
     }
@@ -288,14 +329,23 @@ export default function RelationshipsScreen() {
 
   const requestPermission = async () => {
     try {
-      const { status } = await Contacts.requestPermissionsAsync();
-      setHasPermission(status === 'granted');
-      if (status === 'granted') {
-        loadDeviceContacts();
+      if (Platform.OS === 'web') {
+        // For web, check if Web Contacts API is available
+        setHasPermission('contacts' in navigator);
+        if ('contacts' in navigator) {
+          // Web Contacts API is available, we can proceed
+          console.log('Web Contacts API is available');
+        }
+      } else {
+        const { status } = await Contacts.requestPermissionsAsync();
+        setHasPermission(status === 'granted');
+        if (status === 'granted') {
+          loadDeviceContacts();
+        }
       }
     } catch (error) {
       console.error('Error requesting contacts permission:', error);
-      Alert.alert('Error', 'Failed to request contacts permission');
+      showAlert('Error', 'Failed to request contacts permission');
     }
   };
 
@@ -304,27 +354,36 @@ export default function RelationshipsScreen() {
     
     try {
       setIsLoadingDeviceContacts(true);
-      const { data } = await Contacts.getContactsAsync({
-        fields: [
-          Contacts.Fields.Name,
-          Contacts.Fields.PhoneNumbers,
-          Contacts.Fields.Emails,
-          Contacts.Fields.Image,
-          Contacts.Fields.Company,
-          Contacts.Fields.JobTitle,
-          Contacts.Fields.Addresses,
-          Contacts.Fields.Birthday,
-          Contacts.Fields.Note,
-        ],
-      });
       
-      // Filter out contacts without names
-      const validContacts = data.filter(contact => contact.name && contact.name.trim() !== '');
-      setDeviceContacts(validContacts);
-      setFilteredDeviceContacts(validContacts);
+      if (Platform.OS === 'web') {
+        // For web, we can't load device contacts using Web Contacts API
+        // The Web Contacts API is read-only and doesn't provide a way to list contacts
+        console.log('Web platform: Device contacts loading not supported');
+        setDeviceContacts([]);
+        setFilteredDeviceContacts([]);
+      } else {
+        const { data } = await Contacts.getContactsAsync({
+          fields: [
+            Contacts.Fields.Name,
+            Contacts.Fields.PhoneNumbers,
+            Contacts.Fields.Emails,
+            Contacts.Fields.Image,
+            Contacts.Fields.Company,
+            Contacts.Fields.JobTitle,
+            Contacts.Fields.Addresses,
+            Contacts.Fields.Birthday,
+            Contacts.Fields.Note,
+          ],
+        });
+        
+        // Filter out contacts without names
+        const validContacts = data.filter(contact => contact.name && contact.name.trim() !== '');
+        setDeviceContacts(validContacts);
+        setFilteredDeviceContacts(validContacts);
+      }
     } catch (error) {
       console.error('Error loading device contacts:', error);
-      Alert.alert('Error', 'Failed to load device contacts');
+      showAlert('Error', 'Failed to load device contacts');
     } finally {
       setIsLoadingDeviceContacts(false);
     }
@@ -350,7 +409,10 @@ export default function RelationshipsScreen() {
 
   const handleDeviceContactSelect = async (deviceContact: Contacts.Contact) => {
     if (!currentUser) {
-      Alert.alert('Error', 'Please log in to add relationships');
+      const alertMessage = Platform.OS === 'web'
+        ? 'Please log in to add relationships. Make sure you have a stable internet connection.'
+        : 'Please log in to add relationships';
+      showAlert('Authentication Required', alertMessage);
       return;
     }
 
@@ -377,14 +439,32 @@ export default function RelationshipsScreen() {
       );
       
       if (existingRelationship) {
-        Alert.alert(
-          'Relationship Exists',
-          `You already have a relationship with ${newContact.name}. Would you like to edit it?`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Edit', onPress: () => editRelationship(existingRelationship) },
-          ]
-        );
+        const alertTitle = Platform.OS === 'web' 
+          ? 'Relationship Already Exists' 
+          : 'Relationship Exists';
+        
+        const alertMessage = Platform.OS === 'web'
+          ? `You already have a relationship with "${newContact.name}". Would you like to edit the existing relationship or create a new one?`
+          : `You already have a relationship with ${newContact.name}. Would you like to edit it?`;
+        
+        const alertButtons = Platform.OS === 'web'
+          ? [
+              { text: 'Cancel', style: 'cancel' as const },
+              { text: 'Edit Existing', onPress: () => editRelationship(existingRelationship) },
+              { text: 'Create New', onPress: () => {
+                // Allow creating a new relationship with a different name
+                const newName = `${newContact.name} (${new Date().getFullYear()})`;
+                setSelectedContact({ ...newContact, name: newName, id: `new_${Date.now()}` });
+                setShowContactList(false);
+                setShowAddModal(true);
+              }},
+            ]
+          : [
+              { text: 'Cancel', style: 'cancel' as const },
+              { text: 'Edit', onPress: () => editRelationship(existingRelationship) },
+            ];
+        
+        showAlert(alertTitle, alertMessage, alertButtons);
         return;
       }
       
@@ -411,20 +491,22 @@ export default function RelationshipsScreen() {
       
     } catch (error) {
       console.error('Error selecting contact:', error);
-      Alert.alert('Error', 'Failed to select contact');
+      showAlert('Error', 'Failed to select contact');
     }
   };
 
 
   const openAddRelationship = () => {
+    if(Platform.OS === "web"){
+      setShowNewContactModal(true);
+      return
+    }
     if (!hasPermission) {
-      Alert.alert('No Permission', 'Please allow contact access to add relationships.');
+      showAlert('No Permission', 'Please allow contact access to add relationships.');
       return;
     }
-    if (deviceContacts.length === 0) {
-      Alert.alert('No Contacts', 'No device contacts found. Please check your contacts.');
-      return;
-    }
+
+    
     setShowContactList(true);
   };
 
@@ -456,23 +538,30 @@ export default function RelationshipsScreen() {
       } : null);
 
       setShowFrequencyModal(false);
-      Alert.alert('Success', 'Reminder frequency updated successfully!');
+      showAlert('Success', 'Reminder frequency updated successfully!');
     } catch (error) {
       console.error('Error updating reminder frequency:', error);
-      Alert.alert('Error', 'Failed to update reminder frequency.');
+      showAlert('Error', 'Failed to update reminder frequency.');
     }
   };
 
   const handleCall = async () => {
     if (!selectedRelationship) return;
     
-    // Find the contact in device contacts to get phone number
-    const deviceContact = deviceContacts.find(contact => 
-      contact.name === selectedRelationship.contactName
-    );
+    // Try to get phone number from stored contact data first, then device contacts
+    let phoneNumber = '';
     
-    if (deviceContact?.phoneNumbers && deviceContact.phoneNumbers.length > 0) {
-      const phoneNumber = deviceContact.phoneNumbers[0].number;
+    if (selectedRelationship.contactData?.phoneNumbers && selectedRelationship.contactData.phoneNumbers.length > 0) {
+      phoneNumber = selectedRelationship.contactData.phoneNumbers[0].number;
+    } else {
+      // Fallback to device contacts
+      const deviceContact = deviceContacts.find(contact => 
+        contact.name === selectedRelationship.contactName
+      );
+      phoneNumber = deviceContact?.phoneNumbers?.[0]?.number || '';
+    }
+    
+    if (phoneNumber) {
       const url = `tel:${phoneNumber}`;
       
       try {
@@ -481,26 +570,34 @@ export default function RelationshipsScreen() {
           await Linking.openURL(url);
           setShowContactActions(false);
         } else {
-          Alert.alert('Error', 'Phone app is not available');
+          showAlert('Error', 'Phone app is not available');
         }
       } catch (error) {
         console.error('Error making call:', error);
-        Alert.alert('Error', 'Failed to make call');
+        showAlert('Error', 'Failed to make call');
       }
     } else {
-      Alert.alert('No Phone Number', 'No phone number available for this contact');
+      showAlert('No Phone Number', 'No phone number available for this contact');
     }
   };
 
   const handleMessage = async () => {
     if (!selectedRelationship) return;
     
-    const deviceContact = deviceContacts.find(contact => 
-      contact.name === selectedRelationship.contactName
-    );
+    // Try to get phone number from stored contact data first, then device contacts
+    let phoneNumber = '';
     
-    if (deviceContact?.phoneNumbers && deviceContact.phoneNumbers.length > 0) {
-      const phoneNumber = deviceContact.phoneNumbers[0].number;
+    if (selectedRelationship.contactData?.phoneNumbers && selectedRelationship.contactData.phoneNumbers.length > 0) {
+      phoneNumber = selectedRelationship.contactData.phoneNumbers[0].number;
+    } else {
+      // Fallback to device contacts
+      const deviceContact = deviceContacts.find(contact => 
+        contact.name === selectedRelationship.contactName
+      );
+      phoneNumber = deviceContact?.phoneNumbers?.[0]?.number || '';
+    }
+    
+    if (phoneNumber) {
       const url = `sms:${phoneNumber}`;
       
       try {
@@ -509,27 +606,36 @@ export default function RelationshipsScreen() {
           await Linking.openURL(url);
           setShowContactActions(false);
         } else {
-          Alert.alert('Error', 'SMS app is not available');
+          showAlert('Error', 'SMS app is not available');
         }
       } catch (error) {
         console.error('Error opening SMS:', error);
-        Alert.alert('Error', 'Failed to open SMS');
+        showAlert('Error', 'Failed to open SMS');
       }
     } else {
-      Alert.alert('No Phone Number', 'No phone number available for this contact');
+      showAlert('No Phone Number', 'No phone number available for this contact');
     }
   };
 
   const handleWhatsApp = async () => {
     if (!selectedRelationship) return;
     
-    const deviceContact = deviceContacts.find(contact => 
-      contact.name === selectedRelationship.contactName
-    );
+    // Try to get phone number from stored contact data first, then device contacts
+    let phoneNumber = '';
     
-    if (deviceContact?.phoneNumbers && deviceContact.phoneNumbers.length > 0) {
-      const phoneNumber = deviceContact.phoneNumbers[0]?.number?.replace(/\D/g, '') || ''; // Remove non-digits
-      const url = `whatsapp://send?phone=${phoneNumber}`;
+    if (selectedRelationship.contactData?.phoneNumbers && selectedRelationship.contactData.phoneNumbers.length > 0) {
+      phoneNumber = selectedRelationship.contactData.phoneNumbers[0].number;
+    } else {
+      // Fallback to device contacts
+      const deviceContact = deviceContacts.find(contact => 
+        contact.name === selectedRelationship.contactName
+      );
+      phoneNumber = deviceContact?.phoneNumbers?.[0]?.number || '';
+    }
+    
+    if (phoneNumber) {
+      const cleanPhoneNumber = phoneNumber.replace(/\D/g, ''); // Remove non-digits
+      const url = `whatsapp://send?phone=${cleanPhoneNumber}`;
       
       try {
         const supported = await Linking.canOpenURL(url);
@@ -537,26 +643,34 @@ export default function RelationshipsScreen() {
           await Linking.openURL(url);
           setShowContactActions(false);
         } else {
-          Alert.alert('Error', 'WhatsApp is not installed');
+          showAlert('Error', 'WhatsApp is not installed');
         }
       } catch (error) {
         console.error('Error opening WhatsApp:', error);
-        Alert.alert('Error', 'Failed to open WhatsApp');
+        showAlert('Error', 'Failed to open WhatsApp');
       }
     } else {
-      Alert.alert('No Phone Number', 'No phone number available for this contact');
+      showAlert('No Phone Number', 'No phone number available for this contact');
     }
   };
 
   const handleEmail = async () => {
     if (!selectedRelationship) return;
     
-    const deviceContact = deviceContacts.find(contact => 
-      contact.name === selectedRelationship.contactName
-    );
+    // Try to get email from stored contact data first, then device contacts
+    let email = '';
     
-    if (deviceContact?.emails && deviceContact.emails.length > 0) {
-      const email = deviceContact.emails[0].email;
+    if (selectedRelationship.contactData?.emails && selectedRelationship.contactData.emails.length > 0) {
+      email = selectedRelationship.contactData.emails[0].email;
+    } else {
+      // Fallback to device contacts
+      const deviceContact = deviceContacts.find(contact => 
+        contact.name === selectedRelationship.contactName
+      );
+      email = deviceContact?.emails?.[0]?.email || '';
+    }
+    
+    if (email) {
       const url = `mailto:${email}`;
       
       try {
@@ -565,14 +679,14 @@ export default function RelationshipsScreen() {
           await Linking.openURL(url);
           setShowContactActions(false);
         } else {
-          Alert.alert('Error', 'Email app is not available');
+          showAlert('Error', 'Email app is not available');
         }
       } catch (error) {
         console.error('Error opening email:', error);
-        Alert.alert('Error', 'Failed to open email');
+        showAlert('Error', 'Failed to open email');
       }
     } else {
-      Alert.alert('No Email', 'No email address available for this contact');
+      showAlert('No Email', 'No email address available for this contact');
     }
   };
 
@@ -587,7 +701,7 @@ export default function RelationshipsScreen() {
       setShowMoreActions(false);
     } catch (error) {
       console.error('Error opening X search:', error);
-      Alert.alert('Error', 'Unable to open X. Please check if you have a browser installed.');
+      showAlert('Error', 'Unable to open X. Please check if you have a browser installed.');
     }
   };
 
@@ -610,7 +724,7 @@ export default function RelationshipsScreen() {
         setShowMoreActions(false);
       } catch (fallbackError) {
         console.error('Error opening LinkedIn fallback:', fallbackError);
-        Alert.alert('Error', 'Unable to open LinkedIn. Please check if you have a browser installed.');
+        showAlert('Error', 'Unable to open LinkedIn. Please check if you have a browser installed.');
       }
     }
   };
@@ -626,7 +740,7 @@ export default function RelationshipsScreen() {
       setShowMoreActions(false);
     } catch (error) {
       console.error('Error opening Google search:', error);
-      Alert.alert('Error', 'Unable to open Google. Please check if you have a browser installed.');
+      showAlert('Error', 'Unable to open Google. Please check if you have a browser installed.');
     }
   };
 
@@ -641,23 +755,17 @@ export default function RelationshipsScreen() {
       setShowMoreActions(false);
     } catch (error) {
       console.error('Error opening Facebook search:', error);
-      Alert.alert('Error', 'Unable to open Facebook. Please check if you have a browser installed.');
+      showAlert('Error', 'Unable to open Facebook. Please check if you have a browser installed.');
     }
   };
 
   const handleEditRelationship = () => {
     setShowDetailActions(false);
     setShowRelationshipDetail(false);
-    // Open the relationship form with existing data
-    setSelectedContact({
-      id: selectedRelationship?.contactId || '',
-      name: selectedRelationship?.contactName || '',
-      phoneNumbers: [],
-      emails: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-    setShowAddModal(true);
+    // Call editRelationship with the selected relationship data to populate all form fields
+    if (selectedRelationship) {
+      editRelationship(selectedRelationship);
+    }
   };
 
   const handleShareRelationship = async () => {
@@ -666,7 +774,6 @@ export default function RelationshipsScreen() {
     const shareText = `Contact: ${selectedRelationship.contactName}\n` +
       `Last Contact: ${new Date(selectedRelationship.lastContactDate).toLocaleDateString()}\n` +
       `Last Contact Method: ${selectedRelationship.lastContactMethod}\n` +
-      `Reminder Frequency: ${selectedRelationship.reminderFrequency}\n` +
       `Next Reminder: ${selectedRelationship.nextReminderDate ? new Date(selectedRelationship.nextReminderDate).toLocaleDateString() : 'No reminder set'}\n` +
       `Tags: ${selectedRelationship.tags.join(', ') || 'No tags'}\n` +
       `Notes: ${selectedRelationship.notes || 'No notes'}`;
@@ -681,18 +788,18 @@ export default function RelationshipsScreen() {
       setShowDetailActions(false);
     } catch (error) {
       console.error('Error sharing relationship:', error);
-      Alert.alert('Error', 'Failed to share contact information');
+      showAlert('Error', 'Failed to share contact information');
     }
   };
 
 
   const handleDeleteRelationship = async (relationshipId: string, contactName: string) => {
     if (!currentUser) {
-      Alert.alert('Error', 'Please log in to delete relationships');
+      showAlert('Error', 'Please log in to delete relationships');
       return;
     }
 
-    Alert.alert(
+    showAlert(
       'Delete Relationship',
       `Are you sure you want to delete the relationship with ${contactName}? This will also delete all associated reminders, activities, and cancel all notifications.`,
       [
@@ -750,10 +857,10 @@ export default function RelationshipsScreen() {
               setShowRelationshipDetail(false);
               setSelectedRelationship(null);
 
-              Alert.alert('Success', `Relationship with ${contactName} and all associated data has been deleted successfully.`);
+              showAlert('Success', `Relationship with ${contactName} and all associated data has been deleted successfully.`);
             } catch (error) {
               console.error('❌ Error deleting relationship:', error);
-              Alert.alert('Error', 'Failed to delete relationship. Please try again.');
+              showAlert('Error', 'Failed to delete relationship. Please try again.');
             }
           }
         }
@@ -780,7 +887,7 @@ export default function RelationshipsScreen() {
     
     // Validation: Check if note is not empty
     if (!reminderNote || reminderNote.trim() === '') {
-      Alert.alert('Validation Error', 'Please enter a note for the reminder.');
+      showAlert('Validation Error', 'Please enter a note for the reminder.');
       return;
     }
     
@@ -791,7 +898,7 @@ export default function RelationshipsScreen() {
     
     const now = new Date();
     if (combinedDateTime <= now) {
-      Alert.alert('Validation Error', 'Please select a future date and time for the reminder.');
+      showAlert('Validation Error', 'Please select a future date and time for the reminder.');
       return;
     }
     
@@ -817,10 +924,10 @@ export default function RelationshipsScreen() {
       
       console.log('✅ Reminder created successfully:', newReminder);
       setShowAddReminderModal(false);
-      Alert.alert('Success', 'Reminder added successfully!');
+      showAlert('Success', 'Reminder added successfully!');
     } catch (error) {
       console.error('❌ Error adding reminder:', error);
-      Alert.alert('Error', `Failed to add reminder: ${error instanceof Error ? error.message : String(error)}`);
+      showAlert('Error', `Failed to add reminder: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -842,14 +949,32 @@ export default function RelationshipsScreen() {
     // Check if relationship already exists
     const existingRelationship = relationships.find(r => r.contactId === contact.id);
     if (existingRelationship) {
-      Alert.alert(
-        'Relationship Exists',
-        `You already have a relationship with ${contact.name}. Would you like to edit it?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Edit', onPress: () => editRelationship(existingRelationship) },
-        ]
-      );
+      const alertTitle = Platform.OS === 'web' 
+        ? 'Relationship Already Exists' 
+        : 'Relationship Exists';
+      
+      const alertMessage = Platform.OS === 'web'
+        ? `You already have a relationship with "${contact.name}". Would you like to edit the existing relationship or create a new one?`
+        : `You already have a relationship with ${contact.name}. Would you like to edit it?`;
+      
+      const alertButtons = Platform.OS === 'web'
+        ? [
+            { text: 'Cancel', style: 'cancel' as const },
+            { text: 'Edit Existing', onPress: () => editRelationship(existingRelationship) },
+            { text: 'Create New', onPress: () => {
+              // Allow creating a new relationship with a different name
+              const newName = `${contact.name} (${new Date().getFullYear()})`;
+              setSelectedContact({ ...contact, name: newName, id: `new_${Date.now()}` });
+              setShowContactList(false);
+              setShowAddModal(true);
+            }},
+          ]
+        : [
+            { text: 'Cancel', style: 'cancel' as const },
+            { text: 'Edit', onPress: () => editRelationship(existingRelationship) },
+          ];
+      
+      showAlert(alertTitle, alertMessage, alertButtons);
       return;
     }
 
@@ -876,51 +1001,64 @@ export default function RelationshipsScreen() {
     console.log('🔍 filteredTags:', filteredTags);
     console.log('🔍 filteredTags length:', filteredTags.length);
     
-    // Find the device contact to populate contact fields
+    // Use stored contact data from relationship, fallback to device contact if not available
     const deviceContact = deviceContacts.find(contact => 
       contact.name === relationship.contactName
     );
+    
+    // Get contact data from relationship or fallback to device contact
+    const contactData = relationship.contactData || {};
     
     // Set all form data including tags
     setSelectedContact({ 
       id: relationship.contactId, 
       name: relationship.contactName,
-      phoneNumbers: deviceContact?.phoneNumbers?.map(p => ({ number: p.number || '', label: p.label })) || [],
-      emails: deviceContact?.emails?.map(e => ({ email: e.email || '', label: e.label })) || [],
-      website: '', // Website not available in Expo Contacts
-      linkedin: '', // LinkedIn not available in Expo Contacts
-      twitter: '', // Twitter not available in Expo Contacts
-      instagram: '', // Instagram not available in Expo Contacts
-      facebook: '', // Facebook not available in Expo Contacts
-      company: deviceContact?.company || '',
-      jobTitle: deviceContact?.jobTitle || '',
-      address: deviceContact?.addresses?.[0]?.street || '',
-      birthday: deviceContact?.birthday ? 
-        `${deviceContact.birthday.month}/${deviceContact.birthday.day}/${deviceContact.birthday.year}` : '',
-      notes: deviceContact?.note || '',
+      phoneNumbers: contactData.phoneNumbers || deviceContact?.phoneNumbers?.map(p => ({ number: p.number || '', label: p.label })) || [],
+      emails: contactData.emails || deviceContact?.emails?.map(e => ({ email: e.email || '', label: e.label })) || [],
+      website: contactData.website || '',
+      linkedin: contactData.linkedin || '',
+      twitter: contactData.twitter || '',
+      instagram: contactData.instagram || '',
+      facebook: contactData.facebook || '',
+      company: contactData.company || deviceContact?.company || '',
+      jobTitle: contactData.jobTitle || deviceContact?.jobTitle || '',
+      address: contactData.address || deviceContact?.addresses?.[0]?.street || '',
+      birthday: contactData.birthday || (deviceContact?.birthday ? 
+        `${deviceContact.birthday.month}/${deviceContact.birthday.day}/${deviceContact.birthday.year}` : ''),
+      notes: contactData.notes || deviceContact?.note || '',
     });
     
-    // Set contact edit fields from device contact
-    setEditContactPhone(deviceContact?.phoneNumbers?.[0]?.number || '');
-    setEditContactEmail(deviceContact?.emails?.[0]?.email || '');
-    setEditContactWebsite(''); // Website not available in Expo Contacts
-    setEditContactLinkedin(''); // LinkedIn not available in Expo Contacts
-    setEditContactTwitter(''); // Twitter not available in Expo Contacts
-    setEditContactInstagram(''); // Instagram not available in Expo Contacts
-    setEditContactFacebook(''); // Facebook not available in Expo Contacts
-    setEditContactCompany(deviceContact?.company || '');
-    setEditContactJobTitle(deviceContact?.jobTitle || '');
-    setEditContactAddress(deviceContact?.addresses?.[0]?.street || '');
-    setEditContactBirthday(deviceContact?.birthday ? 
-      `${deviceContact.birthday.month}/${deviceContact.birthday.day}/${deviceContact.birthday.year}` : '');
-    setEditContactNotes(deviceContact?.note || '');
+    // Set contact edit fields from stored contact data or device contact
+    setEditContactPhone(contactData.phoneNumbers?.[0]?.number || deviceContact?.phoneNumbers?.[0]?.number || '');
+    setEditContactEmail(contactData.emails?.[0]?.email || deviceContact?.emails?.[0]?.email || '');
+    setEditContactWebsite(contactData.website || '');
+    setEditContactLinkedin(contactData.linkedin || '');
+    setEditContactTwitter(contactData.twitter || '');
+    setEditContactInstagram(contactData.instagram || '');
+    setEditContactFacebook(contactData.facebook || '');
+    setEditContactCompany(contactData.company || deviceContact?.company || '');
+    setEditContactJobTitle(contactData.jobTitle || deviceContact?.jobTitle || '');
+    setEditContactAddress(contactData.address || deviceContact?.addresses?.[0]?.street || '');
+    setEditContactBirthday(contactData.birthday || (deviceContact?.birthday ? 
+      `${deviceContact.birthday.month}/${deviceContact.birthday.day}/${deviceContact.birthday.year}` : ''));
+    setEditContactNotes(contactData.notes || deviceContact?.note || '');
     
-    setLastContactOption(getLastContactOptionFromDate(relationship.lastContactDate));
+    const lastContactOption = getLastContactOptionFromDate(relationship.lastContactDate);
+    setLastContactOption(lastContactOption);
     setContactMethod(relationship.lastContactMethod as ContactMethod);
     setReminderFrequency(relationship.reminderFrequency as ReminderFrequency);
     setNotes(relationship.notes);
     setFamilyInfo(relationship.familyInfo);
     setTagsForEditing(filteredTags); // Set tags using stable function
+    
+    // Set custom date if last contact option is custom
+    if (lastContactOption === 'custom') {
+      const lastContactDate = new Date(relationship.lastContactDate);
+      setCustomDate(lastContactDate.toISOString().slice(0, 10));
+    } else {
+      setCustomDate('');
+    }
+    
     setShowContactList(false);
     setShowAddModal(true);
   };
@@ -989,19 +1127,28 @@ export default function RelationshipsScreen() {
 
   const saveRelationship = async () => {
     if (!currentUser) {
-      Alert.alert('Authentication Error', 'Please log in to save relationships.');
+      const alertMessage = Platform.OS === 'web'
+        ? 'Please log in to save relationships. Make sure you have a stable internet connection.'
+        : 'Please log in to save relationships.';
+      showAlert('Authentication Required', alertMessage);
       return;
     }
     
     if (!selectedContact) return;
     
     if (selectedTags.length === 0) {
-      Alert.alert('Missing Information', 'Please select at least one tag.');
+      const alertMessage = Platform.OS === 'web'
+        ? 'Please select at least one tag to categorize this relationship. This helps organize your contacts.'
+        : 'Please select at least one tag.';
+      showAlert('Missing Information', alertMessage);
       return;
     }
 
     if (lastContactOption === 'custom' && !customDate) {
-      Alert.alert('Missing Date', 'Please select a custom date.');
+      const alertMessage = Platform.OS === 'web'
+        ? 'Please select a custom date for when you last contacted this person.'
+        : 'Please select a custom date.';
+      showAlert('Missing Date', alertMessage);
       return;
     }
 
@@ -1043,6 +1190,20 @@ export default function RelationshipsScreen() {
       tags: selectedTags,
       notes,
       familyInfo,
+      contactData: {
+        phoneNumbers: updatedContact.phoneNumbers || [],
+        emails: updatedContact.emails || [],
+        website: updatedContact.website || '',
+        linkedin: updatedContact.linkedin || '',
+        twitter: updatedContact.twitter || '',
+        instagram: updatedContact.instagram || '',
+        facebook: updatedContact.facebook || '',
+        company: updatedContact.company || '',
+        jobTitle: updatedContact.jobTitle || '',
+        address: updatedContact.address || '',
+        birthday: updatedContact.birthday || '',
+        notes: updatedContact.notes || '',
+      },
     };
 
     try {
@@ -1302,24 +1463,27 @@ export default function RelationshipsScreen() {
         */
       }
       
-      // Create reminder if frequency is not 'never'
-      if (reminderFrequency !== 'never') {
-        await createReminder({
-          contactName: updatedContact.name,
-          type: 'Follow-up',
-          date: nextReminderDate,
-          frequency: reminderFrequency,
-          tags: selectedTags,
-          notes: `Follow-up reminder for ${updatedContact.name}`,
-        });
-      }
+      // Reminder creation removed - users can create reminders manually if needed
       
       resetForm();
       setShowAddModal(false);
-      Alert.alert('Success', 'Relationship saved successfully!');
+      setContactSearchQuery('');
+      setShowNewContactModal(false);
+      setShowContactList(false);
+      showAlert('Success', 'Relationship saved successfully!');
     } catch (error) {
       console.error('Error saving relationship:', error);
-      Alert.alert('Error', 'Failed to save relationship.');
+      
+      // Show platform-specific error messages
+      if (Platform.OS === 'web') {
+        showAlert(
+          'Web Relationship Save Error',
+          'Failed to save relationship. This may be due to browser limitations or network issues. Please check your internet connection and try again.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        showAlert('Error', 'Failed to save relationship.');
+      }
     } finally {
       setIsSaving(false);
     }
@@ -1360,18 +1524,106 @@ export default function RelationshipsScreen() {
 
 
 
+  // Web-compatible contact creation using Web Contacts API
+  const createWebContact = async (contactData: any) => {
+    if (!('contacts' in navigator)) {
+      console.log('Web Contacts API not supported in this browser');
+      throw new Error('Web Contacts API not supported in this browser');
+    }
+
+    try {
+      // Create contact properties for Web Contacts API
+      const contactProperties: any = {
+        name: [contactData.name],
+      };
+
+      // Add phone numbers
+      if (contactData.phoneNumbers && contactData.phoneNumbers.length > 0) {
+        contactProperties.tel = contactData.phoneNumbers.map((phone: any) => phone.number);
+      }
+
+      // Add emails
+      if (contactData.emails && contactData.emails.length > 0) {
+        contactProperties.email = contactData.emails.map((email: any) => email.email);
+      }
+
+      // Add organization info
+      if (contactData.company) {
+        contactProperties.org = contactData.company;
+      }
+
+      // Add job title as note
+      if (contactData.jobTitle) {
+        contactProperties.note = contactData.jobTitle;
+      }
+
+      // Add address
+      if (contactData.addresses && contactData.addresses.length > 0) {
+        contactProperties.adr = contactData.addresses.map((addr: any) => [
+          '', // P.O. Box
+          '', // Extended Address
+          addr.street || '', // Street Address
+          '', // Locality
+          addr.city || '', // Region
+          addr.postalCode || '', // Postal Code
+          addr.country || '' // Country Name
+        ]);
+      }
+
+      // Add website
+      if (contactData.website) {
+        contactProperties.url = [contactData.website];
+      }
+
+      console.log('🌐 Creating web contact with properties:', contactProperties);
+
+      // Use Web Contacts API to create contact
+      const contact = await (navigator as any).contacts.create(contactProperties);
+      console.log('✅ Web contact created successfully:', contact);
+      return contact;
+    } catch (error) {
+      console.error('❌ Error creating web contact:', error);
+      
+      // Provide more specific error messages based on the error type
+      if (error instanceof Error) {
+        if (error.message.includes('not supported')) {
+          throw new Error('Web Contacts API not supported in this browser');
+        } else if (error.message.includes('permission')) {
+          throw new Error('Permission denied for Web Contacts API');
+        } else if (error.message.includes('network')) {
+          throw new Error('Network error while creating contact');
+        } else {
+          throw new Error(`Web contact creation failed: ${error.message}`);
+        }
+      } else {
+        throw new Error('Unknown error occurred while creating web contact');
+      }
+    }
+  };
+
   const createNewContactAndRelationship = async () => {
     if (!newContactName.trim()) {
-      Alert.alert('Error', 'Please enter a contact name.');
+      const alertMessage = Platform.OS === 'web'
+        ? 'Please enter a contact name. This is required to create a relationship.'
+        : 'Please enter a contact name.';
+      showAlert('Missing Information', alertMessage);
       return;
     }
 
-    // Check and request permission if needed
+    // Handle web platform differently
+    if (Platform.OS === 'web') {
+      // For web, we'll create the contact using Web Contacts API if available
+      // but proceed with relationship creation regardless
+      await proceedWithContactCreation();
+      return;
+    }
+
+    // Check and request permission if needed for mobile platforms
     if (!hasPermission) {
       const { status } = await Contacts.requestPermissionsAsync();
       setHasPermission(status === 'granted');
       if (status !== 'granted') {
-        Alert.alert(
+        showAlert(
           'Permission Required',
           'Contact access is needed to add contacts to your device. You can still create the relationship without device contact access.',
           [
@@ -1476,20 +1728,37 @@ export default function RelationshipsScreen() {
     );
     
     if (existingRelationship) {
-      Alert.alert(
-        'Relationship Exists',
-        `You already have a relationship with ${newContactName.trim()}. Would you like to edit it?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Edit', onPress: () => editRelationship(existingRelationship) },
-        ]
-      );
+      const alertTitle = Platform.OS === 'web' 
+        ? 'Relationship Already Exists' 
+        : 'Relationship Exists';
+      
+      const alertMessage = Platform.OS === 'web'
+        ? `You already have a relationship with "${newContactName.trim()}". Would you like to edit the existing relationship or create a new one?`
+        : `You already have a relationship with ${newContactName.trim()}. Would you like to edit it?`;
+      
+      const alertButtons = Platform.OS === 'web'
+        ? [
+            { text: 'Cancel', style: 'cancel' as const },
+            { text: 'Edit Existing', onPress: () => editRelationship(existingRelationship) },
+            { text: 'Create New', onPress: () => {
+              // Allow creating a new relationship with a different name
+              const newName = `${newContactName.trim()} (${new Date().getFullYear()})`;
+              setNewContactName(newName);
+              // Continue with the creation process
+            }},
+          ]
+        : [
+            { text: 'Cancel', style: 'cancel' as const },
+            { text: 'Edit', onPress: () => editRelationship(existingRelationship) },
+          ];
+      
+      showAlert(alertTitle, alertMessage, alertButtons);
       return;
     }
 
     try {
-      // Create contact in device contacts if permission is granted
-      if (hasPermission) {
+      // Create contact in device contacts if permission is granted (mobile) or web
+      if (hasPermission || Platform.OS === 'web') {
         // Parse the name into givenName and familyName
         const fullName = newContactName.trim();
         const nameParts = fullName.split(' ');
@@ -1550,12 +1819,45 @@ export default function RelationshipsScreen() {
         }
 
         try {
-          console.log('📱 Creating device contact with data:', contactData);
-          const contactId = await Contacts.addContactAsync(contactData);
-          console.log('✅ Contact added to device contacts with ID:', contactId);
+          if (Platform.OS === 'web') {
+            // Use Web Contacts API for web platform
+            console.log('🌐 Creating web contact with data:', contactData);
+            const webContact = await createWebContact({
+              name: fullName,
+              phoneNumbers: contactData[Contacts.Fields.PhoneNumbers] || [],
+              emails: contactData[Contacts.Fields.Emails] || [],
+              company: contactData[Contacts.Fields.Company] || '',
+              jobTitle: contactData[Contacts.Fields.JobTitle] || '',
+              addresses: contactData[Contacts.Fields.Addresses] || [],
+              website: newContactWebsite.trim() || undefined,
+            });
+            
+            console.log('✅ Web contact created successfully');
+          } else {
+            // Use Expo Contacts for mobile platforms
+            console.log('📱 Creating device contact with data:', contactData);
+            const contactId = await Contacts.addContactAsync(contactData);
+            console.log('✅ Contact added to device contacts with ID:', contactId);
+          }
         } catch (contactError) {
           console.error('❌ Error adding contact to device:', contactError);
           console.error('❌ Contact data that failed:', contactData);
+          
+          // Show platform-specific error messages
+          if (Platform.OS === 'web') {
+            const errorMessage = contactError instanceof Error ? contactError.message : 'Unknown error';
+            showAlert(
+              'Web Contact Creation Failed',
+              `Unable to create contact in your device contacts: ${errorMessage}. The relationship will still be created.`,
+              [{ text: 'OK' }]
+            );
+          } else {
+            showAlert(
+              'Contact Creation Failed',
+              'Unable to add contact to device contacts. The relationship will still be created.',
+              [{ text: 'OK' }]
+            );
+          }
           // Continue with relationship creation even if device contact fails
         }
       } else {
@@ -1617,13 +1919,25 @@ export default function RelationshipsScreen() {
       setNewContactBirthday('');
       setNewContactNotes('');
 
-      const successMessage = hasPermission 
-        ? 'Contact created and added to device contacts!'
-        : 'Contact created! (Device contact access not granted)';
-      Alert.alert('Success', successMessage);
+      const successMessage = Platform.OS === 'web' 
+        ? 'Contact created and ready for relationship setup!'
+        : hasPermission 
+          ? 'Contact created and added to device contacts!'
+          : 'Contact created! (Device contact access not granted)';
+      showAlert('Success', successMessage);
     } catch (error) {
       console.error('Error creating contact:', error);
-      Alert.alert('Error', 'Failed to create contact. Please try again.');
+      
+      // Show platform-specific error messages
+      if (Platform.OS === 'web') {
+        showAlert(
+          'Web Contact Creation Error',
+          'Failed to create contact. This may be due to browser limitations or network issues. Please check your internet connection and try again.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        showAlert('Error', 'Failed to create contact. Please try again.');
+      }
     }
   };
 
@@ -1724,7 +2038,7 @@ export default function RelationshipsScreen() {
       setEditedNote('');
     } catch (error) {
       console.error('Error updating note:', error);
-      Alert.alert('Error', 'Failed to update note. Please try again.');
+      showAlert('Error', 'Failed to update note. Please try again.');
     }
   };
 
@@ -1754,7 +2068,7 @@ export default function RelationshipsScreen() {
       setEditedFamilyInfo({ kids: '', siblings: '', spouse: '' });
     } catch (error) {
       console.error('Error updating family info:', error);
-      Alert.alert('Error', 'Failed to update family info. Please try again.');
+      showAlert('Error', 'Failed to update family info. Please try again.');
     }
   };
 
@@ -1789,52 +2103,17 @@ export default function RelationshipsScreen() {
 
   const openEditActivityModal = (activity: any) => {
     setSelectedActivity(activity);
-    
-    // Populate edit form based on activity type
-    if (activity.type === 'note') {
-      setEditNoteTitle(activity.title || '');
-      setEditNoteContent(activity.content || '');
-      setEditNoteTags(activity.tags || []);
-    } else if (activity.type === 'interaction') {
-      setEditInteractionType(activity.interactionType || 'call');
-      setEditInteractionDate(new Date(activity.date || activity.createdAt.seconds * 1000));
-      setEditInteractionNotes(activity.description || '');
-      setEditInteractionDuration(activity.duration?.toString() || '');
-      setEditInteractionLocation(activity.location || '');
-    } else if (activity.type === 'reminder') {
-      setEditReminderTitle(activity.title || '');
-      setEditReminderDate(new Date(activity.reminderDate || activity.createdAt.seconds * 1000));
-      setEditReminderType(activity.reminderType || 'follow_up');
-      setEditReminderFrequency(activity.reminderFrequency || 'month');
-    }
-    
     setShowEditActivityModal(true);
   };
 
   const closeEditActivityModal = () => {
     setShowEditActivityModal(false);
     setSelectedActivity(null);
-    setEditValidationErrors({});
-    resetEditActivityForm();
   };
 
-  const resetEditActivityForm = () => {
-    setEditNoteTitle('');
-    setEditNoteContent('');
-    setEditNoteTags([]);
-    setEditInteractionType('call');
-    setEditInteractionDate(new Date());
-    setEditInteractionNotes('');
-    setEditInteractionDuration('');
-    setEditInteractionLocation('');
-    setEditReminderTitle('');
-    setEditReminderDate(new Date());
-    setEditReminderType('follow_up');
-    setEditReminderFrequency('month');
-  };
 
   const handleDeleteActivity = async (activity: any) => {
-    Alert.alert(
+    showAlert(
       'Delete Activity',
       `Are you sure you want to delete this ${activity.type} activity?\n\nTap to edit, long press to delete.`,
       [
@@ -1846,13 +2125,13 @@ export default function RelationshipsScreen() {
             try {
               const success = await deleteActivity(activity.id);
               if (success) {
-                Alert.alert('Success', 'Activity deleted successfully!');
+                showAlert('Success', 'Activity deleted successfully!');
               } else {
-                Alert.alert('Error', 'Failed to delete activity.');
+                showAlert('Error', 'Failed to delete activity.');
               }
             } catch (error) {
               console.error('Error deleting activity:', error);
-              Alert.alert('Error', 'Failed to delete activity.');
+              showAlert('Error', 'Failed to delete activity.');
             }
           }
         },
@@ -1950,56 +2229,6 @@ export default function RelationshipsScreen() {
     return Object.keys(errors).length === 0;
   };
 
-  const validateEditActivityForm = () => {
-    const errors: Record<string, string> = {};
-
-    if (selectedActivity?.type === 'note') {
-      if (!editNoteTitle.trim()) {
-        errors.editNoteTitle = 'Note title is required';
-      }
-      if (!editNoteContent.trim()) {
-        errors.editNoteContent = 'Note content is required';
-      }
-    } else if (selectedActivity?.type === 'interaction') {
-      if (!editInteractionNotes.trim()) {
-        errors.editInteractionNotes = 'Interaction notes are required';
-      }
-
-      // Check if interaction date is in the future
-      const now = new Date();
-      const interactionDate = new Date(editInteractionDate);
-      // Set time to start of day for accurate comparison
-      now.setHours(0, 0, 0, 0);
-      interactionDate.setHours(0, 0, 0, 0);
-      
-      if (interactionDate > now) {
-        errors.editInteractionDate = 'Interaction date cannot be in the future';
-      }
-      
-      // Validate duration if provided
-      if (editInteractionDuration.trim() && (isNaN(parseInt(editInteractionDuration)) || parseInt(editInteractionDuration) < 0)) {
-        errors.editInteractionDuration = 'Duration must be a valid positive number';
-      }
-    } else if (selectedActivity?.type === 'reminder') {
-      if (!editReminderTitle.trim()) {
-        errors.editReminderTitle = 'Reminder title is required';
-      }
-      
-      // Check if reminder date is in the future
-      const now = new Date();
-      const reminderDate = new Date(editReminderDate);
-      // Set time to start of day for accurate comparison
-      now.setHours(0, 0, 0, 0);
-      reminderDate.setHours(0, 0, 0, 0);
-      
-      if (reminderDate <= now) {
-        errors.editReminderDate = 'Reminder date must be in the future';
-      }
-    }
-
-    setEditValidationErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
 
   const createNoteActivity = async () => {
     if (!selectedRelationship || !currentUser) return;
@@ -2016,11 +2245,21 @@ export default function RelationshipsScreen() {
         contactName: selectedRelationship.contactName,
       });
       
-      Alert.alert('Success', 'Note activity created successfully!');
+      showAlert('Success', 'Note activity created successfully!');
       closeAddActivityModal();
     } catch (error) {
       console.error('Error creating note activity:', error);
-      Alert.alert('Error', 'Failed to create note activity. Please try again.');
+      
+      // Show platform-specific error messages
+      if (Platform.OS === 'web') {
+        showAlert(
+          'Web Activity Creation Error',
+          'Failed to create note activity. This may be due to browser limitations or network issues. Please check your internet connection and try again.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        showAlert('Error', 'Failed to create note activity. Please try again.');
+      }
     }
   };
 
@@ -2060,14 +2299,24 @@ export default function RelationshipsScreen() {
           lastContactMethod: interactionType,
         } : null);
         
-        Alert.alert('Success', 'Interaction activity created and last contact date updated!');
+        showAlert('Success', 'Interaction activity created and last contact date updated!');
       } else {
-        Alert.alert('Success', 'Interaction activity created! (Last contact date not updated - this interaction is older than the current last contact)');
+        showAlert('Success', 'Interaction activity created! (Last contact date not updated - this interaction is older than the current last contact)');
       }
       closeAddActivityModal();
     } catch (error) {
       console.error('Error creating interaction activity:', error);
-      Alert.alert('Error', 'Failed to create interaction activity. Please try again.');
+      
+      // Show platform-specific error messages
+      if (Platform.OS === 'web') {
+        showAlert(
+          'Web Activity Creation Error',
+          'Failed to create interaction activity. This may be due to browser limitations or network issues. Please check your internet connection and try again.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        showAlert('Error', 'Failed to create interaction activity. Please try again.');
+      }
     }
   };
 
@@ -2078,7 +2327,7 @@ export default function RelationshipsScreen() {
       // Create activity
       await createActivity({
         type: 'reminder',
-        title: activityReminderTitle,
+        // title: activityReminderTitle,
         description: activityReminderNotes,
         tags: [],
         contactId: selectedRelationship.contactId,
@@ -2098,11 +2347,21 @@ export default function RelationshipsScreen() {
         notes: activityReminderNotes,
       });
       
-      Alert.alert('Success', 'Reminder activity created and scheduled successfully!');
+      showAlert('Success', 'Reminder activity created and scheduled successfully!');
       closeAddActivityModal();
     } catch (error) {
       console.error('Error creating reminder activity:', error);
-      Alert.alert('Error', 'Failed to create reminder activity. Please try again.');
+      
+      // Show platform-specific error messages
+      if (Platform.OS === 'web') {
+        showAlert(
+          'Web Activity Creation Error',
+          'Failed to create reminder activity. This may be due to browser limitations or network issues. Please check your internet connection and try again.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        showAlert('Error', 'Failed to create reminder activity. Please try again.');
+      }
     }
   };
 
@@ -2120,52 +2379,6 @@ export default function RelationshipsScreen() {
     }
   };
 
-  const handleUpdateActivity = async () => {
-    if (!selectedActivity) return;
-
-    // Validate the form before proceeding
-    if (!validateEditActivityForm()) {
-      return;
-    }
-
-    try {
-      let updateData: any = {};
-
-      if (selectedActivity.type === 'note') {
-        updateData = {
-          title: editNoteTitle,
-          content: editNoteContent,
-          tags: editNoteTags,
-        };
-      } else if (selectedActivity.type === 'interaction') {
-        updateData = {
-          interactionType: editInteractionType,
-          date: editInteractionDate.toISOString(),
-          description: editInteractionNotes,
-          duration: editInteractionDuration ? parseInt(editInteractionDuration) : undefined,
-          location: editInteractionLocation,
-        };
-      } else if (selectedActivity.type === 'reminder') {
-        updateData = {
-          title: editReminderTitle,
-          reminderDate: editReminderDate.toISOString(),
-          reminderType: editReminderType,
-          reminderFrequency: editReminderFrequency,
-        };
-      }
-
-      const success = await updateActivity(selectedActivity.id, updateData);
-      if (success) {
-        Alert.alert('Success', 'Activity updated successfully!');
-        closeEditActivityModal();
-      } else {
-        Alert.alert('Error', 'Failed to update activity.');
-      }
-    } catch (error) {
-      console.error('Error updating activity:', error);
-      Alert.alert('Error', 'Failed to update activity.');
-    }
-  };
 
   const formatDate = (dateString: string): string => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -2277,13 +2490,16 @@ export default function RelationshipsScreen() {
     const getActivityTitle = () => {
       switch (activity.type) {
         case 'note':
-          return activity.title;
+          // return activity.title;
+          return 'Note'; // Default title
         case 'interaction':
           return `${activity.interactionType} with ${activity.contactName}`;
         case 'reminder':
-          return `Reminder: ${activity.title}`;
+          // return `${activity.title}`;
+          return 'Reminder'; // Default title
         default:
-          return activity.title;
+          // return activity.title;
+          return 'Activity'; // Default title
       }
     };
 
@@ -2330,7 +2546,11 @@ export default function RelationshipsScreen() {
       <TouchableOpacity 
         key={activity.id} 
         style={styles.activityCard}
-        onPress={() => openEditActivityModal(activity)}
+        onPress={() => {
+          if(activity.type !== "reminder"){
+            openEditActivityModal(activity)
+          }
+        }}
         onLongPress={() => {
           Vibration.vibrate(100); // Haptic feedback
           handleDeleteActivity(activity);
@@ -2346,7 +2566,13 @@ export default function RelationshipsScreen() {
         </View>
         <View style={styles.activityActions}>
           <Text style={styles.activityTime}>{getActivityTime()}</Text>
-          <Text style={styles.activityHint}>Tap to edit • Long press to delete</Text>
+          <TouchableOpacity 
+            style={styles.editActivityButton}
+            onPress={() => openEditActivityModal(activity)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Text style={styles.editActivityButtonText}>✏️</Text>
+          </TouchableOpacity>
         </View>
       </TouchableOpacity>
     );
@@ -2472,12 +2698,19 @@ export default function RelationshipsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Relationships</Text>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <ArrowLeft size={24} color="#374151" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Relationships</Text>
+        </View>
+        
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TouchableOpacity style={styles.addButton} onPress={openAddRelationship}>
             <Plus size={20} color="#ffffff" />
           </TouchableOpacity>
-        </View>
+        </View> 
+       
       </View>
 
       {/* Status Bar */}
@@ -2527,7 +2760,7 @@ export default function RelationshipsScreen() {
                 style={styles.createNewButton}
                 onPress={() => setShowNewContactModal(true)}
               >
-                <Plus size={20} color="#3B82F6" />
+                <Plus size={20} color="#ffffff" />
                 <Text style={styles.createNewButtonText}>New</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => setShowContactList(false)}>
@@ -2756,7 +2989,7 @@ export default function RelationshipsScreen() {
               <TouchableOpacity 
                 style={[styles.saveButton, !newContactName.trim() && styles.saveButtonDisabled]}
                 onPress={createNewContactAndRelationship}
-                disabled={!newContactName.trim()}
+                disabled={!newContactName.trim() || !newContactPhone}
               >
                 <Text style={styles.saveButtonText}>Create Contact & Add Relationship</Text>
               </TouchableOpacity>
@@ -2847,17 +3080,7 @@ export default function RelationshipsScreen() {
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Contact Information</Text>
               
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Phone Number</Text>
-                <TextInput
-                  style={styles.input}
-                  value={editContactPhone}
-                  onChangeText={setEditContactPhone}
-                  placeholder="Enter phone number"
-                  placeholderTextColor="#9CA3AF"
-                  keyboardType="phone-pad"
-                />
-              </View>
+              
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Email</Text>
@@ -2996,29 +3219,7 @@ export default function RelationshipsScreen() {
               </View>
             </View>
 
-            {/* Reminder Frequency Section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Reminder frequency</Text>
-              <View style={styles.optionsGrid}>
-                {reminderFrequencies.map((freq) => (
-                  <TouchableOpacity
-                    key={freq.key}
-                    style={[
-                      styles.optionButton,
-                      reminderFrequency === freq.key && styles.selectedOption
-                    ]}
-                    onPress={() => setReminderFrequency(freq.key as ReminderFrequency)}
-                  >
-                    <Text style={[
-                      styles.optionText,
-                      reminderFrequency === freq.key && styles.selectedOptionText
-                    ]}>
-                      {freq.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+            
 
             {/* Tags Section */}
             <View style={styles.section}>
@@ -3054,27 +3255,36 @@ export default function RelationshipsScreen() {
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Family Information</Text>
               <View style={styles.familyInputs}>
-                <TextInput
-                  style={styles.input}
-                  value={familyInfo.spouse}
-                  onChangeText={(text) => setFamilyInfo(prev => ({ ...prev, spouse: text }))}
-                  placeholder="Spouse"
-                  placeholderTextColor="#9CA3AF"
-                />
-                <TextInput
-                  style={styles.input}
-                  value={familyInfo.kids}
-                  onChangeText={(text) => setFamilyInfo(prev => ({ ...prev, kids: text }))}
-                  placeholder="Kids"
-                  placeholderTextColor="#9CA3AF"
-                />
-                <TextInput
-                  style={styles.input}
-                  value={familyInfo.siblings}
-                  onChangeText={(text) => setFamilyInfo(prev => ({ ...prev, siblings: text }))}
-                  placeholder="Siblings"
-                  placeholderTextColor="#9CA3AF"
-                />
+                <View style={styles.familyFieldContainer}>
+                  <Text style={styles.familyFieldLabel}>💍 Spouse</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={familyInfo.spouse}
+                    onChangeText={(text) => setFamilyInfo(prev => ({ ...prev, spouse: text }))}
+                    placeholder="e.g., Married to Sarah"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                </View>
+                <View style={styles.familyFieldContainer}>
+                  <Text style={styles.familyFieldLabel}>👶 Kids</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={familyInfo.kids}
+                    onChangeText={(text) => setFamilyInfo(prev => ({ ...prev, kids: text }))}
+                    placeholder="e.g., 2 kids, ages 5 and 8"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                </View>
+                <View style={styles.familyFieldContainer}>
+                  <Text style={styles.familyFieldLabel}>👨‍👩‍👧‍👦 Siblings</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={familyInfo.siblings}
+                    onChangeText={(text) => setFamilyInfo(prev => ({ ...prev, siblings: text }))}
+                    placeholder="e.g., 1 brother, 2 sisters"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                </View>
               </View>
             </View>
 
@@ -3136,7 +3346,12 @@ export default function RelationshipsScreen() {
                 </Text>
               </View>
               <Text style={styles.profileName}>{selectedRelationship?.contactName}</Text>
-              <Text style={styles.profileCompany}>No company info</Text>
+              <Text style={styles.profileCompany}>
+                {selectedRelationship?.contactData?.company || selectedRelationship?.contactData?.jobTitle 
+                  ? `${selectedRelationship?.contactData?.company || ''} ${selectedRelationship?.contactData?.jobTitle || ''}`.trim()
+                  : 'No company info'
+                }
+              </Text>
               
               
               
@@ -3460,26 +3675,76 @@ export default function RelationshipsScreen() {
                 <Text style={styles.reminderContactName}>{selectedRelationship?.contactName}</Text>
                 
                 <Text style={styles.reminderFormLabel}>Date</Text>
-                <TouchableOpacity 
-                  style={styles.dateTimeButton}
-                  onPress={() => setShowDatePicker(true)}
-                >
-                  <Calendar size={20} color="#6B7280" />
-                  <Text style={styles.dateTimeButtonText}>
-                    {reminderDate.toLocaleDateString()}
-                  </Text>
-                </TouchableOpacity>
+                {Platform.OS === 'web' ? (
+                  <View style={styles.webDateTimeInput}>
+                    <input
+                      type="date"
+                      value={reminderDate.toISOString().slice(0, 10)}
+                      onChange={(e) => {
+                        const selectedDate = new Date(e.target.value);
+                        selectedDate.setHours(reminderTime.getHours(), reminderTime.getMinutes());
+                        setReminderDate(selectedDate);
+                      }}
+                      min={new Date().toISOString().slice(0, 10)}
+                      style={{
+                        padding: '12px',
+                        border: '1px solid #D1D5DB',
+                        borderRadius: '8px',
+                        fontSize: '16px',
+                        backgroundColor: '#ffffff',
+                        color: '#111827',
+                        outline: 'none',
+                        width: '100%',
+                      }}
+                    />
+                  </View>
+                ) : (
+                  <TouchableOpacity 
+                    style={styles.dateTimeButton}
+                    onPress={() => setShowDatePicker(true)}
+                  >
+                    <Calendar size={20} color="#6B7280" />
+                    <Text style={styles.dateTimeButtonText}>
+                      {reminderDate.toLocaleDateString()}
+                    </Text>
+                  </TouchableOpacity>
+                )}
                 
                 <Text style={styles.reminderFormLabel}>Time</Text>
-                <TouchableOpacity 
-                  style={styles.dateTimeButton}
-                  onPress={() => setShowTimePicker(true)}
-                >
-                  <Calendar size={20} color="#6B7280" />
-                  <Text style={styles.dateTimeButtonText}>
-                    {reminderTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </Text>
-                </TouchableOpacity>
+                {Platform.OS === 'web' ? (
+                  <View style={styles.webDateTimeInput}>
+                    <input
+                      type="time"
+                      value={reminderTime.toTimeString().slice(0, 5)}
+                      onChange={(e) => {
+                        const [hours, minutes] = e.target.value.split(':').map(Number);
+                        const newTime = new Date(reminderTime);
+                        newTime.setHours(hours, minutes);
+                        setReminderTime(newTime);
+                      }}
+                      style={{
+                        padding: '12px',
+                        border: '1px solid #D1D5DB',
+                        borderRadius: '8px',
+                        fontSize: '16px',
+                        backgroundColor: '#ffffff',
+                        color: '#111827',
+                        outline: 'none',
+                        width: '100%',
+                      }}
+                    />
+                  </View>
+                ) : (
+                  <TouchableOpacity 
+                    style={styles.dateTimeButton}
+                    onPress={() => setShowTimePicker(true)}
+                  >
+                    <Calendar size={20} color="#6B7280" />
+                    <Text style={styles.dateTimeButtonText}>
+                      {reminderTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </TouchableOpacity>
+                )}
                 
                 <Text style={styles.reminderFormLabel}>Note *</Text>
                 <TextInput
@@ -3628,233 +3893,18 @@ export default function RelationshipsScreen() {
       />
 
       {/* Edit Activity Modal */}
-      <Modal visible={showEditActivityModal} animationType="slide" transparent>
-        <View style={styles.addActivityOverlay}>
-          <View style={styles.addActivityContainer}>
-            <View style={styles.addActivityHeader}>
-              <TouchableOpacity onPress={closeEditActivityModal}>
-                <X size={24} color="#6B7280" />
-              </TouchableOpacity>
-              <Text style={styles.addActivityTitle}>Edit Activity</Text>
-              <TouchableOpacity onPress={handleUpdateActivity} style={styles.addActivitySaveButton}>
-                <Text style={styles.addActivitySaveButtonText}>Update</Text>
-              </TouchableOpacity>
-            </View>
-            
-            <ScrollView style={styles.addActivityContent} showsVerticalScrollIndicator={false}>
-              {selectedActivity?.type === 'note' && (
-                <View>
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Title *</Text>
-                    <TextInput
-                      style={[styles.input, editValidationErrors.editNoteTitle && styles.inputError]}
-                      value={editNoteTitle}
-                      onChangeText={(text) => {
-                        setEditNoteTitle(text);
-                        if (editValidationErrors.editNoteTitle) {
-                          setEditValidationErrors(prev => ({ ...prev, editNoteTitle: '' }));
-                        }
-                      }}
-                      placeholder="Enter note title"
-                      placeholderTextColor="#9CA3AF"
-                    />
-                    {editValidationErrors.editNoteTitle && (
-                      <Text style={styles.errorText}>{editValidationErrors.editNoteTitle}</Text>
-                    )}
-                  </View>
-                  
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Content *</Text>
-                    <TextInput
-                      style={[styles.input, styles.textArea, editValidationErrors.editNoteContent && styles.inputError]}
-                      value={editNoteContent}
-                      onChangeText={(text) => {
-                        setEditNoteContent(text);
-                        if (editValidationErrors.editNoteContent) {
-                          setEditValidationErrors(prev => ({ ...prev, editNoteContent: '' }));
-                        }
-                      }}
-                      placeholder="Enter note content"
-                      placeholderTextColor="#9CA3AF"
-                      multiline
-                      numberOfLines={4}
-                      textAlignVertical="top"
-                    />
-                    {editValidationErrors.editNoteContent && (
-                      <Text style={styles.errorText}>{editValidationErrors.editNoteContent}</Text>
-                    )}
-                  </View>
-                </View>
-              )}
-              
-              {selectedActivity?.type === 'interaction' && (
-                <View>
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Interaction Type *</Text>
-                    <View style={styles.interactionTypeButtons}>
-                      {(['call', 'text', 'email', 'inPerson'] as const).map((type) => (
-                        <TouchableOpacity
-                          key={type}
-                          style={[styles.interactionTypeButton, editInteractionType === type && styles.activeInteractionTypeButton]}
-                          onPress={() => setEditInteractionType(type)}
-                        >
-                          <Text style={[styles.interactionTypeButtonText, editInteractionType === type && styles.activeInteractionTypeButtonText]}>
-                            {type === 'call' ? '📞' : type === 'text' ? '💬' : type === 'email' ? '📧' : '🤝'} {type}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                  
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Date & Time *</Text>
-                    <View style={styles.dateTimeRow}>
-                      <TouchableOpacity style={[styles.dateTimeButton, editValidationErrors.editInteractionDate && styles.inputError]} onPress={() => setShowEditInteractionDatePicker(true)}>
-                        <Calendar size={16} color="#6B7280" />
-                        <Text style={styles.dateTimeButtonText}>
-                          {editInteractionDate.toLocaleDateString()}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                    {editValidationErrors.editInteractionDate && (
-                      <Text style={styles.errorText}>{editValidationErrors.editInteractionDate}</Text>
-                    )}
-                  </View>
-                  
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Notes *</Text>
-                    <TextInput
-                      style={[styles.input, styles.textArea, editValidationErrors.editInteractionNotes && styles.inputError]}
-                      value={editInteractionNotes}
-                      onChangeText={(text) => {
-                        setEditInteractionNotes(text);
-                        if (editValidationErrors.editInteractionNotes) {
-                          setEditValidationErrors(prev => ({ ...prev, editInteractionNotes: '' }));
-                        }
-                      }}
-                      placeholder="Add notes about the interaction"
-                      placeholderTextColor="#9CA3AF"
-                      multiline
-                      numberOfLines={3}
-                      textAlignVertical="top"
-                    />
-                    {editValidationErrors.editInteractionNotes && (
-                      <Text style={styles.errorText}>{editValidationErrors.editInteractionNotes}</Text>
-                    )}
-                  </View>
-                  
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Duration (minutes)</Text>
-                    <TextInput
-                      style={[styles.input, editValidationErrors.editInteractionDuration && styles.inputError]}
-                      value={editInteractionDuration}
-                      onChangeText={(text) => {
-                        setEditInteractionDuration(text);
-                        if (editValidationErrors.editInteractionDuration) {
-                          setEditValidationErrors(prev => ({ ...prev, editInteractionDuration: '' }));
-                        }
-                      }}
-                      placeholder="Enter duration in minutes"
-                      placeholderTextColor="#9CA3AF"
-                      keyboardType="numeric"
-                    />
-                    {editValidationErrors.editInteractionDuration && (
-                      <Text style={styles.errorText}>{editValidationErrors.editInteractionDuration}</Text>
-                    )}
-                  </View>
-                  
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Location</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={editInteractionLocation}
-                      onChangeText={setEditInteractionLocation}
-                      placeholder="Enter location"
-                      placeholderTextColor="#9CA3AF"
-                    />
-                  </View>
-                </View>
-              )}
-              
-              {selectedActivity?.type === 'reminder' && (
-                <View>
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Title *</Text>
-                    <TextInput
-                      style={[styles.input, editValidationErrors.editReminderTitle && styles.inputError]}
-                      value={editReminderTitle}
-                      onChangeText={(text) => {
-                        setEditReminderTitle(text);
-                        if (editValidationErrors.editReminderTitle) {
-                          setEditValidationErrors(prev => ({ ...prev, editReminderTitle: '' }));
-                        }
-                      }}
-                      placeholder="Enter reminder title"
-                      placeholderTextColor="#9CA3AF"
-                    />
-                    {editValidationErrors.editReminderTitle && (
-                      <Text style={styles.errorText}>{editValidationErrors.editReminderTitle}</Text>
-                    )}
-                  </View>
-                  
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Date & Time *</Text>
-                    <View style={styles.dateTimeRow}>
-                      <TouchableOpacity style={[styles.dateTimeButton, editValidationErrors.editReminderDate && styles.inputError]} onPress={() => setShowEditReminderDatePicker(true)}>
-                        <Calendar size={16} color="#6B7280" />
-                        <Text style={styles.dateTimeButtonText}>
-                          {editReminderDate.toLocaleDateString()}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                    {editValidationErrors.editReminderDate && (
-                      <Text style={styles.errorText}>{editValidationErrors.editReminderDate}</Text>
-                    )}
-                  </View>
-                  
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Type</Text>
-                    <View style={styles.reminderTypeButtons}>
-                      {reminderTypes.map((type) => (
-                        <TouchableOpacity
-                          key={type.key}
-                          style={[styles.reminderTypeButton, editReminderType === type.key && styles.activeReminderTypeButton]}
-                          onPress={() => setEditReminderType(type.key)}
-                        >
-                          <Text style={[styles.reminderTypeButtonText, editReminderType === type.key && styles.activeReminderTypeButtonText]}>
-                            {type.label}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                  
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Frequency</Text>
-                    <View style={styles.frequencyButtons}>
-                      {reminderFrequencies.map((freq) => (
-                        <TouchableOpacity
-                          key={freq.key}
-                          style={[styles.frequencyButton, editReminderFrequency === freq.key && styles.activeFrequencyButton]}
-                          onPress={() => setEditReminderFrequency(freq.key as any)}
-                        >
-                          <Text style={[styles.frequencyButtonText, editReminderFrequency === freq.key && styles.activeFrequencyButtonText]}>
-                            {freq.label}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                </View>
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      <EditActivityModal
+        visible={showEditActivityModal}
+        onClose={closeEditActivityModal}
+        activity={selectedActivity}
+        onActivityUpdated={() => {
+          // Refresh activities or perform any additional logic
+        }}
+      />
 
-      {/* Activity Date Pickers */}
-      {showInteractionDatePicker && (
-        <DateTimePicker
+      {/* Activity Date Pickers for Native Platforms */}
+      {Platform.OS !== 'web' && showInteractionDatePicker && (
+        <WebCompatibleDateTimePicker
           value={interactionDate}
           mode="date"
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
@@ -3863,8 +3913,8 @@ export default function RelationshipsScreen() {
         />
       )}
 
-      {showInteractionTimePicker && (
-        <DateTimePicker
+      {Platform.OS !== 'web' && showInteractionTimePicker && (
+        <WebCompatibleDateTimePicker
           value={interactionDate}
           mode="time"
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
@@ -3872,8 +3922,8 @@ export default function RelationshipsScreen() {
         />
       )}
 
-      {showReminderDatePicker && (
-        <DateTimePicker
+      {Platform.OS !== 'web' && showReminderDatePicker && (
+        <WebCompatibleDateTimePicker
           value={activityReminderDate}
           mode="date"
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
@@ -3882,8 +3932,8 @@ export default function RelationshipsScreen() {
         />
       )}
 
-      {showReminderTimePicker && (
-        <DateTimePicker
+      {Platform.OS !== 'web' && showReminderTimePicker && (
+        <WebCompatibleDateTimePicker
           value={activityReminderDate}
           mode="time"
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
@@ -3891,9 +3941,9 @@ export default function RelationshipsScreen() {
         />
       )}
 
-      {/* Date Picker */}
-      {showDatePicker && (
-        <DateTimePicker
+      {/* Date Picker for Native Platforms */}
+      {Platform.OS !== 'web' && showDatePicker && (
+        <WebCompatibleDateTimePicker
           value={reminderDate}
           mode="date"
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
@@ -3902,9 +3952,9 @@ export default function RelationshipsScreen() {
         />
       )}
 
-      {/* Time Picker */}
-      {showTimePicker && (
-        <DateTimePicker
+      {/* Time Picker for Native Platforms */}
+      {Platform.OS !== 'web' && showTimePicker && (
+        <WebCompatibleDateTimePicker
           value={reminderTime}
           mode="time"
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
@@ -3912,40 +3962,6 @@ export default function RelationshipsScreen() {
         />
       )}
 
-      {/* Edit Activity Date Pickers */}
-      {showEditInteractionDatePicker && (
-        <DateTimePicker
-          value={editInteractionDate}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={(event, selectedDate) => {
-            setShowEditInteractionDatePicker(Platform.OS === 'ios');
-            if (selectedDate) {
-              setEditInteractionDate(selectedDate);
-              if (editValidationErrors.editInteractionDate) {
-                setEditValidationErrors(prev => ({ ...prev, editInteractionDate: '' }));
-              }
-            }
-          }}
-        />
-      )}
-
-      {showEditReminderDatePicker && (
-        <DateTimePicker
-          value={editReminderDate}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={(event, selectedDate) => {
-            setShowEditReminderDatePicker(Platform.OS === 'ios');
-            if (selectedDate) {
-              setEditReminderDate(selectedDate);
-              if (editValidationErrors.editReminderDate) {
-                setEditValidationErrors(prev => ({ ...prev, editReminderDate: '' }));
-              }
-            }
-          }}
-        />
-      )}
     </SafeAreaView>
   );
 }
@@ -3962,6 +3978,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 16,
     paddingBottom: 20,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 12,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
   },
   statusBar: {
     backgroundColor: '#F3F4F6',
@@ -4277,6 +4304,15 @@ const styles = StyleSheet.create({
   },
   familyInputs: {
     gap: 12,
+  },
+  familyFieldContainer: {
+    marginBottom: 8,
+  },
+  familyFieldLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+    marginBottom: 6,
   },
   input: {
     backgroundColor: '#ffffff',
@@ -4842,6 +4878,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 8,
+    maxWidth:500
   },
   editModalHeader: {
     flexDirection: 'row',
@@ -4927,6 +4964,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 8,
+    maxWidth:500
   },
   addActivityHeader: {
     flexDirection: 'row',
@@ -5557,6 +5595,9 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     flex: 1,
   },
+  webDateTimeInput: {
+    // Container for web datetime inputs
+  },
   dateTimeRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -5604,5 +5645,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#ffffff',
+  },
+  editActivityButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: '#F3F4F6',
+    marginLeft: 8,
+  },
+  editActivityButtonText: {
+    fontSize: 16,
   },
 });
