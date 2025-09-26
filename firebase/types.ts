@@ -97,7 +97,7 @@ export interface AppStats {
 export type LastContactOption = 'today' | 'yesterday' | 'week' | 'month' | '3months' | '6months' | 'year' | 'custom';
 export type ContactMethod = 'call' | 'text' | 'email' | 'inPerson';
 export type ReminderFrequency = 'once' | 'daily' | 'week' | 'month' | '3months' | '6months' | 'yearly' | 'never';
-export type ReminderTab = 'missed' | 'thisWeek' | 'upcoming';
+export type ReminderTab = 'all' | 'missed' | 'thisWeek' | 'upcoming';
 export type FilterType = 'all' | 'client' | 'family' | 'friends' | 'prospect';
 
 // Activity Types

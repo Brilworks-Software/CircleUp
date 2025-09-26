@@ -1,27 +1,45 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import {
   authService,
   type AuthCredentials,
   type RegisterCredentials,
 } from '../services/AuthService';
 import { useCreateUser } from './useUser';
+import { userStore } from '../stores/userStore';
+import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
 export const useAuth = () => {
   const queryClient = useQueryClient();
   const createUserMutation = useCreateUser();
+  const [currentUser, setCurrentUser] = useState<FirebaseAuthTypes.User | null>(null);
+  const [isLoadingUser, setIsLoadingUser] = useState(true);
 
-  const { data: currentUser, isLoading: isLoadingUser } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => authService.getCurrentUser(),
-    staleTime: Infinity,
-  });
+  // Set up real-time auth state listener
+  useEffect(() => {
+    const unsubscribe = authService.onAuthStateChanged((user) => {
+      setCurrentUser(user);
+      setIsLoadingUser(false);
+      
+      // Update userStore when auth state changes
+      if (user) {
+        // User is signed in - invalidate queries to refetch user data
+        queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+        queryClient.invalidateQueries({ queryKey: ['user', user.uid] });
+      } else {
+        // User is signed out - clear user data
+        userStore.clearUser();
+        queryClient.clear();
+      }
+    });
+
+    return unsubscribe;
+  }, [queryClient]);
 
   const signInMutation = useMutation({
     mutationFn: (credentials: AuthCredentials) =>
       authService.signIn(credentials),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
-    },
+    // Auth state listener will handle query invalidation
   });
 
   const signUpMutation = useMutation({
@@ -45,23 +63,17 @@ export const useAuth = () => {
       
       return userCredential;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
-    },
+    // Auth state listener will handle query invalidation
   });
 
   const signOutMutation = useMutation({
     mutationFn: () => authService.signOut(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
-    },
+    // Auth state listener will handle query invalidation
   });
 
   const deleteAccountMutation = useMutation({
     mutationFn: () => authService.deleteAccount(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
-    },
+    // Auth state listener will handle query invalidation
   });
 
   const resetPasswordMutation = useMutation({

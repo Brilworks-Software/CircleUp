@@ -18,6 +18,8 @@ export function useUser(userId: string) {
     if (!userId) return;
     const unsub = UsersService.subscribeToUser(userId, (user) => {
       queryClient.setQueryData(['user', userId], user);
+      // Also update the userStore for global state management
+      userStore.setUser(user);
     });
     return () => unsub();
   }, [userId, queryClient]);

@@ -1411,35 +1411,60 @@ export default function RemindersScreen() {
           >
             <Filter size={20} color="#6B7280" />
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.iconButton}
-            onPress={() => setSearchQuery('')}
-          >
-            <Search size={20} color="#6B7280" />
-          </TouchableOpacity>
+          
         </View>
       </View>
 
-      <View style={styles.tabContainer}>
-        {(['missed', 'thisWeek', 'upcoming'] as ReminderTab[]).map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tab, activeTab === tab && styles.activeTab]}
-            onPress={() => setActiveTab(tab)}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
-              {tab === 'missed' ? 'Missed' : tab === 'thisWeek' ? 'This Week' : 'Upcoming'}
-            </Text>
-            <View style={[styles.badge, activeTab === tab && styles.activeBadge]}>
-              <Text style={[styles.badgeText, activeTab === tab && styles.activeBadgeText]}>
-                {getTabCount(tab)}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
 
+      <View >
+
+      
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ marginVertical: 8}}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', gap:8, paddingHorizontal:10, paddingVertical:10 }}>
+          {(['all', 'upcoming', 'thisWeek', 'missed'] as ReminderTab[]).map((tab) => (
+            <TouchableOpacity
+              key={tab}
+              style={[
+                styles.tab,
+                activeTab === tab && styles.activeTab,
+                { flex: 1, minWidth: 0 }
+              ]}
+              onPress={() => setActiveTab(tab)}
+              activeOpacity={0.7}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                <Text
+                  style={[
+                    styles.tabText,
+                    activeTab === tab && styles.activeTabText,
+                    { flexShrink: 1 }
+                  ]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {tab === 'all'
+                    ? 'All'
+                    : tab === 'missed'
+                    ? 'Missed'
+                    : tab === 'thisWeek'
+                    ? 'This Week'
+                    : 'Upcoming'}
+                </Text>
+                <View style={[styles.badge, activeTab === tab && styles.activeBadge, { marginLeft: 6 }]}>
+                  <Text style={[styles.badgeText, activeTab === tab && styles.activeBadgeText]}>
+                    {getTabCount(tab)}
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
+      </View>
       <View style={styles.content}>
         {reminders.length > 0 ? (
           <FlatList
@@ -1472,7 +1497,9 @@ export default function RemindersScreen() {
             <Clock size={48} color="#9CA3AF" />
             <Text style={styles.emptyTitle}>No reminders</Text>
             <Text style={styles.emptySubtitle}>
-              {activeTab === 'missed' 
+              {activeTab === 'all'
+                ? "No reminders found."
+                : activeTab === 'missed' 
                 ? "Great! You're all caught up."
                 : activeTab === 'thisWeek'
                 ? "No reminders for this week."
@@ -1482,12 +1509,7 @@ export default function RemindersScreen() {
         )}
       </View>
 
-      <TouchableOpacity 
-        style={styles.viewAllButton}
-        onPress={() => setShowAllReminders(true)}
-      >
-        <Text style={styles.viewAllText}>View All Reminders</Text>
-      </TouchableOpacity>
+      
 
       {renderAllReminders()}
       {renderFiltersModal()}

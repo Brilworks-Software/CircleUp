@@ -94,11 +94,11 @@ export const useRemindersInfinite = (
   // We need to get all reminders without tab filtering to calculate accurate counts
   const [refreshTimestamp, setRefreshTimestamp] = useState(0);
   
-  const { data: tabCounts = { missed: 0, thisWeek: 0, upcoming: 0 }, isLoading: isLoadingTabCounts, refetch: refetchTabCounts } = useQuery({
+  const { data: tabCounts = { all: 0, missed: 0, thisWeek: 0, upcoming: 0 }, isLoading: isLoadingTabCounts, refetch: refetchTabCounts } = useQuery({
     queryKey: ['tabCounts', currentUser?.uid, searchQuery, selectedFilter, refreshTimestamp],
     queryFn: async () => {
       console.log('🔄 Calculating tab counts...', { searchQuery, selectedFilter });
-      if (!currentUser?.uid) return { missed: 0, thisWeek: 0, upcoming: 0 };
+      if (!currentUser?.uid) return { all: 0, missed: 0, thisWeek: 0, upcoming: 0 };
       
       try {
         // Get all reminders without any filtering
@@ -119,6 +119,7 @@ export const useRemindersInfinite = (
         
         // Calculate counts for each tab
         const counts = {
+          all: filtered.length, // Total count of all filtered reminders
           missed: filtered.filter(r => r.isOverdue).length,
           thisWeek: filtered.filter(r => r.isThisWeek && !r.isOverdue).length,
           upcoming: filtered.filter(r => !r.isThisWeek && !r.isOverdue).length,
@@ -216,6 +217,8 @@ export const useRemindersInfinite = (
   // Helper functions for filtering
   const filterRemindersByTab = (reminders: Reminder[], tab: ReminderTab): Reminder[] => {
     switch (tab) {
+      case 'all':
+        return reminders; // Return all reminders
       case 'missed':
         return reminders.filter(r => r.isOverdue);
       case 'thisWeek':

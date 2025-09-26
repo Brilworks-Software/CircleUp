@@ -2496,8 +2496,8 @@ __metadata:
   linkType: hard
 
 "@react-native-firebase/app@npm:^23.3.1":
-  version: 23.3.1
-  resolution: "@react-native-firebase/app@npm:23.3.1"
+  version: 23.4.0
+  resolution: "@react-native-firebase/app@npm:23.4.0"
   dependencies:
     firebase: 12.2.1
   peerDependencies:
@@ -2507,64 +2507,64 @@ __metadata:
   peerDependenciesMeta:
     expo:
       optional: true
-  checksum: e40e9089e53f6b9405566a3bc00efc7519c68ec4a804545b4803e133a51316fd815e8a87e30dfae55c23e3a836caec1d119b9dc797c5f45edc9e8265b99565c3
+  checksum: 3441828e35dc957c002eddbb2a3332d21c6af9f539ac5b8c95adba48344d0d56a78ecdaa6e6ebbf3c12537dc0518f1491337cbd04b73749b863b7f36aeb03923
   languageName: node
   linkType: hard
 
 "@react-native-firebase/auth@npm:^23.3.1":
-  version: 23.3.1
-  resolution: "@react-native-firebase/auth@npm:23.3.1"
+  version: 23.4.0
+  resolution: "@react-native-firebase/auth@npm:23.4.0"
   dependencies:
     plist: ^3.1.0
   peerDependencies:
-    "@react-native-firebase/app": 23.3.1
+    "@react-native-firebase/app": 23.4.0
     expo: ">=47.0.0"
   peerDependenciesMeta:
     expo:
       optional: true
-  checksum: 2a3ea16677e5859510ca443f6e06ffb9a8e140a69f929dddd2afccaa4f9a1bc8a37b57205aca0546ff58d7dbfdb6da19567dad26fa6a26a1be5b3c90a73d024c
+  checksum: e04166b393455caa5005c9d4bdaea845f41eec6f390349dc749b42a29d731d8cf25335b43624bcd7e7bc645b9cb256941572ba48ca82d89e04f2e8b6c4c349c5
   languageName: node
   linkType: hard
 
 "@react-native-firebase/database@npm:^23.3.1":
-  version: 23.3.1
-  resolution: "@react-native-firebase/database@npm:23.3.1"
+  version: 23.4.0
+  resolution: "@react-native-firebase/database@npm:23.4.0"
   peerDependencies:
-    "@react-native-firebase/app": 23.3.1
-  checksum: 9a7655b453084caeb24077fde940c42e2d65d0dd5ffed9ed80f02fa293c312ffab8e280e64eb6a5909ef9499d32d9282528b51da784931c53b6dfa5bc0575703
+    "@react-native-firebase/app": 23.4.0
+  checksum: f00f18e3e4fecd9f350ae48b016c63e67de8d1a53d817824a986ab9b95f3ef542cf78ebf3fd19edc59edfe25efbb1736ee6bce78114584f5433b8ddd51e83309
   languageName: node
   linkType: hard
 
 "@react-native-firebase/firestore@npm:^23.3.1":
-  version: 23.3.1
-  resolution: "@react-native-firebase/firestore@npm:23.3.1"
+  version: 23.4.0
+  resolution: "@react-native-firebase/firestore@npm:23.4.0"
   dependencies:
     react-native-url-polyfill: 2.0.0
   peerDependencies:
-    "@react-native-firebase/app": 23.3.1
-  checksum: 928d15356ddf33b397c861ad832823c26dbe3024da21d5bf836fa33777fc8b8cd62ade0d4890aca3bd7281a8454a8a178cbba1a667fcc50f84951a42a7ef503a
+    "@react-native-firebase/app": 23.4.0
+  checksum: b0b3fd3bd97187dfbb69e4cbaff38cc85fd02f703d8aae3a0b415e0c8c9219a2208b5d8e0405c9132fa462c3b20bd614f835276d75300be979b93c6a4da4a4b8
   languageName: node
   linkType: hard
 
 "@react-native-firebase/messaging@npm:^23.3.1":
-  version: 23.3.1
-  resolution: "@react-native-firebase/messaging@npm:23.3.1"
+  version: 23.4.0
+  resolution: "@react-native-firebase/messaging@npm:23.4.0"
   peerDependencies:
-    "@react-native-firebase/app": 23.3.1
+    "@react-native-firebase/app": 23.4.0
     expo: ">=47.0.0"
   peerDependenciesMeta:
     expo:
       optional: true
-  checksum: d472cce96fe914dcc94ae2b06b7abfdab55435ed5b753263051157b0f2542891ee0a293fb12eadd3b3d43bdcb93fc298d6dd7ecd68942ebb1b3b3f3946967c55
+  checksum: 5e7dedb7bb62ff24a11528d75b32f56ec062554e21628c7ddb2ffb71caeab9f1202121408632e315ddc0a45e8557b0d726c4cceb2f749919ecc6ccd9da71e079
   languageName: node
   linkType: hard
 
 "@react-native-firebase/storage@npm:^23.3.1":
-  version: 23.3.1
-  resolution: "@react-native-firebase/storage@npm:23.3.1"
+  version: 23.4.0
+  resolution: "@react-native-firebase/storage@npm:23.4.0"
   peerDependencies:
-    "@react-native-firebase/app": 23.3.1
-  checksum: 4dd68876f5c486345552333a1982c5d766a42ba2993dc6b696013cf2ed8bf4ec072f2a34592b8c9084323b096dc2475c5a98daacfe3f65b2d63441a49045fc4a
+    "@react-native-firebase/app": 23.4.0
+  checksum: b927e8aeb95eff3f0311905e11d1f156258ca1acd5cbc673a07fceff2ff2091e6fbe1dcfec23cc79c6b362c680b579bfec9c52392ec0e2c2259465b8831b1e01
   languageName: node
   linkType: hard
 
@@ -3513,11 +3513,11 @@ __metadata:
   linkType: hard
 
 "baseline-browser-mapping@npm:^2.8.3":
-  version: 2.8.6
-  resolution: "baseline-browser-mapping@npm:2.8.6"
+  version: 2.8.7
+  resolution: "baseline-browser-mapping@npm:2.8.7"
   bin:
     baseline-browser-mapping: dist/cli.js
-  checksum: 113a89acbc7cbcb0ca191ff2498f33f64be3fac90b58bf7c192a325654a436fd7abe9ad98e24394d16c1be102b6e905483181182df69e79f090f180fac1bcbbc
+  checksum: 15a46675aeec236e831644922569863eccb068a1a0131806e91ff0c263bbe6e351825b52cdc6905abf304946997dd8460fd9d3103818ddf4771e2ca0bb3e2de9
   languageName: node
   linkType: hard
 
@@ -3793,9 +3793,9 @@ __metadata:
   linkType: hard
 
 "caniuse-lite@npm:^1.0.30001741":
-  version: 1.0.30001743
-  resolution: "caniuse-lite@npm:1.0.30001743"
-  checksum: 9e203fe09158b011bd4a6707f6e5f9ad040e5b4093b12e2e047636a71d6e2e3bf5209aae42f213251cc812d9091188d7f1da7bd4785bc0b879beb98f9aa04ebc
+  version: 1.0.30001745
+  resolution: "caniuse-lite@npm:1.0.30001745"
+  checksum: a018bfbf6eda6e2728184cd39f3d0438cea04011893664fc7de19568d8e6f26cbc09e59460137bb2f4e792d1cdb7f1a48ad35f31a1c1388c1d7f74b3c889d35b
   languageName: node
   linkType: hard
 
@@ -4350,9 +4350,9 @@ __metadata:
   linkType: hard
 
 "electron-to-chromium@npm:^1.5.218":
-  version: 1.5.223
-  resolution: "electron-to-chromium@npm:1.5.223"
-  checksum: 1db07ef7552a0c8ac981befee3be77efea86bdec292043eb67ee344b9d85999429c78a3d3bf3b41687ae1b18e501cdfc0681841154773a732002772fffa057f1
+  version: 1.5.224
+  resolution: "electron-to-chromium@npm:1.5.224"
+  checksum: cbaf9fbc5a1bc2de13109240d188ecafe6e7232aee4f2204bfc05d412e3e27b6d517cbf9207d1ba0f3aa3744ec399376bf75bc52ad64c6211b0698c135cda660
   languageName: node
   linkType: hard
 

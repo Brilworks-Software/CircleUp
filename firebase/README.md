@@ -1,23 +1,25 @@
 # Firebase Authentication Integration
 
-This document explains how to use the updated authentication flow that separates concerns between authentication (`useAuth`) and user document management (`useUser`).
+This document explains how to use the updated authentication flow that separates concerns between authentication (`useAuth`) and user document management (`useUser`), with **real-time user data updates** across the entire application.
 
 ## Overview
 
-The authentication system now follows a clean separation of concerns:
+The authentication system now follows a clean separation of concerns with real-time synchronization:
 
-- **`useAuth`**: Handles Firebase Authentication (login, signup, logout)
-- **`useUser`**: Manages user documents in Firestore (create, read, update user profiles)
+- **`useAuth`**: Handles Firebase Authentication (login, signup, logout) with real-time auth state changes
+- **`useUser`**: Manages user documents in Firestore (create, read, update user profiles) with real-time listeners
+- **`useUserStore`**: Provides global user state management with real-time updates
+- **`userStore`**: MobX store for reactive user data across the app
 
 ## Key Features
 
-### 1. Authentication with `useAuth`
+### 1. Real-Time Authentication with `useAuth`
 
-The `useAuth` hook provides all authentication functionality:
+The `useAuth` hook provides all authentication functionality with **real-time auth state changes**:
 
 ```typescript
 const {
-  currentUser,           // Current Firebase Auth user
+  currentUser,           // Current Firebase Auth user (updates in real-time)
   isLoadingUser,        // Loading state for auth check
   signIn,              // Login function
   signUp,              // Signup function (creates both auth user and Firestore document)
@@ -30,15 +32,21 @@ const {
 } = useAuth();
 ```
 
-### 2. User Document Management with `useUser`
+**Real-time Features:**
+- Automatically detects when user signs in/out
+- Updates `currentUser` immediately when auth state changes
+- Clears all user data when user signs out
+- Invalidates queries to refetch fresh data
 
-The `useUser` hook manages user profiles in Firestore:
+### 2. Real-Time User Document Management with `useUser`
+
+The `useUser` hook manages user profiles in Firestore with **real-time listeners**:
 
 ```typescript
-// Get user profile
+// Get user profile (updates in real-time)
 const { data: userProfile, isLoading } = useUser(userId);
 
-// Update user profile
+// Update user profile (triggers real-time updates)
 const updateUserMutation = useUpdateUser();
 await updateUserMutation.mutateAsync({
   userId: 'user123',
@@ -51,6 +59,45 @@ await createUserMutation.mutateAsync({
   userId: 'user123',
   userData: { name: 'John Doe', email: 'john@example.com' }
 });
+```
+
+**Real-time Features:**
+- Automatically listens to Firestore document changes
+- Updates React Query cache when user data changes
+- Syncs with global userStore for app-wide state management
+- Optimistic updates for immediate UI feedback
+
+### 3. Global User State with `useUserStore`
+
+The `useUserStore` hook provides reactive access to global user state:
+
+```typescript
+const { user, isLoading, error, userName, userEmail } = useUserStore();
+```
+
+**Real-time Features:**
+- Automatically updates when user data changes anywhere in the app
+- Provides computed values like `userName` and `userEmail`
+- Reactive state management with MobX
+- Persists user data locally for offline access
+
+## Real-Time Data Updates
+
+The system ensures user data updates in real-time across the entire application:
+
+### How Real-Time Updates Work
+
+1. **Auth State Changes**: Firebase `onAuthStateChanged` listener detects sign in/out
+2. **User Data Sync**: When auth state changes, user profile data is automatically fetched/cleared
+3. **Firestore Listeners**: Real-time listeners on user documents detect changes
+4. **Global State**: Changes propagate to the global userStore for app-wide consistency
+5. **UI Updates**: React components automatically re-render with fresh data
+
+### Real-Time Update Flow
+
+```
+User Action → Firebase Auth → Auth State Listener → Query Invalidation → 
+Firestore Listener → React Query Cache → UserStore → UI Update
 ```
 
 ## Usage Examples
@@ -238,6 +285,30 @@ All authentication and user operations include proper error handling:
 5. **Use the provided hooks** instead of calling services directly
 6. **Leverage optimistic updates** for better UX
 
-## Example Component
+## Example Components
 
-See `firebase/examples/AuthExample.tsx` for a complete working example of the authentication flow.
+- **`firebase/examples/AuthExample.tsx`**: Complete working example of the authentication flow
+- **`firebase/examples/RealTimeUserExample.tsx`**: Demonstrates real-time user data updates across multiple data sources
+
+### Real-Time User Data Example
+
+```typescript
+import { useAuth } from '../firebase/hooks/useAuth';
+import { useUser } from '../firebase/hooks/useUser';
+import { useUserStore } from '../firebase/hooks/useUserStore';
+
+function UserDataExample() {
+  const { currentUser } = useAuth();
+  const { data: userProfile } = useUser(currentUser?.uid || '');
+  const { user: storeUser, userName } = useUserStore();
+
+  // All three data sources update in real-time when user data changes!
+  return (
+    <View>
+      <Text>Auth User: {currentUser?.email}</Text>
+      <Text>Profile Name: {userProfile?.name}</Text>
+      <Text>Store Name: {userName}</Text>
+    </View>
+  );
+}
+```

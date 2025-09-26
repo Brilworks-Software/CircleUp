@@ -49,6 +49,7 @@ class UserStore {
   clearUser() {
     this.user = null;
     this.error = null;
+    this.isLoading = false;
     this.clearPersistedUser();
   }
 

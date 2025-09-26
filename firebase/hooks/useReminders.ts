@@ -12,12 +12,25 @@ export const useReminders = () => {
   const remindersService = RemindersService.getInstance();
   const { currentUser: user } = useAuth();
 
-  // Load reminders on mount
+  // Set up real-time listener for reminders
   useEffect(() => {
-    if (user?.uid) {
-      loadReminders();
-    }
-  }, [user?.uid]);
+    if (!user?.uid) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    // Set up real-time listener
+    const unsubscribe = remindersService.onRemindersSnapshot(user.uid, (reminders) => {
+      setReminders(reminders);
+      setFilteredReminders(reminders);
+      setIsLoading(false);
+    });
+
+    // Cleanup listener on unmount or user change
+    return () => {
+      unsubscribe();
+    };
+  }, [user?.uid, remindersService]);
 
   const loadReminders = useCallback(async () => {
     if (!user?.uid) return;
@@ -47,8 +60,7 @@ export const useReminders = () => {
       
       console.log('✅ useReminders: Reminder created successfully:', newReminder);
       
-      setReminders(prev => [...prev, newReminder]);
-      // Don't directly update filteredReminders - let the filtering logic handle it
+      // Real-time listener will automatically update the state
       return newReminder;
     } catch (err) {
       console.error('❌ useReminders: Error creating reminder:', err);
@@ -63,15 +75,7 @@ export const useReminders = () => {
     try {
       setError(null);
       const success = await remindersService.updateReminder(user.uid, reminderId, updates);
-      if (success) {
-        // Update local state
-        setReminders(prev => 
-          prev.map(r => r.id === reminderId ? { ...r, ...updates } : r)
-        );
-        setFilteredReminders(prev => 
-          prev.map(r => r.id === reminderId ? { ...r, ...updates } : r)
-        );
-      }
+      // Real-time listener will automatically update the state
       return success;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update reminder');
@@ -85,11 +89,7 @@ export const useReminders = () => {
     try {
       setError(null);
       const success = await remindersService.deleteReminder(user.uid, reminderId);
-      if (success) {
-        // Update local state
-        setReminders(prev => prev.filter(r => r.id !== reminderId));
-        setFilteredReminders(prev => prev.filter(r => r.id !== reminderId));
-      }
+      // Real-time listener will automatically update the state
       return success;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete reminder');

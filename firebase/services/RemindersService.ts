@@ -804,42 +804,66 @@ class RemindersService {
    * Check if a date is overdue
    */
   private isOverdue(dateString: string): boolean {
-    const reminderDate = new Date(dateString);
-    const now = new Date();
-    // A reminder is overdue if it's past its scheduled time (not just past today)
-    return reminderDate < now;
+    try {
+      const reminderDate = new Date(dateString);
+      
+      // Check if the date is valid
+      if (isNaN(reminderDate.getTime())) {
+        console.warn('Invalid date in isOverdue:', dateString);
+        return false; // Treat invalid dates as not overdue
+      }
+      
+      const now = new Date();
+      // A reminder is overdue if it's past its scheduled time (not just past today)
+      return reminderDate < now;
+    } catch (error) {
+      console.error('Error in isOverdue:', error, 'dateString:', dateString);
+      return false; // Treat errors as not overdue
+    }
   }
 
   /**
    * Check if a date is this week
    */
   private isThisWeek(dateString: string): boolean {
-    const reminderDate = new Date(dateString);
-    const now = new Date();
-    
-    // Get start of week (Monday)
-    const startOfWeek = new Date(now);
-    const dayOfWeek = now.getDay();
-    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Sunday = 0, so go back 6 days
-    startOfWeek.setDate(now.getDate() + daysToMonday);
-    startOfWeek.setHours(0, 0, 0, 0);
-    
-    // Get end of week (Sunday)
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-    endOfWeek.setHours(23, 59, 59, 999);
-    
-    const isThisWeek = reminderDate >= startOfWeek && reminderDate <= endOfWeek;
-    
-    console.log('📅 Week calculation:', {
-      reminderDate: reminderDate.toISOString(),
-      now: now.toISOString(),
-      startOfWeek: startOfWeek.toISOString(),
-      endOfWeek: endOfWeek.toISOString(),
-      isThisWeek
-    });
-    
-    return isThisWeek;
+    try {
+      const reminderDate = new Date(dateString);
+      
+      // Check if the date is valid
+      if (isNaN(reminderDate.getTime())) {
+        console.warn('Invalid date in isThisWeek:', dateString);
+        return false; // Treat invalid dates as not this week
+      }
+      
+      const now = new Date();
+      
+      // Get start of week (Monday)
+      const startOfWeek = new Date(now);
+      const dayOfWeek = now.getDay();
+      const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Sunday = 0, so go back 6 days
+      startOfWeek.setDate(now.getDate() + daysToMonday);
+      startOfWeek.setHours(0, 0, 0, 0);
+      
+      // Get end of week (Sunday)
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+      
+      const isThisWeek = reminderDate >= startOfWeek && reminderDate <= endOfWeek;
+      
+      console.log('📅 Week calculation:', {
+        reminderDate: reminderDate.toISOString(),
+        now: now.toISOString(),
+        startOfWeek: startOfWeek.toISOString(),
+        endOfWeek: endOfWeek.toISOString(),
+        isThisWeek
+      });
+      
+      return isThisWeek;
+    } catch (error) {
+      console.error('Error in isThisWeek:', error, 'dateString:', dateString);
+      return false; // Treat errors as not this week
+    }
   }
 
   /**
@@ -857,11 +881,30 @@ class RemindersService {
       const reminders: Reminder[] = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
+        let dateString: string;
+        
+        // Handle different date formats from Firebase
+        if (data.date instanceof Date) {
+          dateString = data.date.toISOString();
+        } else if (data.date && typeof data.date === 'object' && data.date.seconds) {
+          // Handle Firebase Timestamp
+          dateString = new Date(data.date.seconds * 1000).toISOString();
+        } else if (typeof data.date === 'string') {
+          dateString = data.date;
+        } else {
+          console.warn('Invalid date format in reminder snapshot:', data.date);
+          dateString = new Date().toISOString(); // Fallback to current date
+        }
+        
+        const isOverdue = this.isOverdue(dateString);
+        const isThisWeek = this.isThisWeek(dateString);
+        
         reminders.push({
           id: doc.id,
           ...data,
-          isOverdue: this.isOverdue(data.date),
-          isThisWeek: this.isThisWeek(data.date),
+          date: dateString, // Ensure date is always a string
+          isOverdue,
+          isThisWeek,
         } as Reminder);
       });
       callback(reminders);

@@ -228,7 +228,7 @@ export default function HomeScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View style={styles.headerContent}>
@@ -365,7 +365,8 @@ export default function HomeScreen() {
         onRequestClose={handleCancelEdit}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+         
+          
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Edit Activity</Text>
               <TouchableOpacity onPress={handleCancelEdit} style={styles.closeButton}>
@@ -373,7 +374,11 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
             
-            <View style={styles.modalBody}>
+            <ScrollView 
+              style={styles.modalBody}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
               <Text style={styles.inputLabel}>Title</Text>
               <TextInput
                 style={styles.textInput}
@@ -381,6 +386,7 @@ export default function HomeScreen() {
                 onChangeText={(text) => setEditForm(prev => ({ ...prev, title: text }))}
                 placeholder="Enter activity title"
                 multiline={false}
+                returnKeyType="next"
               />
               
               <Text style={styles.inputLabel}>Description</Text>
@@ -391,8 +397,10 @@ export default function HomeScreen() {
                 placeholder="Enter activity description"
                 multiline={true}
                 numberOfLines={3}
+                returnKeyType="default"
+                textAlignVertical="top"
               />
-            </View>
+            </ScrollView>
             
             <View style={styles.modalFooter}>
               <TouchableOpacity style={styles.cancelButton} onPress={handleCancelEdit}>
@@ -403,7 +411,7 @@ export default function HomeScreen() {
                 <Text style={styles.saveButtonText}>Save</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          
         </View>
       </Modal>
 
@@ -443,7 +451,7 @@ export default function HomeScreen() {
         onClose={handleCloseActivityModal}
         onActivityCreated={handleActivityCreated}
       />
-    </SafeAreaView>
+      </SafeAreaView>
   );
 }
 

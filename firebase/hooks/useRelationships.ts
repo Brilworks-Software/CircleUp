@@ -11,12 +11,24 @@ export const useRelationships = () => {
   const relationshipsService = RelationshipsService.getInstance();
   const { currentUser: user } = useAuth();
 
-  // Load relationships on mount
+  // Set up real-time listener for relationships
   useEffect(() => {
-    if (user?.uid) {
-      loadRelationships();
-    }
-  }, [user?.uid]);
+    if (!user?.uid) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    // Set up real-time listener
+    const unsubscribe = relationshipsService.onRelationshipsSnapshot(user.uid, (relationships) => {
+      setRelationships(relationships);
+      setIsLoading(false);
+    });
+
+    // Cleanup listener on unmount or user change
+    return () => {
+      unsubscribe();
+    };
+  }, [user?.uid, relationshipsService]);
 
   const loadRelationships = useCallback(async () => {
     if (!user?.uid) {
@@ -46,7 +58,7 @@ export const useRelationships = () => {
     try {
       setError(null);
       const newRelationship = await relationshipsService.createRelationship(user.uid, relationshipData);
-      setRelationships(prev => [...prev, newRelationship]);
+      // Real-time listener will automatically update the state
       return newRelationship;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create relationship');
@@ -60,12 +72,7 @@ export const useRelationships = () => {
     try {
       setError(null);
       const success = await relationshipsService.updateRelationship(user.uid, relationshipId, updates);
-      if (success) {
-        // Update local state
-        setRelationships(prev => 
-          prev.map(r => r.id === relationshipId ? { ...r, ...updates } : r)
-        );
-      }
+      // Real-time listener will automatically update the state
       return success;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update relationship');
@@ -79,10 +86,7 @@ export const useRelationships = () => {
     try {
       setError(null);
       const success = await relationshipsService.deleteRelationship(user.uid, relationshipId);
-      if (success) {
-        // Update local state
-        setRelationships(prev => prev.filter(r => r.id !== relationshipId));
-      }
+      // Real-time listener will automatically update the state
       return success;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete relationship');
@@ -182,16 +186,13 @@ export const useRelationships = () => {
     try {
       setError(null);
       const success = await relationshipsService.updateLastContact(user.uid, relationshipId, lastContactDate, contactMethod);
-      if (success) {
-        // Reload relationships to get updated data
-        await loadRelationships();
-      }
+      // Real-time listener will automatically update the state
       return success;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update last contact');
       return false;
     }
-  }, [relationshipsService, loadRelationships, user?.uid]);
+  }, [relationshipsService, user?.uid]);
 
   const clearAllRelationships = useCallback(async (): Promise<boolean> => {
     if (!user?.uid) return false;
@@ -199,9 +200,7 @@ export const useRelationships = () => {
     try {
       setError(null);
       const success = await relationshipsService.clearAllRelationships(user.uid);
-      if (success) {
-        setRelationships([]);
-      }
+      // Real-time listener will automatically update the state
       return success;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to clear all relationships');

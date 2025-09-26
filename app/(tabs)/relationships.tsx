@@ -1713,6 +1713,13 @@ export default function RelationshipsScreen() {
     
     try {
       await updateRelationship(selectedRelationship.id, { notes: editedNote });
+      
+      // Update the selected relationship state to reflect the changes immediately
+      setSelectedRelationship(prev => prev ? {
+        ...prev,
+        notes: editedNote,
+      } : null);
+      
       setShowEditNoteModal(false);
       setEditedNote('');
     } catch (error) {
@@ -1736,6 +1743,13 @@ export default function RelationshipsScreen() {
     
     try {
       await updateRelationship(selectedRelationship.id, { familyInfo: editedFamilyInfo });
+      
+      // Update the selected relationship state to reflect the changes immediately
+      setSelectedRelationship(prev => prev ? {
+        ...prev,
+        familyInfo: editedFamilyInfo,
+      } : null);
+      
       setShowEditFamilyInfoModal(false);
       setEditedFamilyInfo({ kids: '', siblings: '', spouse: '' });
     } catch (error) {
@@ -3558,7 +3572,8 @@ export default function RelationshipsScreen() {
               </TouchableOpacity>
             </View>
             
-            <View style={styles.editModalContent}>
+            <ScrollView style={styles.editModalContent} contentContainerStyle={{paddingBottom: 24}} showsVerticalScrollIndicator={false}>
+              
               <Text style={styles.editFamilyInfoLabel}>Family information for {selectedRelationship?.contactName}</Text>
               <Text style={styles.editFamilyInfoSubtitle}>Add details about their family members</Text>
               
@@ -3596,7 +3611,7 @@ export default function RelationshipsScreen() {
                   />
                 </View>
               </View>
-            </View>
+            </ScrollView>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -4621,7 +4636,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    minWidth: 140,
+    minWidth: 160,
   },
   dropdownButtonText: {
     fontSize: 14,
