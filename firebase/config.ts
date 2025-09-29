@@ -1,5 +1,5 @@
-import { getApp, getApps, initializeApp } from 'firebase/app';
-import { getAuth, initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import { FirebaseApp, getApp, getApps, initializeApp } from 'firebase/app';
+import { getAuth, initializeAuth, getReactNativePersistence, Auth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getDatabase } from 'firebase/database';
 import { getStorage } from 'firebase/storage';
@@ -8,6 +8,22 @@ import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Add this after line 20 in firebase/config.ts
+console.log('Firebase Config Debug:', {
+  apiKey: Constants.expoConfig?.extra?.firebaseApiKey,
+  authDomain: Constants.expoConfig?.extra?.firebaseAuthDomain,
+  projectId: Constants.expoConfig?.extra?.firebaseProjectId,
+  storageBucket: Constants.expoConfig?.extra?.firebaseStorageBucket,
+  messagingSenderId: Constants.expoConfig?.extra?.firebaseMessagingSenderId,
+  appId: Constants.expoConfig?.extra?.firebaseAppId,
+  databaseURL: Constants.expoConfig?.extra?.firebaseDatabaseUrl,
+});
+
+console.log('Constants.expoConfig:', Constants.expoConfig);
+console.log('Constants.expoConfig.extra:', Constants.expoConfig?.extra);
+// const appID = (Platform.OS === 'android') ? Constants.expoConfig?.extra?.firebaseA : Constants.expoConfig?.extra?.firebaseAppId;
+  
+ 
 // Firebase configuration from Expo Constants
 const firebaseConfig = {
   apiKey: Constants.expoConfig?.extra?.firebaseApiKey,
@@ -20,8 +36,8 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-let app;
-let auth;
+let app: FirebaseApp;
+let auth: Auth;
 
 // Initialize Firebase services
 if (!getApps().length) {

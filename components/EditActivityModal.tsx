@@ -303,14 +303,10 @@ export default function EditActivityModal({
       // }
       if (!noteContent.trim()) {
         errors.noteContent = 'Note content is required';
-      } else if (noteContent.trim().length < 10) {
-        errors.noteContent = 'Note content must be at least 10 characters';
       }
     } else if (activeActivityTab === 'interaction') {
       if (!interactionNotes.trim()) {
         errors.interactionNotes = 'Interaction notes are required';
-      } else if (interactionNotes.trim().length < 10) {
-        errors.interactionNotes = 'Interaction notes must be at least 10 characters';
       }
       if (!interactionDate) {
         errors.interactionDate = 'Interaction date is required';

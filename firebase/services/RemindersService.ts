@@ -28,6 +28,7 @@ export interface CreateReminderData {
   tags: string[];
   notes?: string;
   contactId?: string;
+  relationshipId?: string;
 }
 
 export interface UpdateReminderData {
@@ -38,6 +39,7 @@ export interface UpdateReminderData {
   tags?: string[];
   notes?: string;
   contactId?: string;
+  relationshipId?: string;
 }
 
 // Interface for Firebase document data (with Date objects for timestamps)
@@ -49,6 +51,7 @@ interface ReminderFirebaseData extends Omit<Reminder, 'date' | 'id' | 'isOverdue
   id?: string; // Optional for create operations
   isOverdue?: boolean; // Calculated field, not stored
   isThisWeek?: boolean; // Calculated field, not stored
+  relationshipId?: string; // Reference to relationship document
 }
 
 class RemindersService {
@@ -707,13 +710,11 @@ class RemindersService {
 
       // Handle different date formats from Firebase
       let reminderDate: Date;
-      if (reminder.date instanceof Date) {
-        reminderDate = reminder.date;
+      if (typeof reminder.date === 'string') {
+        reminderDate = new Date(reminder.date);
       } else if (reminder.date && typeof reminder.date === 'object' && 'seconds' in reminder.date) {
         // Handle Firebase Timestamp
         reminderDate = new Date((reminder.date as any).seconds * 1000);
-      } else if (typeof reminder.date === 'string') {
-        reminderDate = new Date(reminder.date);
       } else {
         console.error('❌ Invalid date format in reminder for snooze:', reminder.date);
         return false;

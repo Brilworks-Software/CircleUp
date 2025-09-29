@@ -20,6 +20,7 @@ import { useRemindersInfinite } from '../../firebase/hooks/useRemindersInfinite'
 import { useAuth } from '../../firebase/hooks/useAuth';
 import { useRelationships } from '../../firebase/hooks/useRelationships';
 import { useActivity } from '../../firebase/hooks/useActivity';
+import { Tags } from '../../constants/Tags';
 import type { Reminder, ReminderTab, FilterType, Relationship, ReminderFrequency } from '../../firebase/types';
 import * as Contacts from 'expo-contacts';
 
@@ -139,12 +140,7 @@ export default function RemindersScreen() {
 
   const filterOptions = [
     { key: 'all', label: 'All Reminders' },
-    { key: 'Client', label: 'Client' },
-    { key: 'College', label: 'College' },
-    { key: 'Family', label: 'Family' },
-    { key: 'Favorite', label: 'Favorite' },
-    { key: 'Friends', label: 'Friends' },
-    { key: 'Prospect', label: 'Prospect' },
+    ...Object.values(Tags).map(tag => ({ key: tag, label: tag }))
   ];
 
   const frequencyOptions = [
@@ -285,7 +281,9 @@ export default function RemindersScreen() {
           reminderDate: reminder.date,
           reminderType: reminder.type,
           frequency: reminder.frequency,
-          reminderId: reminderId,
+          isCompleted: true,
+          completedAt: new Date().toISOString(),
+          // Don't set reminderId for completion activities since the original reminder is being processed
         });
       } catch (activityError) {
         console.error('Error creating completion activity:', activityError);
@@ -309,6 +307,24 @@ export default function RemindersScreen() {
           date: nextDate,
         }
       });
+
+      // Create a new activity for the rescheduled reminder
+      try {
+        await createActivity({
+          type: 'reminder',
+          title: `Reminder rescheduled: ${reminder.contactName}`,
+          description: `Rescheduled reminder: ${reminder.type}${reminder.notes ? ` - ${reminder.notes}` : ''} (Next: ${formatDate(nextDate)})`,
+          tags: ['rescheduled', 'reminder'],
+          contactId: reminder.contactId || '',
+          contactName: reminder.contactName,
+          reminderDate: nextDate,
+          reminderType: reminder.type,
+          frequency: reminder.frequency,
+          reminderId: reminderId, // Link to the updated reminder document
+        });
+      } catch (activityError) {
+        console.error('Error creating reschedule activity:', activityError);
+      }
       
       setShowReminderDetail(false);
       Alert.alert('Success', `Reminder rescheduled for ${formatDate(nextDate)}!`);
@@ -481,6 +497,8 @@ export default function RemindersScreen() {
       
       await createReminder({
         contactName: selectedContact.contactName,
+        contactId: selectedContact.contactId,
+        relationshipId: selectedContact.id,
         type: reminderType,
         date: combinedDateTime.toISOString(),
         frequency: reminderFrequency,
@@ -537,13 +555,26 @@ export default function RemindersScreen() {
   const handleCall = async () => {
     if (!selectedReminder) return;
     
-    // Find the contact in device contacts to get phone number
+    // Find the relationship data first, then fallback to device contacts
+    let relationship = relationships.find(rel => 
+      rel.contactName === selectedReminder.contactName
+    );
+    
+    // If not found, try case-insensitive match
+    if (!relationship) {
+      relationship = relationships.find(rel => 
+        rel.contactName.toLowerCase().trim() === selectedReminder.contactName.toLowerCase().trim()
+      );
+    }
+    
+    const relationshipPhone = relationship?.contactData?.phoneNumbers?.[0]?.number;
     const deviceContact = deviceContacts.find(contact => 
       contact.name === selectedReminder.contactName
     );
     
-    if (deviceContact?.phoneNumbers && deviceContact.phoneNumbers.length > 0) {
-      const phoneNumber = deviceContact.phoneNumbers[0].number;
+    const phoneNumber = relationshipPhone || deviceContact?.phoneNumbers?.[0]?.number;
+    
+    if (phoneNumber) {
       const url = `tel:${phoneNumber}`;
       
       try {
@@ -561,7 +592,7 @@ export default function RemindersScreen() {
     } else {
       Alert.alert(
         'No Phone Number', 
-        `Phone number not available for ${selectedReminder.contactName}. Please add contact information in your device contacts.`,
+        `Phone number not available for ${selectedReminder.contactName}. Please add contact information in your relationship or device contacts.`,
         [{ text: 'OK', onPress: () => setShowContactActions(false) }]
       );
     }
@@ -570,12 +601,26 @@ export default function RemindersScreen() {
   const handleMessage = async () => {
     if (!selectedReminder) return;
     
+    // Find the relationship data first, then fallback to device contacts
+    let relationship = relationships.find(rel => 
+      rel.contactName === selectedReminder.contactName
+    );
+    
+    // If not found, try case-insensitive match
+    if (!relationship) {
+      relationship = relationships.find(rel => 
+        rel.contactName.toLowerCase().trim() === selectedReminder.contactName.toLowerCase().trim()
+      );
+    }
+    
+    const relationshipPhone = relationship?.contactData?.phoneNumbers?.[0]?.number;
     const deviceContact = deviceContacts.find(contact => 
       contact.name === selectedReminder.contactName
     );
     
-    if (deviceContact?.phoneNumbers && deviceContact.phoneNumbers.length > 0) {
-      const phoneNumber = deviceContact.phoneNumbers[0].number;
+    const phoneNumber = relationshipPhone || deviceContact?.phoneNumbers?.[0]?.number;
+    
+    if (phoneNumber) {
       const url = `sms:${phoneNumber}`;
       
       try {
@@ -593,7 +638,54 @@ export default function RemindersScreen() {
     } else {
       Alert.alert(
         'No Phone Number', 
-        `Phone number not available for ${selectedReminder.contactName}. Please add contact information in your device contacts.`,
+        `Phone number not available for ${selectedReminder.contactName}. Please add contact information in your relationship or device contacts.`,
+        [{ text: 'OK', onPress: () => setShowContactActions(false) }]
+      );
+    }
+  };
+
+  const handleWhatsApp = async () => {
+    if (!selectedReminder) return;
+    
+    // Find the relationship data first, then fallback to device contacts
+    let relationship = relationships.find(rel => 
+      rel.contactName === selectedReminder.contactName
+    );
+    
+    // If not found, try case-insensitive match
+    if (!relationship) {
+      relationship = relationships.find(rel => 
+        rel.contactName.toLowerCase().trim() === selectedReminder.contactName.toLowerCase().trim()
+      );
+    }
+    
+    const relationshipPhone = relationship?.contactData?.phoneNumbers?.[0]?.number;
+    const deviceContact = deviceContacts.find(contact => 
+      contact.name === selectedReminder.contactName
+    );
+    
+    const phoneNumber = relationshipPhone || deviceContact?.phoneNumbers?.[0]?.number;
+    
+    if (phoneNumber) {
+      const cleanPhoneNumber = phoneNumber.replace(/\D/g, ''); // Remove non-digits
+      const url = `whatsapp://send?phone=${cleanPhoneNumber}`;
+      
+      try {
+        const supported = await Linking.canOpenURL(url);
+        if (supported) {
+          await Linking.openURL(url);
+          setShowContactActions(false);
+        } else {
+          Alert.alert('Error', 'WhatsApp is not installed');
+        }
+      } catch (error) {
+        console.error('Error opening WhatsApp:', error);
+        Alert.alert('Error', 'Failed to open WhatsApp');
+      }
+    } else {
+      Alert.alert(
+        'No Phone Number', 
+        `Phone number not available for ${selectedReminder.contactName}. Please add contact information in your relationship or device contacts.`,
         [{ text: 'OK', onPress: () => setShowContactActions(false) }]
       );
     }
@@ -602,12 +694,26 @@ export default function RemindersScreen() {
   const handleEmail = async () => {
     if (!selectedReminder) return;
     
+    // Find the relationship data first, then fallback to device contacts
+    let relationship = relationships.find(rel => 
+      rel.contactName === selectedReminder.contactName
+    );
+    
+    // If not found, try case-insensitive match
+    if (!relationship) {
+      relationship = relationships.find(rel => 
+        rel.contactName.toLowerCase().trim() === selectedReminder.contactName.toLowerCase().trim()
+      );
+    }
+    
+    const relationshipEmail = relationship?.contactData?.emails?.[0]?.email;
     const deviceContact = deviceContacts.find(contact => 
       contact.name === selectedReminder.contactName
     );
     
-    if (deviceContact?.emails && deviceContact.emails.length > 0) {
-      const email = deviceContact.emails[0].email;
+    const email = relationshipEmail || deviceContact?.emails?.[0]?.email;
+    
+    if (email) {
       const url = `mailto:${email}`;
       
       try {
@@ -625,7 +731,7 @@ export default function RemindersScreen() {
     } else {
       Alert.alert(
         'No Email Address', 
-        `Email address not available for ${selectedReminder.contactName}. Please add contact information in your device contacts.`,
+        `Email address not available for ${selectedReminder.contactName}. Please add contact information in your relationship or device contacts.`,
         [{ text: 'OK', onPress: () => setShowContactActions(false) }]
       );
     }
@@ -1097,15 +1203,51 @@ export default function RemindersScreen() {
   const renderContactActionsModal = () => {
     if (!selectedReminder) return null;
 
-    // Find the contact in device contacts
+    // Find the relationship data - try exact match first, then case-insensitive
+    let relationship = relationships.find(rel => 
+      rel.contactName === selectedReminder.contactName
+    );
+    
+    // If not found, try case-insensitive match
+    if (!relationship) {
+      relationship = relationships.find(rel => 
+        rel.contactName.toLowerCase().trim() === selectedReminder.contactName.toLowerCase().trim()
+      );
+    }
+    
+    console.log('Debug Relationship Search:', {
+      selectedReminderName: selectedReminder.contactName,
+      totalRelationships: relationships.length,
+      relationshipNames: relationships.map(r => r.contactName),
+      foundRelationship: relationship ? 'Yes' : 'No',
+      relationships: relationships
+    });
+
+    // Get contact data from relationship document, fallback to device contacts
+    const relationshipPhone = relationship?.contactData?.phoneNumbers?.[0]?.number;
+    const relationshipEmail = relationship?.contactData?.emails?.[0]?.email;
+    
     const deviceContact = deviceContacts.find(contact => 
       contact.name === selectedReminder.contactName
     );
 
-    const hasPhone = deviceContact?.phoneNumbers && deviceContact.phoneNumbers.length > 0;
-    const hasEmail = deviceContact?.emails && deviceContact.emails.length > 0;
-    const phoneNumber = hasPhone ? deviceContact?.phoneNumbers?.[0]?.number || '' : '';
-    const email = hasEmail ? deviceContact?.emails?.[0]?.email || '' : '';
+    const hasPhone = relationshipPhone || (deviceContact?.phoneNumbers && deviceContact.phoneNumbers.length > 0);
+    const hasEmail = relationshipEmail || (deviceContact?.emails && deviceContact.emails.length > 0);
+    const phoneNumber = relationshipPhone || (deviceContact?.phoneNumbers?.[0]?.number || '');
+    const email = relationshipEmail || (deviceContact?.emails?.[0]?.email || '');
+    
+    // Debug logging
+    console.log('Debug Contact Info:', {
+      selectedReminder: selectedReminder?.contactName,
+      relationship: relationship ? 'Found' : 'Not found',
+      relationshipPhone,
+      relationshipEmail,
+      deviceContact: deviceContact ? 'Found' : 'Not found',
+      hasPhone,
+      hasEmail,
+      phoneNumber,
+      email
+    });
 
     return (
       <Modal visible={showContactActions} animationType="slide" transparent>
@@ -1135,7 +1277,17 @@ export default function RemindersScreen() {
               {!hasPhone && !hasEmail && (
                 <View style={styles.noContactInfo}>
                   <Text style={styles.noContactInfoText}>No contact information available</Text>
-                  <Text style={styles.noContactInfoSubtext}>Add contact details in your device contacts</Text>
+                  <Text style={styles.noContactInfoSubtext}>
+                    {relationship ? 
+                      'Add contact details in your relationship or device contacts' : 
+                      'Add contact details in your device contacts'
+                    }
+                  </Text>
+                  {/* Debug information - remove this after testing */}
+                  <Text style={[styles.noContactInfoSubtext, { marginTop: 10, fontSize: 12 }]}>
+                    Debug: Relationship {relationship ? 'found' : 'not found'}, 
+                    Device contact {deviceContact ? 'found' : 'not found'}
+                  </Text>
                 </View>
               )}
             </View>
@@ -1193,6 +1345,34 @@ export default function RemindersScreen() {
                     !hasPhone && styles.contactActionSubtitleDisabled
                   ]}>
                     {hasPhone ? 'Send SMS' : 'Phone number not available'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[
+                  styles.contactActionItem,
+                  !hasPhone && styles.contactActionItemDisabled
+                ]} 
+                onPress={handleWhatsApp}
+                disabled={!hasPhone}
+              >
+                <View style={[
+                  styles.contactActionIcon,
+                  !hasPhone && styles.contactActionIconDisabled
+                ]}>
+                  <Text style={styles.whatsappIcon}>📱</Text>
+                </View>
+                <View style={styles.contactActionContent}>
+                  <Text style={[
+                    styles.contactActionTitle,
+                    !hasPhone && styles.contactActionTitleDisabled
+                  ]}>WhatsApp</Text>
+                  <Text style={[
+                    styles.contactActionSubtitle,
+                    !hasPhone && styles.contactActionSubtitleDisabled
+                  ]}>
+                    {hasPhone ? 'Send WhatsApp message' : 'Phone number not available'}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -1696,7 +1876,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
   },
   title: {
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: '800',
     color: '#111827',
     letterSpacing: -0.5,
@@ -2560,6 +2740,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     textAlign: 'center',
+  },
+  whatsappIcon: {
+    fontSize: 24,
   },
   // Disabled States
   contactActionItemDisabled: {

@@ -1,0 +1,15 @@
+export const Tags = {
+    Family: 'Family',
+    Friends: 'Friend',
+    Work: 'Work',
+    Client: 'Client',
+    Prospect: 'Prospect',
+   Favorite: 'Favorite',
+   Colleague: 'Colleague',
+   Vendor: 'Vendor',
+   Mentor: 'Mentor',
+   Mentee: 'Mentee',
+   Business: 'Business',
+   Personal: 'Personal',
+   Other: 'Other',
+}

@@ -12,6 +12,7 @@ import {
   Platform,
   FlatList,
 } from 'react-native';
+import * as Contacts from 'expo-contacts';
 import WebCompatibleDateTimePicker from './WebCompatibleDateTimePicker';
 import { X, ChevronDown, Search } from 'lucide-react-native';
 import { useActivity } from '../firebase/hooks/useActivity';
@@ -56,8 +57,15 @@ export default function AddActivityModal({
     }
   }, [relationships]);
 
+  // Load device contacts on mobile when modal opens
+  useEffect(() => {
+    if (visible && Platform.OS !== 'web') {
+      loadDeviceContacts();
+    }
+  }, [visible]);
+
   // Helper function to ensure relationship exists for a contact
-  const ensureRelationshipExists = async (contactName: string) => {
+  const ensureRelationshipExists = async (contactName: string, deviceContact?: Contacts.Contact) => {
     try {
       // Check if relationship already exists
       const existingRelationship = relationships.find(rel => 
@@ -71,8 +79,44 @@ export default function AddActivityModal({
       
       // Create new relationship
       console.log('🔄 Creating new relationship for:', contactName);
+      
+      // If we have device contact data, use it to populate the relationship
+      const contactData = deviceContact ? {
+        phoneNumbers: deviceContact.phoneNumbers?.map(phone => ({
+          number: phone.number || '',
+          label: phone.label
+        })) || [],
+        emails: deviceContact.emails?.map(email => ({
+          email: email.email || '',
+          label: email.label
+        })) || [],
+        website: '',
+        linkedin: '',
+        twitter: '',
+        instagram: '',
+        facebook: '',
+        company: '',
+        jobTitle: '',
+        address: '',
+        birthday: '',
+        notes: '',
+      } : {
+        phoneNumbers: [],
+        emails: [],
+        website: '',
+        linkedin: '',
+        twitter: '',
+        instagram: '',
+        facebook: '',
+        company: '',
+        jobTitle: '',
+        address: '',
+        birthday: '',
+        notes: '',
+      };
+      
       const newRelationship = await createRelationship({
-        contactId: `contact_${Date.now()}`, // Generate unique ID
+        contactId: (deviceContact as any)?.id || `contact_${Date.now()}`, // Use device contact ID if available
         contactName: contactName,
         lastContactDate: new Date().toISOString(),
         lastContactMethod: 'other',
@@ -81,20 +125,7 @@ export default function AddActivityModal({
         tags: [],
         notes: '',
         familyInfo: { kids: '', siblings: '', spouse: '' },
-        contactData: {
-          phoneNumbers: [],
-          emails: [],
-          website: '',
-          linkedin: '',
-          twitter: '',
-          instagram: '',
-          facebook: '',
-          company: '',
-          jobTitle: '',
-          address: '',
-          birthday: '',
-          notes: '',
-        },
+        contactData,
       });
       
       console.log('✅ New relationship created for:', contactName);
@@ -123,6 +154,11 @@ export default function AddActivityModal({
   const [showContactSearch, setShowContactSearch] = useState(false);
   const [filteredContacts, setFilteredContacts] = useState<Array<{id: string; name: string}>>([]);
   const searchContainerRef = useRef<any>(null);
+  
+  // Device contacts state (for mobile)
+  const [deviceContacts, setDeviceContacts] = useState<Contacts.Contact[]>([]);
+  const [isLoadingDeviceContacts, setIsLoadingDeviceContacts] = useState(false);
+  const [hasContactPermission, setHasContactPermission] = useState(false);
 
   // Animation states for tabs
   const tabAnimations = useRef({
@@ -506,7 +542,12 @@ export default function AddActivityModal({
 
     try {
       // Ensure relationship exists for the contact
-      await ensureRelationshipExists(currentContactName);
+      const relationship = await ensureRelationshipExists(currentContactName);
+      
+      if (!relationship) {
+        Alert.alert('Error', 'Failed to create or find relationship for this contact');
+        return;
+      }
       
       // First create the reminder document and schedule notifications
       const reminderData = {
@@ -517,6 +558,7 @@ export default function AddActivityModal({
         tags: [],
         notes: activityReminderNotes.trim(),
         contactId: currentContactId,
+        relationshipId: relationship.id,
         isOverdue: false,
         isThisWeek: false,
       };
@@ -582,6 +624,7 @@ export default function AddActivityModal({
         reminderDate: activityReminderDate.toISOString(),
         reminderType: activityReminderType,
         frequency: activityReminderFrequency,
+        reminderId: editingActivity.reminderId, // Preserve the reminder ID
       };
 
       await updateActivity(editingActivity.id, activityUpdates);
@@ -641,6 +684,17 @@ export default function AddActivityModal({
       return;
     }
 
+    // Ensure relationship exists for manually entered contact names
+    if (!isContactProvided && currentContactName.trim()) {
+      try {
+        await ensureRelationshipExists(currentContactName.trim());
+        console.log('✅ Relationship ensured for manually entered contact:', currentContactName);
+      } catch (error) {
+        console.error('❌ Error ensuring relationship for manual entry:', error);
+        // Continue with activity creation even if relationship creation fails
+      }
+    }
+
     if (editingActivity) {
       // Handle editing existing activities
       if (activeActivityTab === 'reminder') {
@@ -697,27 +751,72 @@ export default function AddActivityModal({
     }
   };
 
+  // Load device contacts (mobile only)
+  const loadDeviceContacts = async () => {
+    if (Platform.OS === 'web') return;
+    
+    try {
+      setIsLoadingDeviceContacts(true);
+      const { status } = await Contacts.requestPermissionsAsync();
+      
+      if (status === 'granted') {
+        setHasContactPermission(true);
+        const { data } = await Contacts.getContactsAsync({
+          fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers, Contacts.Fields.Emails],
+        });
+        setDeviceContacts(data);
+        console.log('📱 Device contacts loaded:', data.length);
+      } else {
+        setHasContactPermission(false);
+        console.log('❌ Contact permission denied');
+      }
+    } catch (error) {
+      console.error('Error loading device contacts:', error);
+    } finally {
+      setIsLoadingDeviceContacts(false);
+    }
+  };
+
   // Direct contact search functions
   const handleContactSearch = (query: string) => {
     console.log('🔍 Searching for:', query);
-    console.log('📊 Total relationships available:', relationships.length);
-    console.log('📊 Relationships data:', relationships);
     setContactSearchQuery(query);
+    
     if (query.trim()) {
-      const filtered = relationships
-        .filter(rel => 
-          rel.contactName.toLowerCase().includes(query.toLowerCase())
-        )
-        .map(rel => ({
-          id: rel.contactId,
-          name: rel.contactName
-        }))
-        .slice(0, 5); // Limit to 5 results
+      let filtered: Array<{id: string; name: string}> = [];
+      
+      if (Platform.OS === 'web') {
+        // Web: Use relationship data
+        console.log('🌐 Web platform - using relationships');
+        console.log('📊 Total relationships available:', relationships.length);
+        filtered = relationships
+          .filter(rel => 
+            rel.contactName.toLowerCase().includes(query.toLowerCase())
+          )
+          .map(rel => ({
+            id: rel.contactId,
+            name: rel.contactName
+          }))
+          .slice(0, 5);
+      } else {
+        // Mobile: Use device contacts
+        console.log('📱 Mobile platform - using device contacts');
+        console.log('📊 Device contacts available:', deviceContacts.length);
+        filtered = deviceContacts
+          .filter(contact => 
+            contact.name?.toLowerCase().includes(query.toLowerCase())
+          )
+          .map((contact, index) => ({
+            id: (contact as any).id || `device_${Date.now()}_${index}`,
+            name: contact.name || 'Unknown'
+          }))
+          .slice(0, 5);
+      }
+      
       console.log('📋 Filtered contacts:', filtered);
       console.log('📋 Filtered contacts count:', filtered.length);
       setFilteredContacts(filtered);
       setShowContactSearch(true);
-      console.log('🔍 Contact search modal should be visible:', true);
     } else {
       setShowContactSearch(false);
       setFilteredContacts([]);
@@ -731,41 +830,18 @@ export default function AddActivityModal({
     setContactSearchQuery(contact.name);
     console.log('✅ Contact search closed and contact set');
     
-    // Check if relationship exists, if not create it
-    const existingRelationship = relationships.find(rel => rel.contactId === contact.id);
-    if (!existingRelationship) {
-      try {
-        // Create a basic relationship
-        await createRelationship({
-          contactId: contact.id,
-          contactName: contact.name,
-          lastContactDate: new Date().toISOString(),
-          lastContactMethod: 'call',
-          reminderFrequency: 'month',
-          nextReminderDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
-          tags: [],
-          notes: '',
-          familyInfo: { kids: '', siblings: '', spouse: '' },
-          contactData: {
-            phoneNumbers: [],
-            emails: [],
-            website: '',
-            linkedin: '',
-            twitter: '',
-            instagram: '',
-            facebook: '',
-            company: '',
-            jobTitle: '',
-            address: '',
-            birthday: '',
-            notes: '',
-          },
-        });
-        console.log('✅ Relationship created for contact:', contact.name);
-      } catch (error) {
-        console.error('❌ Error creating relationship:', error);
-        // Continue with activity creation even if relationship creation fails
-      }
+    // Find the device contact if this is from device contacts
+    const deviceContact = Platform.OS !== 'web' 
+      ? deviceContacts.find(dc => (dc as any).id === contact.id || dc.name === contact.name)
+      : undefined;
+    
+    // Ensure relationship exists for the contact
+    try {
+      await ensureRelationshipExists(contact.name, deviceContact);
+      console.log('✅ Relationship ensured for:', contact.name);
+    } catch (error) {
+      console.error('❌ Error ensuring relationship:', error);
+      Alert.alert('Error', 'Failed to create relationship for this contact');
     }
   };
 
@@ -857,11 +933,11 @@ export default function AddActivityModal({
                           ]}
                           value={contactSearchQuery}
                           onChangeText={handleContactSearch}
-                          placeholder="Search contacts..."
+                          placeholder={Platform.OS === 'web' ? "Search relationships..." : "Search device contacts..."}
                           placeholderTextColor="#9CA3AF"
                         />
                         {showContactSearch && (
-                          <View style={styles.contactSearchResults}>
+                          <View style={[styles.contactSearchResults, {position: (Platform.OS === 'android') ? "absolute" : "sticky"}]}>
                             {filteredContacts.length > 0 ? (
                               <>
                                 
@@ -880,7 +956,10 @@ export default function AddActivityModal({
                               </>
                             ) : (
                               <Text style={styles.debugText}>
-                                No contacts found (Total relationships: {relationships.length})
+                                {Platform.OS === 'web' 
+                                  ? `No contacts found (Total relationships: ${relationships.length})`
+                                  : `No contacts found (Device contacts: ${deviceContacts.length})`
+                                }
                               </Text>
                             )}
                           </View>
@@ -957,11 +1036,11 @@ export default function AddActivityModal({
                           ]}
                           value={contactSearchQuery}
                           onChangeText={handleContactSearch}
-                          placeholder="Search contacts..."
+                          placeholder={Platform.OS === 'web' ? "Search relationships..." : "Search device contacts..."}
                           placeholderTextColor="#9CA3AF"
                         />
                         {showContactSearch && (
-                          <View style={styles.contactSearchResults}>
+                          <View style={[styles.contactSearchResults, {position: (Platform.OS === 'android') ? "absolute" : "sticky"}]}>
                             {filteredContacts.length > 0 ? (
                               <>
                                 
@@ -980,7 +1059,10 @@ export default function AddActivityModal({
                               </>
                             ) : (
                               <Text style={styles.debugText}>
-                                No contacts found (Total relationships: {relationships.length})
+                                {Platform.OS === 'web' 
+                                  ? `No contacts found (Total relationships: ${relationships.length})`
+                                  : `No contacts found (Device contacts: ${deviceContacts.length})`
+                                }
                               </Text>
                             )}
                           </View>
@@ -1186,30 +1268,30 @@ export default function AddActivityModal({
                           ]}
                           value={contactSearchQuery}
                           onChangeText={handleContactSearch}
-                          placeholder="Search contacts..."
+                          placeholder={Platform.OS === 'web' ? "Search relationships..." : "Search device contacts..."}
                           placeholderTextColor="#9CA3AF"
                         />
                         {showContactSearch && (
-                          <View style={styles.contactSearchResults}>
+                          <View style={[styles.contactSearchResults, {position: (Platform.OS === 'android') ? "absolute" : "sticky"}]}>
                             {filteredContacts.length > 0 ? (
-                              <>
-                                
-                                {filteredContacts.map((contact) => (
-                                  <TouchableOpacity
-                                    key={contact.id}
-                                    style={styles.contactSearchItem}
-                                    onPress={() => handleDirectContactSelect(contact)}
-                                    activeOpacity={0.7}
-                                  >
-                                    <Text style={styles.contactSearchItemText}>
-                                      {contact.name}
-                                    </Text>
-                                  </TouchableOpacity>
-                                ))}
-                              </>
+                              filteredContacts.map((contact) => (
+                                <TouchableOpacity
+                                  key={contact.id}
+                                  style={styles.contactSearchItem}
+                                  onPress={() => handleDirectContactSelect(contact)}
+                                  activeOpacity={0.7}
+                                >
+                                  <Text style={styles.contactSearchItemText}>
+                                    {contact.name}
+                                  </Text>
+                                </TouchableOpacity>
+                              ))
                             ) : (
                               <Text style={styles.debugText}>
-                                No contacts found (Total relationships: {relationships.length})
+                                {Platform.OS === 'web' 
+                                  ? `No contacts found (Total relationships: ${relationships.length})`
+                                  : `No contacts found (Device contacts: ${deviceContacts.length})`
+                                }
                               </Text>
                             )}
                           </View>
@@ -1935,7 +2017,6 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   contactSearchResults: {
-    position: 'sticky',
     top: '100%',
     left: 0,
     right: 0,
@@ -1944,7 +2025,7 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     borderRadius: 8,
     marginTop: 4,
-    maxHeight: 200,
+    maxHeight: 230,
     zIndex: 9999,
     elevation: 10,
     shadowColor: '#000',

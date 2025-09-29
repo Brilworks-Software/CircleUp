@@ -119,7 +119,9 @@ class ActivityService {
             reminderDate: activityData.reminderDate || new Date().toISOString(),
             reminderType: activityData.reminderType || 'follow_up',
             frequency: activityData.frequency || 'month',
-            isCompleted: false,
+            reminderId: activityData.reminderId || '', // Store reference to reminder document
+            isCompleted: activityData.isCompleted !== undefined ? activityData.isCompleted : false,
+            completedAt: activityData.completedAt || null,
           };
           break;
       }
@@ -246,6 +248,11 @@ class ActivityService {
         ...updates,
         updatedAt: serverTimestamp(),
       };
+
+      // Handle reminderId updates for reminder activities
+      if (updates.reminderId !== undefined) {
+        updateData.reminderId = updates.reminderId;
+      }
 
       await updateDoc(activityRef, updateData);
       return true;
@@ -406,6 +413,36 @@ class ActivityService {
     } catch (error) {
       console.error('Error getting all tags:', error);
       return [];
+    }
+  }
+
+  /**
+   * Get activity by reminder ID (for direct editing)
+   */
+  async getActivityByReminderId(userId: string, reminderId: string): Promise<Activity | null> {
+    try {
+      const activitiesRef = collection(db, this.COLLECTION_NAME);
+      const q = query(
+        activitiesRef,
+        where('userId', '==', userId),
+        where('reminderId', '==', reminderId),
+        where('isArchived', '==', false)
+      );
+
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        return null;
+      }
+
+      const doc = querySnapshot.docs[0];
+      return {
+        id: doc.id,
+        ...(doc.data() || {}),
+      } as Activity;
+    } catch (error) {
+      console.error('Error getting activity by reminder ID:', error);
+      throw error;
     }
   }
 }

@@ -92,6 +92,7 @@ export interface Reminder {
   id: string;
   contactName: string;
   contactId?: string;
+  relationshipId?: string;
   type: string;
   date: string;
   frequency: string;
@@ -177,11 +178,13 @@ export interface CreateActivityData {
   date?: string;
   duration?: number;
   location?: string;
+  isCompleted?: boolean;
   // Reminder specific
   reminderDate?: string;
   reminderType?: string;
   frequency?: ReminderFrequency;
   reminderId?: string; // Reference to the reminder document
+  completedAt?: string; // When the reminder was completed
 }
 
 export interface UpdateActivityData {

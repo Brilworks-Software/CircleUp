@@ -124,6 +124,18 @@ export const useActivity = () => {
     }
   }, [activityService, user?.uid]);
 
+  const getActivityByReminderId = useCallback(async (reminderId: string): Promise<Activity | null> => {
+    if (!user?.uid) return null;
+    
+    try {
+      setError(null);
+      return await activityService.getActivityByReminderId(user.uid, reminderId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to get activity by reminder ID');
+      return null;
+    }
+  }, [activityService, user?.uid]);
+
   const getActivitiesByType = useCallback(async (type: ActivityType): Promise<Activity[]> => {
     if (!user?.uid) return [];
     
@@ -249,6 +261,7 @@ export const useActivity = () => {
     archiveActivity,
     completeReminder,
     getActivityById,
+    getActivityByReminderId,
     getActivitiesByType,
     searchActivities,
     getActivitiesByTags,
