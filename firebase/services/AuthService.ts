@@ -10,6 +10,7 @@ import {
   import { auth } from '../config';
   import UsersService from './UserService';
   import NotificationService from '../../services/NotificationService';
+import { Platform } from 'react-native';
   
   export interface AuthCredentials {
     email: string;
@@ -71,8 +72,10 @@ export interface RegisterCredentials extends AuthCredentials {
     async signOut() {
       try {
         // Cancel all scheduled notifications before signing out
-        const notificationService = NotificationService.getInstance();
-        await notificationService.cancelAllNotifications();
+        if(Platform.OS !== 'web') {
+          const notificationService = NotificationService.getInstance();
+          await notificationService.cancelAllNotifications();
+        }
         
         await signOut(auth);
       } catch (error) {
