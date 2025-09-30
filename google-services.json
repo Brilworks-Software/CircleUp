@@ -1,115 +1,26 @@
 {
   "project_info": {
-    "project_number": "708438594834",
-    "project_id": "backend-in7gy7",
-    "storage_bucket": "backend-in7gy7.firebasestorage.app"
+    "project_number": "540064305831",
+    "project_id": "circleup-63110",
+    "storage_bucket": "circleup-63110.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:708438594834:android:4673e0dc66753f18154fcb",
+        "mobilesdk_app_id": "1:540064305831:android:f36747f410e2175ec80182",
         "android_client_info": {
-          "package_name": "com.bhavikbhanushali.boltexponativewind"
+          "package_name": "com.circleUp.app"
         }
       },
-      "oauth_client": [
-        {
-          "client_id": "708438594834-srhvgnctpte34f657o0p9v5oco5atoir.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
+      "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyANwYgwR6nkzhiOJNdtGNvY9kJhs3o8xMY"
+          "current_key": "AIzaSyBpmR20DaOa2Plt8qvnfQiVaa8aRYR96ds"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "708438594834-srhvgnctpte34f657o0p9v5oco5atoir.apps.googleusercontent.com",
-              "client_type": 3
-            },
-            {
-              "client_id": "708438594834-4nd43fndqog70dvnfq44tqsdjqinn2gi.apps.googleusercontent.com",
-              "client_type": 2,
-              "ios_info": {
-                "bundle_id": "com.mycompany.backend"
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:708438594834:android:b1be6cd15bec7e19154fcb",
-        "android_client_info": {
-          "package_name": "com.mycompany.backend"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "708438594834-srhvgnctpte34f657o0p9v5oco5atoir.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyANwYgwR6nkzhiOJNdtGNvY9kJhs3o8xMY"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "708438594834-srhvgnctpte34f657o0p9v5oco5atoir.apps.googleusercontent.com",
-              "client_type": 3
-            },
-            {
-              "client_id": "708438594834-4nd43fndqog70dvnfq44tqsdjqinn2gi.apps.googleusercontent.com",
-              "client_type": 2,
-              "ios_info": {
-                "bundle_id": "com.mycompany.backend"
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:708438594834:android:79e7950ab9a9747c154fcb",
-        "android_client_info": {
-          "package_name": "com.mycompany.temp"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "708438594834-srhvgnctpte34f657o0p9v5oco5atoir.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyANwYgwR6nkzhiOJNdtGNvY9kJhs3o8xMY"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "708438594834-srhvgnctpte34f657o0p9v5oco5atoir.apps.googleusercontent.com",
-              "client_type": 3
-            },
-            {
-              "client_id": "708438594834-4nd43fndqog70dvnfq44tqsdjqinn2gi.apps.googleusercontent.com",
-              "client_type": 2,
-              "ios_info": {
-                "bundle_id": "com.mycompany.backend"
-              }
-            }
-          ]
+          "other_platform_oauth_client": []
         }
       }
     }
