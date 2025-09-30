@@ -21,16 +21,55 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  // Validation helper functions
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    // Validate email
+    if (!email.trim()) {
+      errors.email = 'Email is required';
+    } else if (!validateEmail(email.trim())) {
+      errors.email = 'Please enter a valid email address';
+    }
+
+    // Validate password
+    if (!password) {
+      errors.password = 'Password is required';
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const clearFieldError = (fieldName: string) => {
+    if (validationErrors[fieldName]) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[fieldName];
+        return newErrors;
+      });
+    }
+  };
+
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    clearFieldError('email');
+  };
+
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    clearFieldError('password');
+  };
 
   const handleLogin = async () => {
-    // Validate form data
-    if (!email.trim()) {
-      Alert.alert('Error', 'Please enter your email');
-      return;
-    }
-    
-    if (!password) {
-      Alert.alert('Error', 'Please enter your password');
+    if (!validateForm()) {
       return;
     }
     
@@ -78,9 +117,9 @@ export default function LoginScreen() {
               <View style={styles.inputWrapper}>
                 <User size={20} color="#6B7280" style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, validationErrors.email && styles.inputError]}
                   value={email}
-                  onChangeText={setEmail}
+                  onChangeText={handleEmailChange}
                   placeholder="Enter your email"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="email-address"
@@ -88,6 +127,9 @@ export default function LoginScreen() {
                   autoCorrect={false}
                 />
               </View>
+              {validationErrors.email && (
+                <Text style={styles.errorText}>{validationErrors.email}</Text>
+              )}
             </View>
 
             <View style={styles.inputContainer}>
@@ -95,9 +137,9 @@ export default function LoginScreen() {
               <View style={styles.inputWrapper}>
                 <Lock size={20} color="#6B7280" style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, validationErrors.password && styles.inputError]}
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={handlePasswordChange}
                   placeholder="Enter your password"
                   placeholderTextColor="#9CA3AF"
                   secureTextEntry={!showPassword}
@@ -115,6 +157,9 @@ export default function LoginScreen() {
                   )}
                 </TouchableOpacity>
               </View>
+              {validationErrors.password && (
+                <Text style={styles.errorText}>{validationErrors.password}</Text>
+              )}
             </View>
 
             <TouchableOpacity style={styles.forgotPassword}>
@@ -221,6 +266,15 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: '#111827',
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
   },
   eyeIcon: {
     padding: 4,

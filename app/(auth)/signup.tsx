@@ -25,39 +25,103 @@ export default function SignupScreen() {
     password: '',
     confirmPassword: '',
     age: '',
-    gender: 'other' as 'male' | 'female' | 'other',
+    gender: 'male' as 'male' | 'female' | 'other',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  // Validation helper functions
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validatePhone = (phone: string): boolean => {
+    if (!phone) return true; // Phone is optional
+    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+    const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
+    return phoneRegex.test(cleanPhone);
+  };
+
+  const validatePassword = (password: string): boolean => {
+    // At least 8 characters, 1 uppercase, 1 lowercase, 1 number
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$/;
+    return passwordRegex.test(password);
+  };
+
+  const validateAge = (age: string): boolean => {
+    if (!age) return true; // Age is optional
+    const ageNum = parseInt(age);
+    return !isNaN(ageNum) && ageNum >= 13 && ageNum <= 120;
+  };
+
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    // Validate full name
+    if (!formData.fullName.trim()) {
+      errors.fullName = 'Full name is required';
+    } else if (formData.fullName.trim().length < 2) {
+      errors.fullName = 'Full name must be at least 2 characters long';
+    } else if (!/^[a-zA-Z\s'-]+$/.test(formData.fullName.trim())) {
+      errors.fullName = 'Full name can only contain letters, spaces, hyphens, and apostrophes';
+    }
+
+    // Validate email
+    if (!formData.email.trim()) {
+      errors.email = 'Email is required';
+    } else if (!validateEmail(formData.email.trim())) {
+      errors.email = 'Please enter a valid email address';
+    }
+
+    // Validate phone (optional)
+    if (formData.phone && !validatePhone(formData.phone)) {
+      errors.phone = 'Please enter a valid phone number';
+    }
+
+    // Validate age (optional)
+    if (formData.age && !validateAge(formData.age)) {
+      errors.age = 'Please enter a valid age (13-120)';
+    }
+
+    // Validate password
+    if (!formData.password) {
+      errors.password = 'Password is required';
+    } else if (formData.password.length < 8) {
+      errors.password = 'Password must be at least 8 characters long';
+    } else if (!validatePassword(formData.password)) {
+      errors.password = 'Password must contain at least 8 characters, 1 uppercase letter, 1 lowercase letter, and 1 number';
+    }
+
+    // Validate confirm password
+    if (!formData.confirmPassword) {
+      errors.confirmPassword = 'Please confirm your password';
+    } else if (formData.password !== formData.confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match';
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const clearFieldError = (fieldName: string) => {
+    if (validationErrors[fieldName]) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[fieldName];
+        return newErrors;
+      });
+    }
+  };
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    clearFieldError(field);
   };
 
   const handleSignup = async () => {
-    // Validate form data
-    if (!formData.fullName.trim()) {
-      Alert.alert('Error', 'Please enter your full name');
-      return;
-    }
-    
-    if (!formData.email.trim()) {
-      Alert.alert('Error', 'Please enter your email');
-      return;
-    }
-    
-    if (!formData.password) {
-      Alert.alert('Error', 'Please enter a password');
-      return;
-    }
-    
-    if (formData.password !== formData.confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
-      return;
-    }
-    
-    if (formData.password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long');
+    if (!validateForm()) {
       return;
     }
     
@@ -109,7 +173,7 @@ export default function SignupScreen() {
               <View style={styles.inputWrapper}>
                 <User size={20} color="#6B7280" style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, validationErrors.fullName && styles.inputError]}
                   value={formData.fullName}
                   onChangeText={(value) => handleInputChange('fullName', value)}
                   placeholder="Enter your full name"
@@ -117,6 +181,9 @@ export default function SignupScreen() {
                   autoCapitalize="words"
                 />
               </View>
+              {validationErrors.fullName && (
+                <Text style={styles.errorText}>{validationErrors.fullName}</Text>
+              )}
             </View>
 
             <View style={styles.inputContainer}>
@@ -124,7 +191,7 @@ export default function SignupScreen() {
               <View style={styles.inputWrapper}>
                 <Mail size={20} color="#6B7280" style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, validationErrors.email && styles.inputError]}
                   value={formData.email}
                   onChangeText={(value) => handleInputChange('email', value)}
                   placeholder="Enter your email"
@@ -134,6 +201,9 @@ export default function SignupScreen() {
                   autoCorrect={false}
                 />
               </View>
+              {validationErrors.email && (
+                <Text style={styles.errorText}>{validationErrors.email}</Text>
+              )}
             </View>
 
             <View style={styles.inputContainer}>
@@ -141,7 +211,7 @@ export default function SignupScreen() {
               <View style={styles.inputWrapper}>
                 <Phone size={20} color="#6B7280" style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, validationErrors.phone && styles.inputError]}
                   value={formData.phone}
                   onChangeText={(value) => handleInputChange('phone', value)}
                   placeholder="Enter your phone number"
@@ -149,6 +219,9 @@ export default function SignupScreen() {
                   keyboardType="phone-pad"
                 />
               </View>
+              {validationErrors.phone && (
+                <Text style={styles.errorText}>{validationErrors.phone}</Text>
+              )}
             </View>
 
             <View style={styles.inputContainer}>
@@ -156,7 +229,7 @@ export default function SignupScreen() {
               <View style={styles.inputWrapper}>
                 <User size={20} color="#6B7280" style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, validationErrors.age && styles.inputError]}
                   value={formData.age}
                   onChangeText={(value) => handleInputChange('age', value)}
                   placeholder="Enter your age"
@@ -164,6 +237,9 @@ export default function SignupScreen() {
                   keyboardType="numeric"
                 />
               </View>
+              {validationErrors.age && (
+                <Text style={styles.errorText}>{validationErrors.age}</Text>
+              )}
             </View>
 
             <View style={styles.inputContainer}>
@@ -219,7 +295,7 @@ export default function SignupScreen() {
               <View style={styles.inputWrapper}>
                 <Lock size={20} color="#6B7280" style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, validationErrors.password && styles.inputError]}
                   value={formData.password}
                   onChangeText={(value) => handleInputChange('password', value)}
                   placeholder="Create a password"
@@ -239,6 +315,9 @@ export default function SignupScreen() {
                   )}
                 </TouchableOpacity>
               </View>
+              {validationErrors.password && (
+                <Text style={styles.errorText}>{validationErrors.password}</Text>
+              )}
             </View>
 
             <View style={styles.inputContainer}>
@@ -246,7 +325,7 @@ export default function SignupScreen() {
               <View style={styles.inputWrapper}>
                 <Lock size={20} color="#6B7280" style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, validationErrors.confirmPassword && styles.inputError]}
                   value={formData.confirmPassword}
                   onChangeText={(value) => handleInputChange('confirmPassword', value)}
                   placeholder="Confirm your password"
@@ -266,6 +345,9 @@ export default function SignupScreen() {
                   )}
                 </TouchableOpacity>
               </View>
+              {validationErrors.confirmPassword && (
+                <Text style={styles.errorText}>{validationErrors.confirmPassword}</Text>
+              )}
             </View>
 
             <TouchableOpacity 
@@ -367,6 +449,15 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: '#111827',
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
   },
   eyeIcon: {
     padding: 4,

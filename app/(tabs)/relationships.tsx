@@ -172,6 +172,11 @@ export default function RelationshipsScreen() {
   const [newContactBirthday, setNewContactBirthday] = useState('');
   const [newContactNotes, setNewContactNotes] = useState('');
   
+  // Validation states
+  const [contactValidationErrors, setContactValidationErrors] = useState<Record<string, string>>({});
+  const [noteValidationErrors, setNoteValidationErrors] = useState<Record<string, string>>({});
+  const [familyInfoValidationErrors, setFamilyInfoValidationErrors] = useState<Record<string, string>>({});
+  
   // Activity filtering state
   const [activityFilter, setActivityFilter] = useState<'all' | 'note' | 'interaction' | 'reminder'>('all');
   const [showActivityDropdown, setShowActivityDropdown] = useState(false);
@@ -324,13 +329,9 @@ export default function RelationshipsScreen() {
   }, [hasPermission]);
 
   // Debug selectedTags changes
-  useEffect(() => {
-    console.log('🔍 selectedTags changed to:', selectedTags);
-  }, [selectedTags]);
 
   // Stable function to set tags for editing
   const setTagsForEditing = useCallback((tags: string[]) => {
-    console.log('🔍 setTagsForEditing called with:', tags);
     setSelectedTags(tags);
   }, []);
 
@@ -356,7 +357,6 @@ export default function RelationshipsScreen() {
         setHasPermission('contacts' in navigator);
         if ('contacts' in navigator) {
           // Web Contacts API is available, we can proceed
-          console.log('Web Contacts API is available');
         }
       } else {
         const { status } = await Contacts.requestPermissionsAsync();
@@ -380,7 +380,6 @@ export default function RelationshipsScreen() {
       if (Platform.OS === 'web') {
         // For web, we can't load device contacts using Web Contacts API
         // The Web Contacts API is read-only and doesn't provide a way to list contacts
-        console.log('Web platform: Device contacts loading not supported');
         setDeviceContacts([]);
         setFilteredDeviceContacts([]);
       } else {
@@ -657,7 +656,11 @@ export default function RelationshipsScreen() {
     
     if (phoneNumber) {
       const cleanPhoneNumber = phoneNumber.replace(/\D/g, ''); // Remove non-digits
-      const url = `whatsapp://send?phone=${cleanPhoneNumber}`;
+      
+      // Use different URL schemes for web vs mobile
+      const url = Platform.OS === 'web' 
+        ? `https://wa.me/${cleanPhoneNumber}`
+        : `whatsapp://send?phone=${cleanPhoneNumber}`;
       
       try {
         const supported = await Linking.canOpenURL(url);
@@ -665,7 +668,7 @@ export default function RelationshipsScreen() {
           await Linking.openURL(url);
           setShowContactActions(false);
         } else {
-          showAlert('Error', 'WhatsApp is not installed');
+          showAlert('Error', Platform.OS === 'web' ? 'Unable to open WhatsApp Web' : 'WhatsApp is not installed');
         }
       } catch (error) {
         console.error('Error opening WhatsApp:', error);
@@ -831,7 +834,6 @@ export default function RelationshipsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('🗑️ Starting comprehensive relationship deletion for:', contactName);
               
               // Get all reminders for this relationship
               const relationshipReminders = activities
@@ -839,20 +841,17 @@ export default function RelationshipsScreen() {
                 .map(activity => (activity as any).reminderId)
                 .filter(Boolean);
 
-              console.log('🔔 Found reminders to delete:', relationshipReminders);
 
               // Get all activities for this relationship
               const relationshipActivities = activities
                 .filter(activity => activity.contactName === contactName);
 
-              console.log('📝 Found activities to delete:', relationshipActivities.length);
 
               // Delete all reminders and cancel their notifications
               const reminderNotificationService = ReminderNotificationService.getInstance();
               for (const reminderId of relationshipReminders) {
                 try {
                   await reminderNotificationService.deleteReminderWithNotifications(currentUser.uid, reminderId);
-                  console.log('✅ Deleted reminder and cancelled notifications:', reminderId);
                 } catch (error) {
                   console.error('❌ Error deleting reminder:', reminderId, error);
                   // Continue with other deletions even if one fails
@@ -863,7 +862,6 @@ export default function RelationshipsScreen() {
               for (const activity of relationshipActivities) {
                 try {
                   await deleteActivity(activity.id);
-                  console.log('✅ Deleted activity:', activity.id);
                 } catch (error) {
                   console.error('❌ Error deleting activity:', activity.id, error);
                   // Continue with other deletions even if one fails
@@ -872,7 +870,6 @@ export default function RelationshipsScreen() {
 
               // Finally, delete the relationship
               await deleteRelationship(relationshipId);
-              console.log('✅ Deleted relationship:', relationshipId);
 
               // Close any open modals
               setShowDetailActions(false);
@@ -925,15 +922,6 @@ export default function RelationshipsScreen() {
     }
     
     try {
-      console.log('🔔 Creating reminder with data:', {
-        contactName: selectedRelationship.contactName,
-        type: 'follow_up',
-        date: combinedDateTime.toISOString(),
-        frequency: selectedRelationship.reminderFrequency,
-        tags: selectedRelationship.tags,
-        notes: reminderNote.trim(),
-      });
-      
       // Create a new reminder for this relationship
       const newReminder = await createReminder({
         contactName: selectedRelationship.contactName,
@@ -946,7 +934,6 @@ export default function RelationshipsScreen() {
         notes: reminderNote.trim(),
       });
       
-      console.log('✅ Reminder created successfully:', newReminder);
       setShowAddReminderModal(false);
       showAlert('Success', 'Reminder added successfully!');
     } catch (error) {
@@ -1008,22 +995,14 @@ export default function RelationshipsScreen() {
   };
 
   const editRelationship = (relationship: Relationship) => {
-    console.log('🔍 editRelationship called with:', relationship);
-    console.log('🔍 relationship.tags:', relationship.tags);
-    console.log('🔍 relationship.tags type:', typeof relationship.tags);
-    console.log('🔍 relationship.tags length:', relationship.tags?.length);
-    console.log('🔍 predefinedTags:', predefinedTags);
     
     // Check each tag individually
     relationship.tags?.forEach((tag, index) => {
-      console.log(`🔍 Tag ${index}: "${tag}" (type: ${typeof tag})`);
-      console.log(`🔍 Is "${tag}" in predefinedTags?`, predefinedTags.includes(tag));
+      // Tag validation logic
     });
     
     // Filter tags first
     const filteredTags = relationship.tags?.filter(tag => predefinedTags.includes(tag)) || [];
-    console.log('🔍 filteredTags:', filteredTags);
-    console.log('🔍 filteredTags length:', filteredTags.length);
     
     // Use stored contact data from relationship, fallback to device contact if not available
     const deviceContact = deviceContacts.find(contact => 
@@ -1189,7 +1168,6 @@ export default function RelationshipsScreen() {
   // Web-compatible contact creation using Web Contacts API
   const createWebContact = async (contactData: any) => {
     if (!('contacts' in navigator)) {
-      console.log('Web Contacts API not supported in this browser');
       throw new Error('Web Contacts API not supported in this browser');
     }
 
@@ -1237,11 +1215,9 @@ export default function RelationshipsScreen() {
         contactProperties.url = [contactData.website];
       }
 
-      console.log('🌐 Creating web contact with properties:', contactProperties);
 
       // Use Web Contacts API to create contact
       const contact = await (navigator as any).contacts.create(contactProperties);
-      console.log('✅ Web contact created successfully:', contact);
       return contact;
     } catch (error) {
       console.error('❌ Error creating web contact:', error);
@@ -1263,12 +1239,261 @@ export default function RelationshipsScreen() {
     }
   };
 
-  const createNewContactAndRelationship = async () => {
+  // Validation helper functions
+  const validateContactEmail = (email: string): boolean => {
+    if (!email) return true; // Empty email is valid (optional field)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validateContactPhone = (phone: string): boolean => {
+    if (!phone) return true; // Empty phone is valid (optional field)
+    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+    const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
+    return phoneRegex.test(cleanPhone);
+  };
+
+  const validateContactURL = (url: string): boolean => {
+    if (!url) return true; // Empty URL is valid (optional field)
+    
+    // Clean the URL
+    let cleanUrl = url.trim();
+    
+    // Add protocol if missing
+    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+      cleanUrl = `https://${cleanUrl}`;
+    }
+    
+    try {
+      const urlObj = new URL(cleanUrl);
+      
+      // Check if it's a valid protocol
+      if (!['http:', 'https:'].includes(urlObj.protocol)) {
+        return false;
+      }
+      
+      // Check if hostname is valid (not empty and has at least one dot for domain)
+      if (!urlObj.hostname || !urlObj.hostname.includes('.')) {
+        return false;
+      }
+      
+      // Check for valid domain structure
+      const domainParts = urlObj.hostname.split('.');
+      if (domainParts.length < 2) {
+        return false;
+      }
+      
+      // Check that each part of the domain is not empty
+      for (const part of domainParts) {
+        if (!part || part.length === 0) {
+          return false;
+        }
+      }
+      
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const validateContactBirthday = (birthday: string): boolean => {
+    if (!birthday) return true; // Empty birthday is valid (optional field)
+    const dateRegex = /^(0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01])\/\d{4}$/;
+    if (!dateRegex.test(birthday)) return false;
+    
+    const [month, day, year] = birthday.split('/').map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.getFullYear() === year && 
+           date.getMonth() === month - 1 && 
+           date.getDate() === day &&
+           year >= 1900 && 
+           year <= new Date().getFullYear();
+  };
+
+  const validateContactForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    // Validate required fields
     if (!newContactName.trim()) {
-      const alertMessage = Platform.OS === 'web'
-        ? 'Please enter a contact name. This is required to create a relationship.'
-        : 'Please enter a contact name.';
-      showAlert('Missing Information', alertMessage);
+      errors.contactName = 'Contact name is required';
+    } else if (newContactName.trim().length < 2) {
+      errors.contactName = 'Contact name must be at least 2 characters long';
+    }
+
+    // Validate contact information fields
+    if (newContactEmail && !validateContactEmail(newContactEmail)) {
+      errors.contactEmail = 'Please enter a valid email address';
+    }
+
+    if (newContactPhone && !validateContactPhone(newContactPhone)) {
+      errors.contactPhone = 'Please enter a valid phone number';
+    }
+
+    if (newContactWebsite && !validateContactURL(newContactWebsite)) {
+      errors.contactWebsite = 'Please enter a valid website URL (e.g., https://example.com)';
+    }
+
+    if (newContactLinkedin && !validateContactURL(newContactLinkedin)) {
+      errors.contactLinkedin = 'Please enter a valid LinkedIn URL (e.g., https://linkedin.com/in/username)';
+    }
+
+    if (newContactTwitter && newContactTwitter.trim()) {
+      // Twitter can be either a handle (@username) or URL
+      const isHandle = newContactTwitter.startsWith('@');
+      const isURL = newContactTwitter.startsWith('http') || newContactTwitter.includes('.');
+      
+      if (!isHandle && !isURL) {
+        errors.contactTwitter = 'Please enter a valid Twitter handle (@username) or URL';
+      } else if (isURL && !validateContactURL(newContactTwitter)) {
+        errors.contactTwitter = 'Please enter a valid Twitter URL (e.g., https://twitter.com/username)';
+      } else if (isHandle) {
+        // Validate handle format
+        const handleRegex = /^@[a-zA-Z0-9_]{1,15}$/;
+        if (!handleRegex.test(newContactTwitter)) {
+          errors.contactTwitter = 'Please enter a valid Twitter handle (@username, 1-15 characters, letters, numbers, and underscores only)';
+        }
+      }
+    }
+
+    if (newContactInstagram && newContactInstagram.trim()) {
+      // Instagram can be either a handle (@username) or URL
+      const isHandle = newContactInstagram.startsWith('@');
+      const isURL = newContactInstagram.startsWith('http') || newContactInstagram.includes('.');
+      
+      if (!isHandle && !isURL) {
+        errors.contactInstagram = 'Please enter a valid Instagram handle (@username) or URL';
+      } else if (isURL && !validateContactURL(newContactInstagram)) {
+        errors.contactInstagram = 'Please enter a valid Instagram URL (e.g., https://instagram.com/username)';
+      } else if (isHandle) {
+        // Validate handle format
+        const handleRegex = /^@[a-zA-Z0-9._]{1,30}$/;
+        if (!handleRegex.test(newContactInstagram)) {
+          errors.contactInstagram = 'Please enter a valid Instagram handle (@username, 1-30 characters, letters, numbers, dots, and underscores only)';
+        }
+      }
+    }
+
+    if (newContactFacebook && !validateContactURL(newContactFacebook)) {
+      errors.contactFacebook = 'Please enter a valid Facebook URL (e.g., https://facebook.com/username)';
+    }
+
+    if (newContactBirthday && !validateContactBirthday(newContactBirthday)) {
+      errors.contactBirthday = 'Please enter a valid birthday (MM/DD/YYYY)';
+    }
+
+    // Validate company and job title content
+    if (newContactCompany && newContactCompany.trim()) {
+      if (newContactCompany.length > 100) {
+        errors.contactCompany = 'Company name must be 100 characters or less';
+      } else if (newContactCompany.trim().length < 2) {
+        errors.contactCompany = 'Company name must be at least 2 characters long';
+      } else if (!/^[a-zA-Z0-9\s\-&.,'()]+$/.test(newContactCompany.trim())) {
+        errors.contactCompany = 'Company name contains invalid characters';
+      }
+    }
+
+    if (newContactJobTitle && newContactJobTitle.trim()) {
+      if (newContactJobTitle.length > 100) {
+        errors.contactJobTitle = 'Job title must be 100 characters or less';
+      } else if (newContactJobTitle.trim().length < 2) {
+        errors.contactJobTitle = 'Job title must be at least 2 characters long';
+      } else if (!/^[a-zA-Z0-9\s\-&.,'()]+$/.test(newContactJobTitle.trim())) {
+        errors.contactJobTitle = 'Job title contains invalid characters';
+      }
+    }
+
+    // Validate character limits
+    if (newContactAddress && newContactAddress.length > 200) {
+      errors.contactAddress = 'Address must be 200 characters or less';
+    }
+
+    if (newContactNotes && newContactNotes.length > 500) {
+      errors.contactNotes = 'Notes must be 500 characters or less';
+    }
+
+    setContactValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const validateNoteForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (editedNote && editedNote.length > 1000) {
+      errors.note = 'Note must be 1000 characters or less';
+    }
+
+    setNoteValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const validateFamilyInfoForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (editedFamilyInfo.spouse && editedFamilyInfo.spouse.length > 100) {
+      errors.familySpouse = 'Spouse information must be 100 characters or less';
+    }
+
+    if (editedFamilyInfo.kids && editedFamilyInfo.kids.length > 200) {
+      errors.familyKids = 'Kids information must be 200 characters or less';
+    }
+
+    if (editedFamilyInfo.siblings && editedFamilyInfo.siblings.length > 200) {
+      errors.familySiblings = 'Siblings information must be 200 characters or less';
+    }
+
+    setFamilyInfoValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const clearContactFieldError = (fieldName: string) => {
+    if (contactValidationErrors[fieldName]) {
+      setContactValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[fieldName];
+        return newErrors;
+      });
+    }
+  };
+
+  const clearNoteFieldError = (fieldName: string) => {
+    if (noteValidationErrors[fieldName]) {
+      setNoteValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[fieldName];
+        return newErrors;
+      });
+    }
+  };
+
+  const clearFamilyInfoFieldError = (fieldName: string) => {
+    if (familyInfoValidationErrors[fieldName]) {
+      setFamilyInfoValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[fieldName];
+        return newErrors;
+      });
+    }
+  };
+
+  const resetNewContactForm = () => {
+    setNewContactName('');
+    setNewContactPhone('');
+    setNewContactEmail('');
+    setNewContactWebsite('');
+    setNewContactLinkedin('');
+    setNewContactTwitter('');
+    setNewContactInstagram('');
+    setNewContactFacebook('');
+    setNewContactCompany('');
+    setNewContactJobTitle('');
+    setNewContactAddress('');
+    setNewContactBirthday('');
+    setNewContactNotes('');
+    setContactValidationErrors({});
+  };
+
+  const createNewContactAndRelationship = async () => {
+    if (!validateContactForm()) {
       return;
     }
 
@@ -1302,13 +1527,10 @@ export default function RelationshipsScreen() {
 
   const updateDeviceContact = async (contact: Contacts.Contact, contactData: any) => {
     if (!hasPermission) {
-      console.log('⚠️ No permission to update device contact');
       return false;
     }
 
     try {
-      console.log('📱 Updating device contact:', contact.name);
-      console.log('📱 Contact data:', contactData);
       
       // Create update object with proper Expo Contacts structure
       const updatedContact: any = {
@@ -1371,9 +1593,7 @@ export default function RelationshipsScreen() {
         updatedContact.note = contactData[Contacts.Fields.Note];
       }
       
-      console.log('📱 Final update object:', updatedContact);
       await Contacts.updateContactAsync(updatedContact);
-      console.log('✅ Device contact updated successfully');
       return true;
     } catch (error) {
       console.error('❌ Error updating device contact:', error);
@@ -1483,7 +1703,6 @@ export default function RelationshipsScreen() {
         try {
           if (Platform.OS === 'web') {
             // Use Web Contacts API for web platform
-            console.log('🌐 Creating web contact with data:', contactData);
             const webContact = await createWebContact({
               name: fullName,
               phoneNumbers: contactData[Contacts.Fields.PhoneNumbers] || [],
@@ -1493,13 +1712,9 @@ export default function RelationshipsScreen() {
               addresses: contactData[Contacts.Fields.Addresses] || [],
               website: newContactWebsite.trim() || undefined,
             });
-            
-            console.log('✅ Web contact created successfully');
           } else {
             // Use Expo Contacts for mobile platforms
-            console.log('📱 Creating device contact with data:', contactData);
             const contactId = await Contacts.addContactAsync(contactData);
-            console.log('✅ Contact added to device contacts with ID:', contactId);
           }
         } catch (contactError) {
           console.error('❌ Error adding contact to device:', contactError);
@@ -1523,7 +1738,7 @@ export default function RelationshipsScreen() {
           // Continue with relationship creation even if device contact fails
         }
       } else {
-        console.log('⚠️ No permission to add contact to device');
+        // No permission to add contact to device
       }
 
       // Create a contact object for the relationship
@@ -1627,49 +1842,16 @@ export default function RelationshipsScreen() {
       return false;
     });
 
-    // Debug logging (can be removed after testing)
-    if (__DEV__) {
-      console.log('Debug - Total activities:', activities.length);
-      console.log('Debug - All activities:', activities.map(a => ({ 
-        type: a.type, 
-        contactName: (a as any).contactName, 
-        contactId: (a as any).contactId,
-        id: a.id 
-      })));
-      console.log('Debug - Selected relationship:', { 
-        contactName: selectedRelationship.contactName, 
-        contactId: selectedRelationship.contactId 
-      });
-      console.log('Debug - Contact activities before filter:', contactActivities.length);
-      console.log('Debug - Contact activities details:', contactActivities.map(a => ({ 
-        type: a.type, 
-        contactName: (a as any).contactName, 
-        contactId: (a as any).contactId,
-        id: a.id 
-      })));
-      console.log('Debug - Activity filter:', activityFilter);
-      console.log('Debug - Contact activities types:', contactActivities.map(a => a.type));
-    }
 
     // Apply type filter
     if (activityFilter === 'all') {
-      if (__DEV__) {
-        console.log('Debug - Returning all contact activities:', contactActivities.length);
-      }
       return contactActivities;
     }
     
     const filteredActivities = contactActivities.filter(activity => {
-      const matches = activity.type === activityFilter;
-      if (__DEV__) {
-        console.log(`Debug - Activity type: "${activity.type}", Filter: "${activityFilter}", Matches: ${matches}`);
-      }
-      return matches;
+      return activity.type === activityFilter;
     });
     
-    if (__DEV__) {
-      console.log('Debug - Filtered activities:', filteredActivities.length);
-    }
     return filteredActivities;
   };
 
@@ -1681,11 +1863,16 @@ export default function RelationshipsScreen() {
 
   const closeEditNoteModal = () => {
     setEditedNote('');
+    setNoteValidationErrors({});
     setShowEditNoteModal(false);
   };
 
   const saveNote = async () => {
     if (!selectedRelationship || !currentUser) return;
+    
+    if (!validateNoteForm()) {
+      return;
+    }
     
     try {
       await updateRelationship(selectedRelationship.id, { notes: editedNote });
@@ -1711,11 +1898,16 @@ export default function RelationshipsScreen() {
 
   const closeEditFamilyInfoModal = () => {
     setEditedFamilyInfo({ kids: '', siblings: '', spouse: '' });
+    setFamilyInfoValidationErrors({});
     setShowEditFamilyInfoModal(false);
   };
 
   const saveFamilyInfo = async () => {
     if (!selectedRelationship || !currentUser) return;
+    
+    if (!validateFamilyInfoForm()) {
+      return;
+    }
     
     try {
       await updateRelationship(selectedRelationship.id, { familyInfo: editedFamilyInfo });
@@ -2075,9 +2267,6 @@ export default function RelationshipsScreen() {
             const shouldOpenAbove = contactActivities.length === 0;
             setDropdownPosition(shouldOpenAbove ? 'above' : 'below');
             const newState = !showActivityDropdown;
-            if (__DEV__) {
-              console.log('Debug - Toggling dropdown to:', newState);
-            }
             setShowActivityDropdown(newState);
           }}
         >
@@ -2113,9 +2302,6 @@ export default function RelationshipsScreen() {
                     activityFilter === option.key && styles.dropdownItemSelected
                   ]}
                   onPress={() => {
-                    if (__DEV__) {
-                      console.log('Debug - Changing filter to:', option.key);
-                    }
                     setActivityFilter(option.key as any);
                     setShowActivityDropdown(false);
                   }}
@@ -2316,13 +2502,6 @@ export default function RelationshipsScreen() {
   );
 
   // Debug logging
-  useEffect(() => {
-    console.log('🔍 Debug Info:');
-    console.log('Current User:', currentUser ? `${currentUser.email} (${currentUser.uid})` : 'Not authenticated');
-    console.log('Is Loading Relationships:', isLoadingRelationships);
-    console.log('Relationships Count:', relationships.length);
-    console.log('Relationships Data:', relationships);
-  }, [currentUser, isLoadingRelationships, relationships]);
 
 
   // Show loading if user authentication or relationships are loading
@@ -2494,7 +2673,10 @@ export default function RelationshipsScreen() {
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Create New Contact</Text>
-            <TouchableOpacity onPress={() => setShowNewContactModal(false)}>
+            <TouchableOpacity onPress={() => {
+              setShowNewContactModal(false);
+              resetNewContactForm();
+            }}>
               <X size={24} color="#6B7280" />
             </TouchableOpacity>
           </View>
@@ -2506,160 +2688,238 @@ export default function RelationshipsScreen() {
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Name *</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, contactValidationErrors.contactName && styles.inputError]}
                   value={newContactName}
-                  onChangeText={setNewContactName}
+                  onChangeText={(text) => {
+                    setNewContactName(text);
+                    clearContactFieldError('contactName');
+                  }}
                   placeholder="Enter contact name"
                   placeholderTextColor="#9CA3AF"
                 />
+                {contactValidationErrors.contactName && (
+                  <Text style={styles.errorText}>{contactValidationErrors.contactName}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Phone Number</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, contactValidationErrors.contactPhone && styles.inputError]}
                   value={newContactPhone}
-                  onChangeText={setNewContactPhone}
+                  onChangeText={(text) => {
+                    setNewContactPhone(text);
+                    clearContactFieldError('contactPhone');
+                  }}
                   placeholder="Enter phone number"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="phone-pad"
                 />
+                {contactValidationErrors.contactPhone && (
+                  <Text style={styles.errorText}>{contactValidationErrors.contactPhone}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Email</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, contactValidationErrors.contactEmail && styles.inputError]}
                   value={newContactEmail}
-                  onChangeText={setNewContactEmail}
+                  onChangeText={(text) => {
+                    setNewContactEmail(text);
+                    clearContactFieldError('contactEmail');
+                  }}
                   placeholder="Enter email address"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="email-address"
                   autoCapitalize="none"
                 />
+                {contactValidationErrors.contactEmail && (
+                  <Text style={styles.errorText}>{contactValidationErrors.contactEmail}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Company</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, contactValidationErrors.contactCompany && styles.inputError]}
                   value={newContactCompany}
-                  onChangeText={setNewContactCompany}
+                  onChangeText={(text) => {
+                    setNewContactCompany(text);
+                    clearContactFieldError('contactCompany');
+                  }}
                   placeholder="Enter company name"
                   placeholderTextColor="#9CA3AF"
                 />
+                {contactValidationErrors.contactCompany && (
+                  <Text style={styles.errorText}>{contactValidationErrors.contactCompany}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Job Title</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, contactValidationErrors.contactJobTitle && styles.inputError]}
                   value={newContactJobTitle}
-                  onChangeText={setNewContactJobTitle}
+                  onChangeText={(text) => {
+                    setNewContactJobTitle(text);
+                    clearContactFieldError('contactJobTitle');
+                  }}
                   placeholder="Enter job title"
                   placeholderTextColor="#9CA3AF"
                 />
+                {contactValidationErrors.contactJobTitle && (
+                  <Text style={styles.errorText}>{contactValidationErrors.contactJobTitle}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Website</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, contactValidationErrors.contactWebsite && styles.inputError]}
                   value={newContactWebsite}
-                  onChangeText={setNewContactWebsite}
+                  onChangeText={(text) => {
+                    setNewContactWebsite(text);
+                    clearContactFieldError('contactWebsite');
+                  }}
                   placeholder="Enter website URL"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="url"
                   autoCapitalize="none"
                 />
+                {contactValidationErrors.contactWebsite && (
+                  <Text style={styles.errorText}>{contactValidationErrors.contactWebsite}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>LinkedIn</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, contactValidationErrors.contactLinkedin && styles.inputError]}
                   value={newContactLinkedin}
-                  onChangeText={setNewContactLinkedin}
+                  onChangeText={(text) => {
+                    setNewContactLinkedin(text);
+                    clearContactFieldError('contactLinkedin');
+                  }}
                   placeholder="Enter LinkedIn profile URL"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="url"
                   autoCapitalize="none"
                 />
+                {contactValidationErrors.contactLinkedin && (
+                  <Text style={styles.errorText}>{contactValidationErrors.contactLinkedin}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>X (Twitter)</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, contactValidationErrors.contactTwitter && styles.inputError]}
                   value={newContactTwitter}
-                  onChangeText={setNewContactTwitter}
+                  onChangeText={(text) => {
+                    setNewContactTwitter(text);
+                    clearContactFieldError('contactTwitter');
+                  }}
                   placeholder="Enter X/Twitter handle or URL"
                   placeholderTextColor="#9CA3AF"
                   autoCapitalize="none"
                 />
+                {contactValidationErrors.contactTwitter && (
+                  <Text style={styles.errorText}>{contactValidationErrors.contactTwitter}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Instagram</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, contactValidationErrors.contactInstagram && styles.inputError]}
                   value={newContactInstagram}
-                  onChangeText={setNewContactInstagram}
+                  onChangeText={(text) => {
+                    setNewContactInstagram(text);
+                    clearContactFieldError('contactInstagram');
+                  }}
                   placeholder="Enter Instagram handle or URL"
                   placeholderTextColor="#9CA3AF"
                   autoCapitalize="none"
                 />
+                {contactValidationErrors.contactInstagram && (
+                  <Text style={styles.errorText}>{contactValidationErrors.contactInstagram}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Facebook</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, contactValidationErrors.contactFacebook && styles.inputError]}
                   value={newContactFacebook}
-                  onChangeText={setNewContactFacebook}
+                  onChangeText={(text) => {
+                    setNewContactFacebook(text);
+                    clearContactFieldError('contactFacebook');
+                  }}
                   placeholder="Enter Facebook profile URL"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="url"
                   autoCapitalize="none"
                 />
+                {contactValidationErrors.contactFacebook && (
+                  <Text style={styles.errorText}>{contactValidationErrors.contactFacebook}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Address</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, contactValidationErrors.contactAddress && styles.inputError]}
                   value={newContactAddress}
-                  onChangeText={setNewContactAddress}
+                  onChangeText={(text) => {
+                    setNewContactAddress(text);
+                    clearContactFieldError('contactAddress');
+                  }}
                   placeholder="Enter address"
                   placeholderTextColor="#9CA3AF"
                   multiline
                   numberOfLines={2}
                 />
+                {contactValidationErrors.contactAddress && (
+                  <Text style={styles.errorText}>{contactValidationErrors.contactAddress}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Birthday</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, contactValidationErrors.contactBirthday && styles.inputError]}
                   value={newContactBirthday}
-                  onChangeText={setNewContactBirthday}
+                  onChangeText={(text) => {
+                    setNewContactBirthday(text);
+                    clearContactFieldError('contactBirthday');
+                  }}
                   placeholder="Enter birthday (MM/DD/YYYY)"
                   placeholderTextColor="#9CA3AF"
                 />
+                {contactValidationErrors.contactBirthday && (
+                  <Text style={styles.errorText}>{contactValidationErrors.contactBirthday}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Notes</Text>
                 <TextInput
-                  style={[styles.input, styles.textArea]}
+                  style={[styles.input, styles.textArea, contactValidationErrors.contactNotes && styles.inputError]}
                   value={newContactNotes}
-                  onChangeText={setNewContactNotes}
+                  onChangeText={(text) => {
+                    setNewContactNotes(text);
+                    clearContactFieldError('contactNotes');
+                  }}
                   placeholder="Enter additional notes"
                   placeholderTextColor="#9CA3AF"
                   multiline
                   numberOfLines={3}
                   textAlignVertical="top"
                 />
+                {contactValidationErrors.contactNotes && (
+                  <Text style={styles.errorText}>{contactValidationErrors.contactNotes}</Text>
+                )}
               </View>
 
               <TouchableOpacity 
@@ -2681,7 +2941,6 @@ export default function RelationshipsScreen() {
         relationship={null} // null means create mode
         initialContact={selectedContact} // Pass the selected contact
         onRelationshipSaved={(relationship) => {
-          console.log('New relationship created:', relationship);
           setShowAddModal(false);
           setSelectedContact(null);
           showAlert('Success', 'Relationship created successfully!');
@@ -2697,7 +2956,6 @@ export default function RelationshipsScreen() {
         }}
         relationship={relationshipToEdit} // existing relationship means edit mode
         onRelationshipSaved={(updatedRelationship) => {
-          console.log('Relationship updated:', updatedRelationship);
           setShowEditModal(false);
           setRelationshipToEdit(null);
           showAlert('Success', 'Relationship updated successfully!');
@@ -3191,14 +3449,20 @@ export default function RelationshipsScreen() {
             <View style={styles.editModalContent}>
               <Text style={styles.editNoteLabel}>Note for {selectedRelationship?.contactName}</Text>
               <TextInput
-                style={styles.editNoteInput}
+                style={[styles.editNoteInput, noteValidationErrors.note && styles.inputError]}
                 value={editedNote}
-                onChangeText={setEditedNote}
+                onChangeText={(text) => {
+                  setEditedNote(text);
+                  clearNoteFieldError('note');
+                }}
                 placeholder="Add your notes here..."
                 placeholderTextColor="#9CA3AF"
                 multiline
                 textAlignVertical="top"
               />
+              {noteValidationErrors.note && (
+                <Text style={styles.errorText}>{noteValidationErrors.note}</Text>
+              )}
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -3235,34 +3499,52 @@ export default function RelationshipsScreen() {
                 <View style={styles.familyInfoField}>
                   <Text style={styles.familyInfoFieldLabel}>👶 Kids</Text>
                   <TextInput
-                    style={styles.familyInfoFieldInput}
+                    style={[styles.familyInfoFieldInput, familyInfoValidationErrors.familyKids && styles.inputError]}
                     value={editedFamilyInfo.kids}
-                    onChangeText={(text) => setEditedFamilyInfo(prev => ({ ...prev, kids: text }))}
+                    onChangeText={(text) => {
+                      setEditedFamilyInfo(prev => ({ ...prev, kids: text }));
+                      clearFamilyInfoFieldError('familyKids');
+                    }}
                     placeholder="e.g., 2 kids, ages 5 and 8"
                     placeholderTextColor="#9CA3AF"
                   />
+                  {familyInfoValidationErrors.familyKids && (
+                    <Text style={styles.errorText}>{familyInfoValidationErrors.familyKids}</Text>
+                  )}
                 </View>
                 
                 <View style={styles.familyInfoField}>
                   <Text style={styles.familyInfoFieldLabel}>👨‍👩‍👧‍👦 Siblings</Text>
                   <TextInput
-                    style={styles.familyInfoFieldInput}
+                    style={[styles.familyInfoFieldInput, familyInfoValidationErrors.familySiblings && styles.inputError]}
                     value={editedFamilyInfo.siblings}
-                    onChangeText={(text) => setEditedFamilyInfo(prev => ({ ...prev, siblings: text }))}
+                    onChangeText={(text) => {
+                      setEditedFamilyInfo(prev => ({ ...prev, siblings: text }));
+                      clearFamilyInfoFieldError('familySiblings');
+                    }}
                     placeholder="e.g., 1 brother, 2 sisters"
                     placeholderTextColor="#9CA3AF"
                   />
+                  {familyInfoValidationErrors.familySiblings && (
+                    <Text style={styles.errorText}>{familyInfoValidationErrors.familySiblings}</Text>
+                  )}
                 </View>
                 
                 <View style={styles.familyInfoField}>
                   <Text style={styles.familyInfoFieldLabel}>💍 Spouse</Text>
                   <TextInput
-                    style={styles.familyInfoFieldInput}
+                    style={[styles.familyInfoFieldInput, familyInfoValidationErrors.familySpouse && styles.inputError]}
                     value={editedFamilyInfo.spouse}
-                    onChangeText={(text) => setEditedFamilyInfo(prev => ({ ...prev, spouse: text }))}
+                    onChangeText={(text) => {
+                      setEditedFamilyInfo(prev => ({ ...prev, spouse: text }));
+                      clearFamilyInfoFieldError('familySpouse');
+                    }}
                     placeholder="e.g., Married to Sarah"
                     placeholderTextColor="#9CA3AF"
                   />
+                  {familyInfoValidationErrors.familySpouse && (
+                    <Text style={styles.errorText}>{familyInfoValidationErrors.familySpouse}</Text>
+                  )}
                 </View>
               </View>
             </ScrollView>

@@ -32,17 +32,13 @@ export const useRelationships = () => {
 
   const loadRelationships = useCallback(async () => {
     if (!user?.uid) {
-      console.log('❌ No user UID available for loading relationships');
       return;
     }
     
     try {
-      console.log('🔄 Loading relationships for user:', user.uid);
       setIsLoading(true);
       setError(null);
       const loadedRelationships = await relationshipsService.getRelationships(user.uid);
-      console.log('✅ Loaded relationships:', loadedRelationships.length, 'items');
-      console.log('📊 Relationships data:', loadedRelationships);
       setRelationships(loadedRelationships);
     } catch (err) {
       console.error('❌ Error loading relationships:', err);

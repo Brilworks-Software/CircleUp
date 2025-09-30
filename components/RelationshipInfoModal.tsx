@@ -314,7 +314,13 @@ export default function RelationshipInfoModal({
     if (phoneNumber) {
       // Remove any non-numeric characters
       const cleanNumber = phoneNumber.replace(/\D/g, '');
-      Linking.openURL(`whatsapp://send?phone=${cleanNumber}`);
+      
+      // Use different URL schemes for web vs mobile
+      const url = Platform.OS === 'web' 
+        ? `https://wa.me/${cleanNumber}`
+        : `whatsapp://send?phone=${cleanNumber}`;
+      
+      Linking.openURL(url);
     } else {
       showAlert('No Phone Number', 'Phone number not available for this contact');
     }

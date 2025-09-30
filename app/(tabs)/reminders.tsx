@@ -63,8 +63,14 @@ export default function RemindersScreen() {
   // Add Reminder Modal State
   const [showAddReminderModal, setShowAddReminderModal] = useState(false);
   const [reminderNote, setReminderNote] = useState('');
-  const [reminderDate, setReminderDate] = useState(new Date());
-  const [reminderTime, setReminderTime] = useState(new Date());
+  const [reminderDate, setReminderDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getTime() + 30 * 60 * 1000); // Current time + 30 minutes
+  });
+  const [reminderTime, setReminderTime] = useState(() => {
+    const now = new Date();
+    return new Date(now.getTime() + 30 * 60 * 1000); // Current time + 30 minutes
+  });
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [reminderContactName, setReminderContactName] = useState('');
@@ -134,9 +140,6 @@ export default function RemindersScreen() {
   }, []);
 
   // Debug tab counts changes
-  useEffect(() => {
-    console.log('📊 Tab counts updated:', tabCounts, 'isLoadingTabCounts:', isLoadingTabCounts);
-  }, [tabCounts, isLoadingTabCounts]);
 
   const filterOptions = [
     { key: 'all', label: 'All Reminders' },
@@ -210,7 +213,6 @@ export default function RemindersScreen() {
 
 
   const formatDate = (dateString: string): string => {
-    console.log('formatDate input:', dateString, 'type:', typeof dateString);
     const date = new Date(dateString);
     
     // Check if the date is valid
@@ -227,17 +229,6 @@ export default function RemindersScreen() {
     
     // Calculate difference in days
     const diffInDays = Math.floor((todayUTC.getTime() - targetDateUTC.getTime()) / (1000 * 60 * 60 * 24));
-    
-    console.log('Date comparison (UTC):', {
-      input: dateString,
-      parsedDate: date.toISOString(),
-      todayUTC: todayUTC.toISOString(),
-      targetDateUTC: targetDateUTC.toISOString(),
-      diffInDays,
-      now: now.toISOString(),
-      nowLocal: now.toLocaleDateString(),
-      dateLocal: date.toLocaleDateString()
-    });
 
     if (diffInDays === 0) {
       // Show time for today's reminders
@@ -390,14 +381,6 @@ export default function RemindersScreen() {
     }
     
     try {
-      console.log('🔄 Updating reminder:', {
-        reminderId: editingReminder.id,
-        oldDate: editingReminder.date,
-        newDate: combinedDateTime.toISOString(),
-        notes: editReminderNote.trim(),
-        type: editReminderType
-      });
-      
       await updateReminder({
         reminderId: editingReminder.id,
         updates: {
@@ -408,7 +391,6 @@ export default function RemindersScreen() {
         }
       });
       
-      console.log('✅ Reminder updated successfully, notification should be rescheduled');
       
       setShowEditReminderModal(false);
       setEditingReminder(null);
@@ -450,8 +432,14 @@ export default function RemindersScreen() {
     setShowAddReminderModal(true);
     // Reset form with default values
     setReminderNote('');
-    setReminderDate(new Date());
-    setReminderTime(new Date());
+    setReminderDate(() => {
+      const now = new Date();
+      return new Date(now.getTime() + 30 * 60 * 1000); // Current time + 30 minutes
+    });
+    setReminderTime(() => {
+      const now = new Date();
+      return new Date(now.getTime() + 30 * 60 * 1000); // Current time + 30 minutes
+    });
     setReminderContactName('');
     setReminderType('follow_up');
     setReminderFrequency('once');
@@ -486,15 +474,6 @@ export default function RemindersScreen() {
     
     try {
       // Create a new reminder
-      console.log('🔔 Creating reminder with data:', {
-        contactName: selectedContact.contactName,
-        type: reminderType,
-        date: combinedDateTime.toISOString(),
-        frequency: reminderFrequency,
-        tags: selectedContact.tags || [],
-        notes: reminderNote.trim(),
-      });
-      
       await createReminder({
         contactName: selectedContact.contactName,
         contactId: selectedContact.contactId,
@@ -506,7 +485,6 @@ export default function RemindersScreen() {
         notes: reminderNote.trim(),
       });
       
-      console.log('✅ Reminder created successfully');
       
       // Close modal and show success
       setShowAddReminderModal(false);
@@ -668,7 +646,11 @@ export default function RemindersScreen() {
     
     if (phoneNumber) {
       const cleanPhoneNumber = phoneNumber.replace(/\D/g, ''); // Remove non-digits
-      const url = `whatsapp://send?phone=${cleanPhoneNumber}`;
+      
+      // Use different URL schemes for web vs mobile
+      const url = Platform.OS === 'web' 
+        ? `https://wa.me/${cleanPhoneNumber}`
+        : `whatsapp://send?phone=${cleanPhoneNumber}`;
       
       try {
         const supported = await Linking.canOpenURL(url);
@@ -676,7 +658,7 @@ export default function RemindersScreen() {
           await Linking.openURL(url);
           setShowContactActions(false);
         } else {
-          Alert.alert('Error', 'WhatsApp is not installed');
+          Alert.alert('Error', Platform.OS === 'web' ? 'Unable to open WhatsApp Web' : 'WhatsApp is not installed');
         }
       } catch (error) {
         console.error('Error opening WhatsApp:', error);
@@ -784,7 +766,6 @@ export default function RemindersScreen() {
   const getTabCount = (tab: ReminderTab): number => {
     // Use tabCounts from the hook for accurate counts
     const count = tabCounts[tab] || 0;
-    console.log(`📊 Tab count for ${tab}:`, count, 'tabCounts:', tabCounts, 'isLoadingTabCounts:', isLoadingTabCounts);
     return count;
   };
 
@@ -1214,14 +1195,6 @@ export default function RemindersScreen() {
         rel.contactName.toLowerCase().trim() === selectedReminder.contactName.toLowerCase().trim()
       );
     }
-    
-    console.log('Debug Relationship Search:', {
-      selectedReminderName: selectedReminder.contactName,
-      totalRelationships: relationships.length,
-      relationshipNames: relationships.map(r => r.contactName),
-      foundRelationship: relationship ? 'Yes' : 'No',
-      relationships: relationships
-    });
 
     // Get contact data from relationship document, fallback to device contacts
     const relationshipPhone = relationship?.contactData?.phoneNumbers?.[0]?.number;
@@ -1235,19 +1208,6 @@ export default function RemindersScreen() {
     const hasEmail = relationshipEmail || (deviceContact?.emails && deviceContact.emails.length > 0);
     const phoneNumber = relationshipPhone || (deviceContact?.phoneNumbers?.[0]?.number || '');
     const email = relationshipEmail || (deviceContact?.emails?.[0]?.email || '');
-    
-    // Debug logging
-    console.log('Debug Contact Info:', {
-      selectedReminder: selectedReminder?.contactName,
-      relationship: relationship ? 'Found' : 'Not found',
-      relationshipPhone,
-      relationshipEmail,
-      deviceContact: deviceContact ? 'Found' : 'Not found',
-      hasPhone,
-      hasEmail,
-      phoneNumber,
-      email
-    });
 
     return (
       <Modal visible={showContactActions} animationType="slide" transparent>

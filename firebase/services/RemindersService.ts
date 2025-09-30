@@ -72,21 +72,12 @@ class RemindersService {
    */
   async testConnection(): Promise<boolean> {
     try {
-      console.log('🔍 Testing Firebase connection...');
-      console.log('🔍 Firebase app:', db.app);
-      console.log('🔍 Firebase project ID:', db.app.options.projectId);
-      console.log('🔍 Firebase app name:', db.app.name);
-      console.log('🔍 Firebase app options:', db.app.options);
-      
       // Just test if we can create a collection reference (no actual write)
       const testCollection = collection(db, 'test');
-      console.log('🔍 Collection reference created successfully');
       
       // Test if we can create a document reference
       const testDoc = doc(testCollection, 'test-doc');
-      console.log('🔍 Document reference created successfully');
       
-      console.log('✅ Firebase connection test successful (basic connectivity)');
       return true;
     } catch (error) {
       console.error('❌ Firebase connection test failed:', error);
@@ -122,8 +113,6 @@ class RemindersService {
    */
   async testFirebaseWrite(): Promise<boolean> {
     try {
-      console.log('🧪 Testing Firebase write operation...');
-      
       const testCollection = collection(db, 'test');
       const testDoc = doc(testCollection, `test_${Date.now()}`);
       
@@ -133,11 +122,8 @@ class RemindersService {
         message: 'Firebase connectivity test'
       };
       
-      console.log('🧪 Test data:', testData);
-      
       await setDoc(testDoc, testData);
       
-      console.log('✅ Firebase write test successful');
       return true;
     } catch (error) {
       console.error('❌ Firebase write test failed:', error);
@@ -150,8 +136,6 @@ class RemindersService {
    */
   async rescheduleAllNotifications(userId: string): Promise<void> {
     try {
-      console.log('🔔 Rescheduling notifications for all reminders...');
-      
       const reminders = await this.getReminders(userId);
       const notificationService = NotificationService.getInstance();
       
@@ -180,15 +164,13 @@ class RemindersService {
             );
             
             if (notificationId) {
-              console.log('✅ Rescheduled notification for reminder:', reminder.id);
+              // Notification rescheduled successfully
             }
           } catch (error) {
             console.error('❌ Error rescheduling notification for reminder:', reminder.id, error);
           }
         }
       }
-      
-      console.log('✅ Finished rescheduling notifications');
     } catch (error) {
       console.error('❌ Error rescheduling all notifications:', error);
     }
@@ -229,17 +211,9 @@ class RemindersService {
         const isOverdue = this.isOverdue(dateString);
         const isThisWeek = this.isThisWeek(dateString);
         
-        // Debug logging for new reminders
+        // Categorize reminders
         if (data.contactName) {
-          console.log('📅 Reminder categorization:', {
-            contactName: data.contactName,
-            date: dateString,
-            reminderDate: new Date(dateString),
-            now: new Date(),
-            isOverdue,
-            isThisWeek,
-            category: isOverdue ? 'missed' : isThisWeek ? 'thisWeek' : 'upcoming'
-          });
+          // Reminder categorization logic
         }
         
         reminders.push({
@@ -305,10 +279,6 @@ class RemindersService {
    */
   async createReminder(userId: string, reminderData: CreateReminderData): Promise<Reminder> {
     try {
-      console.log('🔔 RemindersService: Creating reminder for user:', userId);
-      console.log('🔔 RemindersService: Reminder data:', reminderData);
-      console.log('🔔 RemindersService: Firebase diagnostics:', this.getFirebaseDiagnostics());
-      
       // Generate a unique document ID
       const docId = `reminder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
@@ -318,15 +288,9 @@ class RemindersService {
         isOverdue: this.isOverdue(reminderData.date),
         isThisWeek: this.isThisWeek(reminderData.date),
       };
-
-      console.log('🔔 RemindersService: Created reminder object locally:', reminder);
       
       // Try to save to Firebase with a very short timeout
       try {
-        console.log('🔔 RemindersService: Attempting to save to Firebase...');
-        console.log('🔔 RemindersService: User ID:', userId);
-        console.log('🔔 RemindersService: Document ID:', docId);
-        
         const remindersCollection = collection(db, this.COLLECTION_NAME);
         const docRef = doc(remindersCollection, docId);
         
@@ -338,14 +302,9 @@ class RemindersService {
           updatedAt: serverTimestamp(),
         };
 
-        console.log('🔔 RemindersService: Document data to save:', docData);
-
-        
-
         const setDocPromise = setDoc(docRef, docData);
         // await Promise.race([setDocPromise, timeoutPromise]);
         
-        console.log('✅ RemindersService: Successfully saved to Firebase');
       } catch (firebaseError) {
         console.error('❌ RemindersService: Firebase save failed:', firebaseError);
         console.error('❌ RemindersService: Error details:', {
@@ -355,11 +314,8 @@ class RemindersService {
         // Continue with local reminder even if Firebase fails
       }
       
-      console.log('✅ RemindersService: Reminder created successfully (local):', reminder);
-      
       // Schedule local notification for the reminder
       try {
-        console.log('🔔 Scheduling notification for reminder:', reminder.id);
         const notificationService = NotificationService.getInstance();
         
         // Initialize notification service if not already done
@@ -381,9 +337,7 @@ class RemindersService {
           }
         );
         
-        if (notificationId) {
-          console.log('✅ Notification scheduled successfully with ID:', notificationId);
-        } else {
+        if (!notificationId) {
           console.warn('⚠️ Failed to schedule notification for reminder:', reminder.id);
         }
       } catch (notificationError) {
@@ -428,7 +382,6 @@ class RemindersService {
       // Reschedule notification if any relevant fields were updated
       if (updates.date || updates.contactName || updates.notes || updates.type) {
         try {
-          console.log('🔔 Rescheduling notification for updated reminder:', reminderId, 'updates:', updates);
           const notificationService = NotificationService.getInstance();
           
           // Initialize notification service if needed
@@ -441,7 +394,6 @@ class RemindersService {
           // Cancel old notification first (this might fail if notification doesn't exist, which is OK)
           try {
             const cancelResult = await notificationService.cancelNotification(reminderId);
-            console.log('✅ Cancelled old notification for reminder:', reminderId, 'result:', cancelResult);
           } catch (cancelError) {
             console.warn('⚠️ Failed to cancel old notification (this might be normal if notification doesn\'t exist):', cancelError instanceof Error ? cancelError.message : String(cancelError));
           }
@@ -477,19 +429,8 @@ class RemindersService {
               return true; // Don't fail the update operation
             }
             
-            console.log('📅 Reminder date check:', {
-              originalDate: reminderData.date,
-              originalDateType: typeof reminderData.date,
-              isTimestamp: reminderData.date && typeof reminderData.date === 'object' && reminderData.date.seconds,
-              parsedDate: reminderDate.toISOString(),
-              now: new Date().toISOString(),
-              isFuture: reminderDate > new Date(),
-              dateValid: !isNaN(reminderDate.getTime())
-            });
-            
             // Only schedule if the reminder is in the future
             if (reminderDate > new Date()) {
-              console.log('⏰ Scheduling new notification for future reminder...');
               try {
                 // Validate the date before scheduling
                 if (isNaN(reminderDate.getTime())) {
@@ -500,16 +441,8 @@ class RemindersService {
                 // Ensure the date is valid and in the future
                 const now = new Date();
                 if (reminderDate <= now) {
-                  console.log('ℹ️ Reminder date is not in the future, skipping notification:', reminderDate.toISOString());
                   return true;
                 }
-                
-                console.log('📅 Validating date for notification:', {
-                  reminderDate: reminderDate.toISOString(),
-                  reminderDateValid: !isNaN(reminderDate.getTime()),
-                  isFuture: reminderDate > now,
-                  timeUntilReminder: reminderDate.getTime() - now.getTime()
-                });
                 
                 const notificationId = await notificationService.scheduleNotificationForDateTime(
                   reminderId,
@@ -525,9 +458,7 @@ class RemindersService {
                   }
                 );
                 
-                if (notificationId) {
-                  console.log('✅ Notification rescheduled successfully for reminder:', reminderId, 'at:', reminderDate.toISOString(), 'notificationId:', notificationId);
-                } else {
+                if (!notificationId) {
                   console.warn('⚠️ Failed to reschedule notification for reminder:', reminderId, '- notificationId is null');
                 }
               } catch (scheduleError) {
@@ -540,7 +471,7 @@ class RemindersService {
                 });
               }
             } else {
-              console.log('ℹ️ Reminder is in the past, not scheduling notification:', reminderId, 'date:', reminderDate.toISOString());
+              // Reminder is in the past, not scheduling notification
             }
           } else {
             console.error('❌ Reminder not found after update:', reminderId);
@@ -556,7 +487,7 @@ class RemindersService {
           // Don't fail the update operation if notification rescheduling fails
         }
       } else {
-        console.log('ℹ️ No relevant fields updated, skipping notification reschedule for reminder:', reminderId);
+        // No relevant fields updated, skipping notification reschedule
       }
       
       return true;
@@ -585,7 +516,6 @@ class RemindersService {
       try {
         const notificationService = NotificationService.getInstance();
         await notificationService.cancelNotification(reminderId);
-        console.log('✅ Cancelled notification for reminder:', reminderId);
       } catch (notificationError) {
         console.error('❌ Error cancelling notification:', notificationError);
         // Don't fail the delete operation if notification cancellation fails
@@ -853,14 +783,6 @@ class RemindersService {
       endOfWeek.setHours(23, 59, 59, 999);
       
       const isThisWeek = reminderDate >= startOfWeek && reminderDate <= endOfWeek;
-      
-      console.log('📅 Week calculation:', {
-        reminderDate: reminderDate.toISOString(),
-        now: now.toISOString(),
-        startOfWeek: startOfWeek.toISOString(),
-        endOfWeek: endOfWeek.toISOString(),
-        isThisWeek
-      });
       
       return isThisWeek;
     } catch (error) {
