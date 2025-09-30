@@ -52,13 +52,8 @@ export const useReminders = () => {
     if (!user?.uid) throw new Error('User not authenticated');
     
     try {
-      console.log('🔔 useReminders: Creating reminder with data:', reminderData);
-      console.log('🔔 useReminders: User ID:', user.uid);
-      
       setError(null);
       const newReminder = await remindersService.createReminder(user.uid, reminderData);
-      
-      console.log('✅ useReminders: Reminder created successfully:', newReminder);
       
       // Real-time listener will automatically update the state
       return newReminder;

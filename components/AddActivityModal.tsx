@@ -43,19 +43,6 @@ export default function AddActivityModal({
   const { relationships, createRelationship } = useRelationships();
   const { currentUser } = useAuth();
   
-  // Debug relationships loading
-  console.log('🔗 Relationships loaded:', relationships.length);
-  console.log('🔗 Relationships data:', relationships);
-  
-  // Monitor relationships changes
-  useEffect(() => {
-    console.log('🔄 Relationships updated:', relationships.length);
-    if (relationships.length > 0) {
-      console.log('✅ Relationships available for search');
-    } else {
-      console.log('⚠️ No relationships available');
-    }
-  }, [relationships]);
 
   // Load device contacts on mobile when modal opens
   useEffect(() => {
@@ -73,12 +60,10 @@ export default function AddActivityModal({
       );
       
       if (existingRelationship) {
-        console.log('✅ Relationship already exists for:', contactName);
         return existingRelationship;
       }
       
       // Create new relationship
-      console.log('🔄 Creating new relationship for:', contactName);
       
       // If we have device contact data, use it to populate the relationship
       const contactData = deviceContact ? {
@@ -128,7 +113,6 @@ export default function AddActivityModal({
         contactData,
       });
       
-      console.log('✅ New relationship created for:', contactName);
       return newRelationship;
     } catch (error) {
       console.error('❌ Error creating relationship for:', contactName, error);
@@ -188,14 +172,20 @@ export default function AddActivityModal({
   const [interactionType, setInteractionType] = useState<
     'call' | 'text' | 'email' | 'inPerson'
   >('call');
-  const [interactionDate, setInteractionDate] = useState(new Date());
+  const [interactionDate, setInteractionDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getTime() - 30 * 60 * 1000); // Current time - 30 minutes
+  });
   const [interactionNotes, setInteractionNotes] = useState('');
   const [interactionDuration, setInteractionDuration] = useState('');
   const [interactionLocation, setInteractionLocation] = useState('');
 
   // Reminder activity states
   const [activityReminderTitle, setActivityReminderTitle] = useState('');
-  const [activityReminderDate, setActivityReminderDate] = useState(new Date());
+  const [activityReminderDate, setActivityReminderDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getTime() + 30 * 60 * 1000); // Current time + 30 minutes
+  });
   const [activityReminderType, setActivityReminderType] = useState('follow_up');
   const [activityReminderFrequency, setActivityReminderFrequency] = useState<
     | 'once'
@@ -270,12 +260,18 @@ export default function AddActivityModal({
     setShowContactSearch(false);
     setFilteredContacts([]);
     setInteractionType('call');
-    setInteractionDate(new Date());
+    setInteractionDate(() => {
+      const now = new Date();
+      return new Date(now.getTime() - 30 * 60 * 1000); // Current time - 30 minutes
+    });
     setInteractionNotes('');
     setInteractionDuration('');
     setInteractionLocation('');
     setActivityReminderTitle('');
-    setActivityReminderDate(new Date());
+    setActivityReminderDate(() => {
+      const now = new Date();
+      return new Date(now.getTime() + 30 * 60 * 1000); // Current time + 30 minutes
+    });
     setActivityReminderType('follow_up');
     setActivityReminderFrequency('month');
     setActivityReminderNotes('');
@@ -688,7 +684,6 @@ export default function AddActivityModal({
     if (!isContactProvided && currentContactName.trim()) {
       try {
         await ensureRelationshipExists(currentContactName.trim());
-        console.log('✅ Relationship ensured for manually entered contact:', currentContactName);
       } catch (error) {
         console.error('❌ Error ensuring relationship for manual entry:', error);
         // Continue with activity creation even if relationship creation fails
@@ -765,10 +760,8 @@ export default function AddActivityModal({
           fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers, Contacts.Fields.Emails],
         });
         setDeviceContacts(data);
-        console.log('📱 Device contacts loaded:', data.length);
       } else {
         setHasContactPermission(false);
-        console.log('❌ Contact permission denied');
       }
     } catch (error) {
       console.error('Error loading device contacts:', error);
@@ -779,7 +772,6 @@ export default function AddActivityModal({
 
   // Direct contact search functions
   const handleContactSearch = (query: string) => {
-    console.log('🔍 Searching for:', query);
     setContactSearchQuery(query);
     
     if (query.trim()) {
@@ -787,8 +779,6 @@ export default function AddActivityModal({
       
       if (Platform.OS === 'web') {
         // Web: Use relationship data
-        console.log('🌐 Web platform - using relationships');
-        console.log('📊 Total relationships available:', relationships.length);
         filtered = relationships
           .filter(rel => 
             rel.contactName.toLowerCase().includes(query.toLowerCase())
@@ -800,8 +790,6 @@ export default function AddActivityModal({
           .slice(0, 5);
       } else {
         // Mobile: Use device contacts
-        console.log('📱 Mobile platform - using device contacts');
-        console.log('📊 Device contacts available:', deviceContacts.length);
         filtered = deviceContacts
           .filter(contact => 
             contact.name?.toLowerCase().includes(query.toLowerCase())
@@ -813,8 +801,6 @@ export default function AddActivityModal({
           .slice(0, 5);
       }
       
-      console.log('📋 Filtered contacts:', filtered);
-      console.log('📋 Filtered contacts count:', filtered.length);
       setFilteredContacts(filtered);
       setShowContactSearch(true);
     } else {
@@ -824,11 +810,9 @@ export default function AddActivityModal({
   };
 
   const handleDirectContactSelect = async (contact: { id: string; name: string }) => {
-    console.log('🎯 Contact selected:', contact);
     setSelectedContact(contact);
     setShowContactSearch(false);
     setContactSearchQuery(contact.name);
-    console.log('✅ Contact search closed and contact set');
     
     // Find the device contact if this is from device contacts
     const deviceContact = Platform.OS !== 'web' 
@@ -838,7 +822,6 @@ export default function AddActivityModal({
     // Ensure relationship exists for the contact
     try {
       await ensureRelationshipExists(contact.name, deviceContact);
-      console.log('✅ Relationship ensured for:', contact.name);
     } catch (error) {
       console.error('❌ Error ensuring relationship:', error);
       Alert.alert('Error', 'Failed to create relationship for this contact');
@@ -993,7 +976,7 @@ export default function AddActivityModal({
                   </View> */}
 
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Content *</Text>
+                    <Text style={styles.inputLabel}>Note *</Text>
                     <TextInput
                       style={[
                         styles.activityTextArea,

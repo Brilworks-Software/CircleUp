@@ -111,6 +111,10 @@ export default function CreateEditRelationshipModal({
     siblings: '',
     spouse: '',
   });
+  useEffect(()=>{
+    console.log(initialContact);
+    
+  },[])
 
   // Contact data states
   const [contactPhone, setContactPhone] = useState('');
@@ -315,6 +319,77 @@ export default function CreateEditRelationshipModal({
     return nextDate.toISOString();
   };
 
+  // Validation helper functions
+  const validateEmail = (email: string): boolean => {
+    if (!email) return true; // Empty email is valid (optional field)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validatePhone = (phone: string): boolean => {
+    if (!phone) return true; // Empty phone is valid (optional field)
+    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+    const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
+    return phoneRegex.test(cleanPhone);
+  };
+
+  const validateURL = (url: string): boolean => {
+    if (!url) return true; // Empty URL is valid (optional field)
+    
+    // Clean the URL
+    let cleanUrl = url.trim();
+    
+    // Add protocol if missing
+    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+      cleanUrl = `https://${cleanUrl}`;
+    }
+    
+    try {
+      const urlObj = new URL(cleanUrl);
+      
+      // Check if it's a valid protocol
+      if (!['http:', 'https:'].includes(urlObj.protocol)) {
+        return false;
+      }
+      
+      // Check if hostname is valid (not empty and has at least one dot for domain)
+      if (!urlObj.hostname || !urlObj.hostname.includes('.')) {
+        return false;
+      }
+      
+      // Check for valid domain structure
+      const domainParts = urlObj.hostname.split('.');
+      if (domainParts.length < 2) {
+        return false;
+      }
+      
+      // Check that each part of the domain is not empty
+      for (const part of domainParts) {
+        if (!part || part.length === 0) {
+          return false;
+        }
+      }
+      
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const validateBirthday = (birthday: string): boolean => {
+    if (!birthday) return true; // Empty birthday is valid (optional field)
+    const dateRegex = /^(0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01])\/\d{4}$/;
+    if (!dateRegex.test(birthday)) return false;
+    
+    const [month, day, year] = birthday.split('/').map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.getFullYear() === year && 
+           date.getMonth() === month - 1 && 
+           date.getDate() === day &&
+           year >= 1900 && 
+           year <= new Date().getFullYear();
+  };
+
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
 
@@ -334,6 +409,112 @@ export default function CreateEditRelationshipModal({
           errors.customDate = 'Please enter a valid date';
         }
       }
+    }
+
+    // Validate contact information fields
+    if (contactEmail && !validateEmail(contactEmail)) {
+      errors.contactEmail = 'Please enter a valid email address';
+    }
+
+    if (contactPhone && !validatePhone(contactPhone)) {
+      errors.contactPhone = 'Please enter a valid phone number';
+    }
+
+    if (contactWebsite && !validateURL(contactWebsite)) {
+      errors.contactWebsite = 'Please enter a valid website URL (e.g., https://example.com)';
+    }
+
+    if (contactLinkedin && !validateURL(contactLinkedin)) {
+      errors.contactLinkedin = 'Please enter a valid LinkedIn URL (e.g., https://linkedin.com/in/username)';
+    }
+
+    if (contactTwitter && contactTwitter.trim()) {
+      // Twitter can be either a handle (@username) or URL
+      const isHandle = contactTwitter.startsWith('@');
+      const isURL = contactTwitter.startsWith('http') || contactTwitter.includes('.');
+      
+      if (!isHandle && !isURL) {
+        errors.contactTwitter = 'Please enter a valid Twitter handle (@username) or URL';
+      } else if (isURL && !validateURL(contactTwitter)) {
+        errors.contactTwitter = 'Please enter a valid Twitter URL (e.g., https://twitter.com/username)';
+      } else if (isHandle) {
+        // Validate handle format
+        const handleRegex = /^@[a-zA-Z0-9_]{1,15}$/;
+        if (!handleRegex.test(contactTwitter)) {
+          errors.contactTwitter = 'Please enter a valid Twitter handle (@username, 1-15 characters, letters, numbers, and underscores only)';
+        }
+      }
+    }
+
+    if (contactInstagram && contactInstagram.trim()) {
+      // Instagram can be either a handle (@username) or URL
+      const isHandle = contactInstagram.startsWith('@');
+      const isURL = contactInstagram.startsWith('http') || contactInstagram.includes('.');
+      
+      if (!isHandle && !isURL) {
+        errors.contactInstagram = 'Please enter a valid Instagram handle (@username) or URL';
+      } else if (isURL && !validateURL(contactInstagram)) {
+        errors.contactInstagram = 'Please enter a valid Instagram URL (e.g., https://instagram.com/username)';
+      } else if (isHandle) {
+        // Validate handle format
+        const handleRegex = /^@[a-zA-Z0-9._]{1,30}$/;
+        if (!handleRegex.test(contactInstagram)) {
+          errors.contactInstagram = 'Please enter a valid Instagram handle (@username, 1-30 characters, letters, numbers, dots, and underscores only)';
+        }
+      }
+    }
+
+    if (contactFacebook && !validateURL(contactFacebook)) {
+      errors.contactFacebook = 'Please enter a valid Facebook URL (e.g., https://facebook.com/username)';
+    }
+
+    if (contactBirthday && !validateBirthday(contactBirthday)) {
+      errors.contactBirthday = 'Please enter a valid birthday (MM/DD/YYYY)';
+    }
+
+    // Validate company and job title content
+    if (contactCompany && contactCompany.trim()) {
+      if (contactCompany.length > 100) {
+        errors.contactCompany = 'Company name must be 100 characters or less';
+      } else if (contactCompany.trim().length < 2) {
+        errors.contactCompany = 'Company name must be at least 2 characters long';
+      } else if (!/^[a-zA-Z0-9\s\-&.,'()]+$/.test(contactCompany.trim())) {
+        errors.contactCompany = 'Company name contains invalid characters';
+      }
+    }
+
+    if (contactJobTitle && contactJobTitle.trim()) {
+      if (contactJobTitle.length > 100) {
+        errors.contactJobTitle = 'Job title must be 100 characters or less';
+      } else if (contactJobTitle.trim().length < 2) {
+        errors.contactJobTitle = 'Job title must be at least 2 characters long';
+      } else if (!/^[a-zA-Z0-9\s\-&.,'()]+$/.test(contactJobTitle.trim())) {
+        errors.contactJobTitle = 'Job title contains invalid characters';
+      }
+    }
+
+    if (contactAddress && contactAddress.length > 200) {
+      errors.contactAddress = 'Address must be 200 characters or less';
+    }
+
+    if (contactNotes && contactNotes.length > 500) {
+      errors.contactNotes = 'Notes must be 500 characters or less';
+    }
+
+    if (notes && notes.length > 1000) {
+      errors.notes = 'Notes must be 1000 characters or less';
+    }
+
+    if (familyInfo.spouse && familyInfo.spouse.length > 100) {
+      errors.familySpouse = 'Spouse information must be 100 characters or less';
+    }
+
+    if (familyInfo.kids && familyInfo.kids.length > 200) {
+      errors.familyKids = 'Kids information must be 200 characters or less';
+    }
+
+    if (familyInfo.siblings && familyInfo.siblings.length > 200) {
+      errors.familySiblings = 'Siblings information must be 200 characters or less';
     }
 
     setValidationErrors(errors);
@@ -408,6 +589,16 @@ export default function CreateEditRelationshipModal({
       showAlert('Error', 'Failed to save relationship. Please try again.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const clearFieldError = (fieldName: string) => {
+    if (validationErrors[fieldName]) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[fieldName];
+        return newErrors;
+      });
     }
   };
 
@@ -550,149 +741,221 @@ export default function CreateEditRelationshipModal({
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Phone</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, validationErrors.contactPhone && styles.inputError]}
                   value={contactPhone}
-                  onChangeText={setContactPhone}
+                  onChangeText={(text) => {
+                    setContactPhone(text);
+                    clearFieldError('contactPhone');
+                  }}
                   placeholder="Enter phone number"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="phone-pad"
                 />
+                {validationErrors.contactPhone && (
+                  <Text style={styles.errorText}>{validationErrors.contactPhone}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Email</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, validationErrors.contactEmail && styles.inputError]}
                   value={contactEmail}
-                  onChangeText={setContactEmail}
+                  onChangeText={(text) => {
+                    setContactEmail(text);
+                    clearFieldError('contactEmail');
+                  }}
                   placeholder="Enter email address"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="email-address"
                   autoCapitalize="none"
                 />
+                {validationErrors.contactEmail && (
+                  <Text style={styles.errorText}>{validationErrors.contactEmail}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Company</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, validationErrors.contactCompany && styles.inputError]}
                   value={contactCompany}
-                  onChangeText={setContactCompany}
+                  onChangeText={(text) => {
+                    setContactCompany(text);
+                    clearFieldError('contactCompany');
+                  }}
                   placeholder="Enter company name"
                   placeholderTextColor="#9CA3AF"
                 />
+                {validationErrors.contactCompany && (
+                  <Text style={styles.errorText}>{validationErrors.contactCompany}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Job Title</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, validationErrors.contactJobTitle && styles.inputError]}
                   value={contactJobTitle}
-                  onChangeText={setContactJobTitle}
+                  onChangeText={(text) => {
+                    setContactJobTitle(text);
+                    clearFieldError('contactJobTitle');
+                  }}
                   placeholder="Enter job title"
                   placeholderTextColor="#9CA3AF"
                 />
+                {validationErrors.contactJobTitle && (
+                  <Text style={styles.errorText}>{validationErrors.contactJobTitle}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Website</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, validationErrors.contactWebsite && styles.inputError]}
                   value={contactWebsite}
-                  onChangeText={setContactWebsite}
+                  onChangeText={(text) => {
+                    setContactWebsite(text);
+                    clearFieldError('contactWebsite');
+                  }}
                   placeholder="Enter website URL"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="url"
                   autoCapitalize="none"
                 />
+                {validationErrors.contactWebsite && (
+                  <Text style={styles.errorText}>{validationErrors.contactWebsite}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>LinkedIn</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, validationErrors.contactLinkedin && styles.inputError]}
                   value={contactLinkedin}
-                  onChangeText={setContactLinkedin}
+                  onChangeText={(text) => {
+                    setContactLinkedin(text);
+                    clearFieldError('contactLinkedin');
+                  }}
                   placeholder="Enter LinkedIn profile URL"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="url"
                   autoCapitalize="none"
                 />
+                {validationErrors.contactLinkedin && (
+                  <Text style={styles.errorText}>{validationErrors.contactLinkedin}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>X (Twitter)</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, validationErrors.contactTwitter && styles.inputError]}
                   value={contactTwitter}
-                  onChangeText={setContactTwitter}
+                  onChangeText={(text) => {
+                    setContactTwitter(text);
+                    clearFieldError('contactTwitter');
+                  }}
                   placeholder="Enter X/Twitter handle or URL"
                   placeholderTextColor="#9CA3AF"
                   autoCapitalize="none"
                 />
+                {validationErrors.contactTwitter && (
+                  <Text style={styles.errorText}>{validationErrors.contactTwitter}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Instagram</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, validationErrors.contactInstagram && styles.inputError]}
                   value={contactInstagram}
-                  onChangeText={setContactInstagram}
+                  onChangeText={(text) => {
+                    setContactInstagram(text);
+                    clearFieldError('contactInstagram');
+                  }}
                   placeholder="Enter Instagram handle or URL"
                   placeholderTextColor="#9CA3AF"
                   autoCapitalize="none"
                 />
+                {validationErrors.contactInstagram && (
+                  <Text style={styles.errorText}>{validationErrors.contactInstagram}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Facebook</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, validationErrors.contactFacebook && styles.inputError]}
                   value={contactFacebook}
-                  onChangeText={setContactFacebook}
+                  onChangeText={(text) => {
+                    setContactFacebook(text);
+                    clearFieldError('contactFacebook');
+                  }}
                   placeholder="Enter Facebook profile URL"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="url"
                   autoCapitalize="none"
                 />
+                {validationErrors.contactFacebook && (
+                  <Text style={styles.errorText}>{validationErrors.contactFacebook}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Address</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, validationErrors.contactAddress && styles.inputError]}
                   value={contactAddress}
-                  onChangeText={setContactAddress}
+                  onChangeText={(text) => {
+                    setContactAddress(text);
+                    clearFieldError('contactAddress');
+                  }}
                   placeholder="Enter address"
                   placeholderTextColor="#9CA3AF"
                   multiline
                   numberOfLines={2}
                 />
+                {validationErrors.contactAddress && (
+                  <Text style={styles.errorText}>{validationErrors.contactAddress}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Birthday</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, validationErrors.contactBirthday && styles.inputError]}
                   value={contactBirthday}
-                  onChangeText={setContactBirthday}
+                  onChangeText={(text) => {
+                    setContactBirthday(text);
+                    clearFieldError('contactBirthday');
+                  }}
                   placeholder="Enter birthday (MM/DD/YYYY)"
                   placeholderTextColor="#9CA3AF"
                 />
+                {validationErrors.contactBirthday && (
+                  <Text style={styles.errorText}>{validationErrors.contactBirthday}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Notes</Text>
                 <TextInput
-                  style={[styles.input, styles.textArea]}
+                  style={[styles.input, styles.textArea, validationErrors.contactNotes && styles.inputError]}
                   value={contactNotes}
-                  onChangeText={setContactNotes}
+                  onChangeText={(text) => {
+                    setContactNotes(text);
+                    clearFieldError('contactNotes');
+                  }}
                   placeholder="Enter additional notes"
                   placeholderTextColor="#9CA3AF"
                   multiline
                   numberOfLines={3}
                   textAlignVertical="top"
                 />
+                {validationErrors.contactNotes && (
+                  <Text style={styles.errorText}>{validationErrors.contactNotes}</Text>
+                )}
               </View>
             </View>
 
@@ -730,32 +993,50 @@ export default function CreateEditRelationshipModal({
                 <View style={styles.familyFieldContainer}>
                   <Text style={styles.familyFieldLabel}>💍 Spouse</Text>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, validationErrors.familySpouse && styles.inputError]}
                     value={familyInfo.spouse}
-                    onChangeText={(text) => setFamilyInfo(prev => ({ ...prev, spouse: text }))}
+                    onChangeText={(text) => {
+                      setFamilyInfo(prev => ({ ...prev, spouse: text }));
+                      clearFieldError('familySpouse');
+                    }}
                     placeholder="e.g., Married to Sarah"
                     placeholderTextColor="#9CA3AF"
                   />
+                  {validationErrors.familySpouse && (
+                    <Text style={styles.errorText}>{validationErrors.familySpouse}</Text>
+                  )}
                 </View>
                 <View style={styles.familyFieldContainer}>
                   <Text style={styles.familyFieldLabel}>👶 Kids</Text>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, validationErrors.familyKids && styles.inputError]}
                     value={familyInfo.kids}
-                    onChangeText={(text) => setFamilyInfo(prev => ({ ...prev, kids: text }))}
+                    onChangeText={(text) => {
+                      setFamilyInfo(prev => ({ ...prev, kids: text }));
+                      clearFieldError('familyKids');
+                    }}
                     placeholder="e.g., 2 kids, ages 5 and 8"
                     placeholderTextColor="#9CA3AF"
                   />
+                  {validationErrors.familyKids && (
+                    <Text style={styles.errorText}>{validationErrors.familyKids}</Text>
+                  )}
                 </View>
                 <View style={styles.familyFieldContainer}>
                   <Text style={styles.familyFieldLabel}>👨‍👩‍👧‍👦 Siblings</Text>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, validationErrors.familySiblings && styles.inputError]}
                     value={familyInfo.siblings}
-                    onChangeText={(text) => setFamilyInfo(prev => ({ ...prev, siblings: text }))}
+                    onChangeText={(text) => {
+                      setFamilyInfo(prev => ({ ...prev, siblings: text }));
+                      clearFieldError('familySiblings');
+                    }}
                     placeholder="e.g., 1 brother, 2 sisters"
                     placeholderTextColor="#9CA3AF"
                   />
+                  {validationErrors.familySiblings && (
+                    <Text style={styles.errorText}>{validationErrors.familySiblings}</Text>
+                  )}
                 </View>
               </View>
             </View>
@@ -764,14 +1045,20 @@ export default function CreateEditRelationshipModal({
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Notes</Text>
               <TextInput
-                style={[styles.input, styles.notesInput]}
+                style={[styles.input, styles.notesInput, validationErrors.notes && styles.inputError]}
                 value={notes}
-                onChangeText={setNotes}
+                onChangeText={(text) => {
+                  setNotes(text);
+                  clearFieldError('notes');
+                }}
                 placeholder="Add any additional notes..."
                 placeholderTextColor="#9CA3AF"
                 multiline
                 numberOfLines={4}
               />
+              {validationErrors.notes && (
+                <Text style={styles.errorText}>{validationErrors.notes}</Text>
+              )}
             </View>
 
             <TouchableOpacity 

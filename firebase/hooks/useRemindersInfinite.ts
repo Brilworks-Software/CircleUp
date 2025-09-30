@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from './useAuth';
 import RemindersService from '../services/RemindersService';
 import type { Reminder, ReminderTab, FilterType } from '../types';
@@ -14,6 +14,37 @@ export const useRemindersInfinite = (
   const { currentUser } = useAuth();
   const queryClient = useQueryClient();
   const remindersService = RemindersService.getInstance();
+  
+  // State for real-time updates
+  const [realtimeReminders, setRealtimeReminders] = useState<Reminder[]>([]);
+  const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
+
+  // Set up real-time listener for reminders
+  useEffect(() => {
+    if (!currentUser?.uid) {
+      setRealtimeReminders([]);
+      setIsRealtimeConnected(false);
+      return;
+    }
+
+    setIsRealtimeConnected(true);
+    
+    // Set up real-time listener
+    const unsubscribe = remindersService.onRemindersSnapshot(currentUser.uid, (reminders) => {
+      console.log('🔄 Real-time reminder update received:', reminders.length, 'reminders');
+      setRealtimeReminders(reminders);
+      
+      // Invalidate and refetch queries when real-time data changes
+      queryClient.invalidateQueries({ queryKey: ['reminders'] });
+      queryClient.invalidateQueries({ queryKey: ['tabCounts'] });
+    });
+
+    // Cleanup listener on unmount or user change
+    return () => {
+      unsubscribe();
+      setIsRealtimeConnected(false);
+    };
+  }, [currentUser?.uid, remindersService, queryClient]);
 
   // Infinite query for reminders
   const {
@@ -27,15 +58,19 @@ export const useRemindersInfinite = (
     isError,
     refetch,
   } = useInfiniteQuery({
-    queryKey: ['reminders', currentUser?.uid, activeTab, searchQuery, selectedFilter],
+    queryKey: ['reminders', currentUser?.uid, activeTab, searchQuery, selectedFilter, realtimeReminders.length],
     initialPageParam: 0,
     queryFn: async ({ pageParam = 0 }: { pageParam: number }) => {
       if (!currentUser?.uid) throw new Error('User not authenticated');
       
-      console.log('🔄 Fetching reminders page:', pageParam, 'activeTab:', activeTab, 'searchQuery:', searchQuery, 'selectedFilter:', selectedFilter);
-      
-      // Get all reminders first (since Firebase doesn't have built-in pagination)
-      const allReminders = await remindersService.getReminders(currentUser.uid);
+      // Use real-time data if available, otherwise fallback to service call
+      let allReminders: Reminder[];
+      if (realtimeReminders.length > 0 && isRealtimeConnected) {
+        allReminders = realtimeReminders;
+      } else {
+        // Fallback to service call if real-time data is not available
+        allReminders = await remindersService.getReminders(currentUser.uid);
+      }
       
       // Apply filters
       let filtered = allReminders;
@@ -50,9 +85,7 @@ export const useRemindersInfinite = (
       
       // Filter by selected filter
       if (selectedFilter !== 'all') {
-        console.log('🔍 Applying filter:', selectedFilter);
         filtered = filterRemindersByFilter(filtered, selectedFilter);
-        console.log('🔍 After filter, count:', filtered.length);
       }
       
       // Sort by date (most recent first)
@@ -62,15 +95,6 @@ export const useRemindersInfinite = (
       const startIndex = pageParam * REMINDERS_PER_PAGE;
       const endIndex = startIndex + REMINDERS_PER_PAGE;
       const pageData = filtered.slice(startIndex, endIndex);
-      
-      console.log('📄 Page data:', {
-        page: pageParam,
-        startIndex,
-        endIndex,
-        pageDataLength: pageData.length,
-        totalFiltered: filtered.length,
-        hasMore: endIndex < filtered.length
-      });
       
       return {
         reminders: pageData,
@@ -95,14 +119,18 @@ export const useRemindersInfinite = (
   const [refreshTimestamp, setRefreshTimestamp] = useState(0);
   
   const { data: tabCounts = { all: 0, missed: 0, thisWeek: 0, upcoming: 0 }, isLoading: isLoadingTabCounts, refetch: refetchTabCounts } = useQuery({
-    queryKey: ['tabCounts', currentUser?.uid, searchQuery, selectedFilter, refreshTimestamp],
+    queryKey: ['tabCounts', currentUser?.uid, searchQuery, selectedFilter, refreshTimestamp, realtimeReminders.length],
     queryFn: async () => {
-      console.log('🔄 Calculating tab counts...', { searchQuery, selectedFilter });
       if (!currentUser?.uid) return { all: 0, missed: 0, thisWeek: 0, upcoming: 0 };
       
       try {
-        // Get all reminders without any filtering
-        const allReminders = await remindersService.getReminders(currentUser.uid);
+        // Use real-time data if available, otherwise fallback to service call
+        let allReminders: Reminder[];
+        if (realtimeReminders.length > 0 && isRealtimeConnected) {
+          allReminders = realtimeReminders;
+        } else {
+          allReminders = await remindersService.getReminders(currentUser.uid);
+        }
         
         // Apply search and filter filters but not tab filter
         let filtered = allReminders;
@@ -125,15 +153,6 @@ export const useRemindersInfinite = (
           upcoming: filtered.filter(r => !r.isThisWeek && !r.isOverdue).length,
         };
         
-        console.log('📊 Tab counts calculated:', {
-          totalReminders: allReminders.length,
-          filteredReminders: filtered.length,
-          searchQuery,
-          selectedFilter,
-          counts,
-          timestamp: new Date().toISOString()
-        });
-        
         return counts;
       } catch (error) {
         console.error('Error calculating tab counts:', error);
@@ -149,19 +168,12 @@ export const useRemindersInfinite = (
   const createReminderMutation = useMutation({
     mutationFn: async (reminderData: Omit<Reminder, 'id' | 'isOverdue' | 'isThisWeek'>) => {
       if (!currentUser?.uid) throw new Error('User not authenticated');
-      console.log('🔄 Creating reminder...', reminderData);
       return await remindersService.createReminder(currentUser.uid, reminderData);
     },
     onSuccess: () => {
-      console.log('✅ Create mutation successful, invalidating cache...');
-      // Remove all cached data and refetch
-      queryClient.removeQueries({ queryKey: ['reminders'] });
-      queryClient.removeQueries({ queryKey: ['tabCounts'] });
-      // Force refresh by updating timestamp
+      // Real-time listener will automatically update the data
+      // Just update the refresh timestamp to trigger tab counts recalculation
       setRefreshTimestamp(Date.now());
-      // Force refetch both queries
-      refetch();
-      refetchTabCounts();
     },
     onError: (error) => {
       console.error('❌ Create mutation failed:', error);
@@ -172,19 +184,12 @@ export const useRemindersInfinite = (
   const updateReminderMutation = useMutation({
     mutationFn: async ({ reminderId, updates }: { reminderId: string; updates: Partial<Reminder> }) => {
       if (!currentUser?.uid) throw new Error('User not authenticated');
-      console.log('🔄 Updating reminder...', { reminderId, updates });
       return await remindersService.updateReminder(currentUser.uid, reminderId, updates);
     },
     onSuccess: () => {
-      console.log('✅ Update mutation successful, invalidating cache...');
-      // Remove all cached data and refetch
-      queryClient.removeQueries({ queryKey: ['reminders'] });
-      queryClient.removeQueries({ queryKey: ['tabCounts'] });
-      // Force refresh by updating timestamp
+      // Real-time listener will automatically update the data
+      // Just update the refresh timestamp to trigger tab counts recalculation
       setRefreshTimestamp(Date.now());
-      // Force refetch both queries
-      refetch();
-      refetchTabCounts();
     },
     onError: (error) => {
       console.error('❌ Update mutation failed:', error);
@@ -195,19 +200,12 @@ export const useRemindersInfinite = (
   const deleteReminderMutation = useMutation({
     mutationFn: async (reminderId: string) => {
       if (!currentUser?.uid) throw new Error('User not authenticated');
-      console.log('🔄 Deleting reminder...', reminderId);
       return await remindersService.deleteReminder(currentUser.uid, reminderId);
     },
     onSuccess: () => {
-      console.log('✅ Delete mutation successful, invalidating cache...');
-      // Remove all cached data and refetch
-      queryClient.removeQueries({ queryKey: ['reminders'] });
-      queryClient.removeQueries({ queryKey: ['tabCounts'] });
-      // Force refresh by updating timestamp
+      // Real-time listener will automatically update the data
+      // Just update the refresh timestamp to trigger tab counts recalculation
       setRefreshTimestamp(Date.now());
-      // Force refetch both queries
-      refetch();
-      refetchTabCounts();
     },
     onError: (error) => {
       console.error('❌ Delete mutation failed:', error);
@@ -245,23 +243,15 @@ export const useRemindersInfinite = (
   const filterRemindersByFilter = (reminders: Reminder[], filter: FilterType): Reminder[] => {
     if (filter === 'all') return reminders;
     
-    console.log('🔍 Filtering reminders by:', filter);
-    console.log('🔍 Total reminders before filter:', reminders.length);
-    
     const filtered = reminders.filter(reminder => {
       // Filter by tags - check if any of the reminder's tags match the selected filter
       const matches = reminder.tags.some(tag => 
         tag.toLowerCase() === filter.toLowerCase()
       );
       
-      if (matches) {
-        console.log('✅ Reminder matches filter:', reminder.contactName, 'tags:', reminder.tags);
-      }
-      
       return matches;
     });
     
-    console.log('🔍 Filtered reminders count:', filtered.length);
     return filtered;
   };
 

@@ -8,20 +8,7 @@ import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Add this after line 20 in firebase/config.ts
-console.log('Firebase Config Debug:', {
-  apiKey: Constants.expoConfig?.extra?.firebaseApiKey,
-  authDomain: Constants.expoConfig?.extra?.firebaseAuthDomain,
-  projectId: Constants.expoConfig?.extra?.firebaseProjectId,
-  storageBucket: Constants.expoConfig?.extra?.firebaseStorageBucket,
-  messagingSenderId: Constants.expoConfig?.extra?.firebaseMessagingSenderId,
-  appId: Constants.expoConfig?.extra?.firebaseAppId,
-  databaseURL: Constants.expoConfig?.extra?.firebaseDatabaseUrl,
-});
-
-console.log('Constants.expoConfig:', Constants.expoConfig);
-console.log('Constants.expoConfig.extra:', Constants.expoConfig?.extra);
-// const appID = (Platform.OS === 'android') ? Constants.expoConfig?.extra?.firebaseA : Constants.expoConfig?.extra?.firebaseAppId;
+// Firebase configuration
   
  
 // Firebase configuration from Expo Constants
