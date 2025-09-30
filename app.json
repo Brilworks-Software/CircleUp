@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "CircleUp",
-    "slug": "circleup-app",
+    "name": "bolt-expo-nativewind",
+    "slug": "bolt-expo-nativewind",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -37,7 +37,7 @@
       "typedRoutes": true
     },
     "android": {
-      "package": "com.circleUp.app",
+      "package": "com.bhavikbhanushali.boltexponativewind",
       "googleServicesFile": "./google-services.json"
     }
   }
