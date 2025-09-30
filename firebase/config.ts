@@ -7,7 +7,7 @@ import Constants from 'expo-constants';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage'; 
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getMessaging} from 'firebase/messaging';
+
 // Firebase configuration
   
  
@@ -44,5 +44,4 @@ if (!getApps().length) {
   }
   const db = getFirestore(app);
   const storage = getStorage(app);
-  const messaging = getMessaging(app);
-export { app, auth, db, storage, messaging };
+export { app, auth, db, storage };

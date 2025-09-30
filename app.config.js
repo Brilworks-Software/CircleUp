@@ -2,8 +2,8 @@ import 'dotenv/config';
 
 export default {
   expo: {
-    name: "CircleUp",
-    slug: "circleup-app",
+    name: "bolt-expo-nativewind",
+    slug: "bolt-expo-nativewind",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
@@ -38,8 +38,8 @@ export default {
     experiments: {
       typedRoutes: true
     },
-    android: {  
-      package: "com.circleUp.app",
+    android: {
+      package: "com.bhavikbhanushali.boltexponativewind",
       googleServicesFile: "./google-services.json"
     },
     extra: {

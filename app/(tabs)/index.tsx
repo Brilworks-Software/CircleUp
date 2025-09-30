@@ -17,7 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Contacts from 'expo-contacts';
-import { Plus, Users, Bell, Clock, MessageSquare, StickyNote, FileText, Phone, Calendar, CheckCircle, X, Save, Trash2, Mail, MessageCircle, User, AlertCircle, Search, ChevronRight, LogOut } from 'lucide-react-native';
+import { Plus, Users, Bell, Clock, MessageSquare, StickyNote, FileText, Phone, Calendar, CheckCircle, X, Save, Trash2, Mail, MessageCircle, User, AlertCircle, Search, ChevronRight } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useAuth } from '../../firebase/hooks/useAuth';
 import { useUser } from '../../firebase/hooks/useUser';
@@ -487,63 +487,6 @@ export default function HomeScreen() {
   const handleCancelDelete = () => {
     setDeleteModalVisible(false);
     setSelectedActivity(null);
-  };
-
-  const handleLogout = () => {
-    if (Platform.OS === 'web') {
-      // Use browser's native confirm dialog for web
-      const confirmed = window.confirm('Are you sure you want to logout?');
-      if (confirmed) {
-        performLogout();
-      }
-    } else {
-      // Use React Native Alert for mobile
-      Alert.alert(
-        'Logout',
-        'Are you sure you want to logout?',
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'Logout',
-            style: 'destructive',
-            onPress: performLogout,
-          },
-        ]
-      );
-    }
-  };
-
-  const performLogout = async () => {
-    try {
-      await signOut();
-      // User will be automatically redirected to login screen by auth state change
-      // For web, add explicit redirect as backup
-      if (Platform.OS === 'web') {
-        // Small delay to ensure auth state has updated
-        setTimeout(() => {
-          try {
-            router.replace('/(auth)/login');
-          } catch (routerError) {
-            // Fallback to window.location if router fails
-            console.warn('Router redirect failed, using window.location:', routerError);
-            window.location.href = '/login';
-          }
-        }, 100);
-      } else {
-        router.replace("/(auth)/login");
-      }
-
-    } catch (error) {
-      console.error('Logout error:', error);
-      if (Platform.OS === 'web') {
-        alert('Failed to logout. Please try again.');
-      } else {
-        Alert.alert('Error', 'Failed to logout. Please try again.');
-      }
-    }
   };
 
   // Activity handlers
@@ -1820,12 +1763,7 @@ export default function HomeScreen() {
               </Text>
               <Text style={styles.subtitle}>Manage your connections</Text>
             </View>
-            <TouchableOpacity 
-              style={styles.logoutButton}
-              onPress={handleLogout}
-            >
-              <LogOut size={20} color="#6B7280" />
-            </TouchableOpacity>
+           
           </View>
         </View>
 
