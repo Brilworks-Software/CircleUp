@@ -2,8 +2,8 @@ import 'dotenv/config';
 
 export default {
   expo: {
-    name: "bolt-expo-nativewind",
-    slug: "bolt-expo-nativewind",
+    name: "circle-up",
+    slug: "circle-up",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
@@ -51,6 +51,10 @@ export default {
       firebaseMessagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
       firebaseAppId: process.env.FIREBASE_APP_ID,
       firebaseDatabaseUrl: process.env.FIREBASE_DATABASE_URL,
+
+      eas: {
+        projectId: "e192a659-fba6-49e5-b3fa-501e337889c5"
+      }
     }
   }
 };

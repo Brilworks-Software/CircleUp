@@ -9,7 +9,9 @@
     "lint": "expo lint",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "clean": "npx expo prebuild --clean"
+    "clean": "npx expo prebuild --clean",
+    "web:export": "npx expo export -p web",
+    "web:deploy": "npx eas deploy"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
