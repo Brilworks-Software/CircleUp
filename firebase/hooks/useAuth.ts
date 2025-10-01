@@ -8,6 +8,7 @@ import {
 import { useCreateUser } from './useUser';
 import { userStore } from '../stores/userStore';
 import type { User } from 'firebase/auth';
+import { addUserFCMToken, clearUserFCMTokens } from '../../services/PushNotificationService';
 
 export const useAuth = () => {
   const queryClient = useQueryClient();
@@ -17,7 +18,7 @@ export const useAuth = () => {
 
   // Set up real-time auth state listener
   useEffect(() => {
-    const unsubscribe = authService.onAuthStateChanged((user) => {
+    const unsubscribe = authService.onAuthStateChanged(async (user) => {
       setCurrentUser(user);
       setIsLoadingUser(false);
       
@@ -26,6 +27,13 @@ export const useAuth = () => {
         // User is signed in - invalidate queries to refetch user data
         queryClient.invalidateQueries({ queryKey: ['currentUser'] });
         queryClient.invalidateQueries({ queryKey: ['user', user.uid] });
+        
+        // Add FCM token for the logged-in user
+        try {
+          await addUserFCMToken();
+        } catch (error) {
+          console.error('Failed to add FCM token on login:', error);
+        }
       } else {
         // User is signed out - clear user data
         userStore.clearUser();
@@ -59,6 +67,13 @@ export const useAuth = () => {
             phone: credentials.phone,
           }
         });
+        
+        // Add FCM token for the newly created user
+        try {
+          await addUserFCMToken();
+        } catch (error) {
+          console.error('Failed to add FCM token on signup:', error);
+        }
       }
       
       return userCredential;
@@ -67,12 +82,32 @@ export const useAuth = () => {
   });
 
   const signOutMutation = useMutation({
-    mutationFn: () => authService.signOut(),
+    mutationFn: async () => {
+      // Clear FCM tokens before signing out
+      try {
+        await clearUserFCMTokens();
+      } catch (error) {
+        console.error('Failed to clear FCM tokens on signout:', error);
+      }
+      
+      // Then sign out
+      return authService.signOut();
+    },
     // Auth state listener will handle query invalidation
   });
 
   const deleteAccountMutation = useMutation({
-    mutationFn: () => authService.deleteAccount(),
+    mutationFn: async () => {
+      // Clear FCM tokens before deleting account
+      try {
+        await clearUserFCMTokens();
+      } catch (error) {
+        console.error('Failed to clear FCM tokens on account deletion:', error);
+      }
+      
+      // Then delete the account
+      return authService.deleteAccount();
+    },
     // Auth state listener will handle query invalidation
   });
 

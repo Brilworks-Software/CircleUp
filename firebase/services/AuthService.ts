@@ -9,7 +9,6 @@ import {
   } from 'firebase/auth';
   import { auth } from '../config';
   import UsersService from './UserService';
-  import NotificationService from '../../services/NotificationService';
   
   export interface AuthCredentials {
     email: string;
@@ -70,9 +69,6 @@ export interface RegisterCredentials extends AuthCredentials {
   
     async signOut() {
       try {
-        // Cancel all scheduled notifications before signing out
-        const notificationService = NotificationService.getInstance();
-        await notificationService.cancelAllNotifications();
         
         await signOut(auth);
       } catch (error) {
@@ -93,9 +89,6 @@ export interface RegisterCredentials extends AuthCredentials {
         const user = auth.currentUser;
         if (!user) throw new Error('No authenticated user');
   
-        // Cancel all scheduled notifications before deleting account
-        const notificationService = NotificationService.getInstance();
-        await notificationService.cancelAllNotifications();
   
         // Finally delete Firebase Auth user
         await user.delete();

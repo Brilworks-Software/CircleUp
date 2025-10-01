@@ -29,7 +29,7 @@ export async function registerForPushNotificationsAsync() {
   return token;
 }
 
-export async function updateUserFCMToken() {
+export async function addUserFCMToken() {
   try {
     // Only run on mobile platforms
     if (Platform.OS === 'web') {
@@ -50,12 +50,55 @@ export async function updateUserFCMToken() {
       return;
     }
 
-    // Update the user's FCM token in Firestore
-    await UsersService.updateUser(currentUser.uid, { fcmToken: token });
-    console.log('FCM token updated successfully for user:', currentUser.uid);
+    // Add the FCM token to user's token list in Firestore
+    await UsersService.addFCMToken(currentUser.uid, token);
+    console.log('FCM token added successfully for user:', currentUser.uid);
   } catch (error) {
-    console.error('Error updating FCM token:', error);
+    console.error('Error adding FCM token:', error);
   }
 }
 
+export async function removeUserFCMToken() {
+  try {
+    // Only run on mobile platforms
+    if (Platform.OS === 'web') {
+      console.log('Push notifications not supported on web platform');
+      return;
+    }
 
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) {
+      console.log('No authenticated user found');
+      return;
+    }
+
+    // Get the current push notification token
+    const token = await registerForPushNotificationsAsync();
+    if (!token) {
+      console.log('Failed to get push notification token');
+      return;
+    }
+
+    // Remove the FCM token from user's token list in Firestore
+    await UsersService.removeFCMToken(currentUser.uid, token);
+    console.log('FCM token removed successfully for user:', currentUser.uid);
+  } catch (error) {
+    console.error('Error removing FCM token:', error);
+  }
+}
+
+export async function clearUserFCMTokens() {
+  try {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) {
+      console.log('No authenticated user found');
+      return;
+    }
+
+    // Clear all FCM tokens for the user
+    await UsersService.clearFCMTokens(currentUser.uid);
+    console.log('All FCM tokens cleared successfully for user:', currentUser.uid);
+  } catch (error) {
+    console.error('Error clearing FCM tokens:', error);
+  }
+}

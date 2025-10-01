@@ -18,7 +18,6 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config';
 import type { Reminder, ReminderTab, FilterType } from '../types';
-import NotificationService from '../../services/NotificationService';
 
 export interface CreateReminderData {
   contactName: string;
@@ -131,50 +130,6 @@ class RemindersService {
     }
   }
 
-  /**
-   * Reschedule notifications for all active reminders
-   */
-  async rescheduleAllNotifications(userId: string): Promise<void> {
-    try {
-      const reminders = await this.getReminders(userId);
-      const notificationService = NotificationService.getInstance();
-      
-      // Cancel all existing notifications first
-      await notificationService.cancelAllNotifications();
-      
-      // Reschedule notifications for all future reminders
-      for (const reminder of reminders) {
-        const reminderDate = new Date(reminder.date);
-        
-        // Only schedule if the reminder is in the future
-        if (reminderDate > new Date()) {
-          try {
-            const notificationId = await notificationService.scheduleNotificationForDateTime(
-              reminder.id,
-              `Reminder: ${reminder.contactName}`,
-              reminder.notes || `Don't forget to follow up with ${reminder.contactName}`,
-              reminderDate,
-              {
-                reminderId: reminder.id,
-                contactName: reminder.contactName,
-                type: reminder.type,
-                frequency: reminder.frequency,
-                tags: reminder.tags,
-              }
-            );
-            
-            if (notificationId) {
-              // Notification rescheduled successfully
-            }
-          } catch (error) {
-            console.error('❌ Error rescheduling notification for reminder:', reminder.id, error);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('❌ Error rescheduling all notifications:', error);
-    }
-  }
 
   /**
    * Get all reminders for a user
@@ -314,36 +269,6 @@ class RemindersService {
         // Continue with local reminder even if Firebase fails
       }
       
-      // Schedule local notification for the reminder
-      try {
-        const notificationService = NotificationService.getInstance();
-        
-        // Initialize notification service if not already done
-        await notificationService.initialize();
-        
-        // Schedule notification at the reminder date/time
-        const reminderDate = new Date(reminderData.date);
-        const notificationId = await notificationService.scheduleNotificationForDateTime(
-          reminder.id, // Use reminder ID as unique notification ID
-          `Reminder: ${reminderData.contactName}`,
-          reminderData.notes || `Don't forget to follow up with ${reminderData.contactName}`,
-          reminderDate,
-          {
-            reminderId: reminder.id,
-            contactName: reminderData.contactName,
-            type: reminderData.type,
-            frequency: reminderData.frequency,
-            tags: reminderData.tags,
-          }
-        );
-        
-        if (!notificationId) {
-          console.warn('⚠️ Failed to schedule notification for reminder:', reminder.id);
-        }
-      } catch (notificationError) {
-        console.error('❌ Error scheduling notification:', notificationError);
-        // Don't throw error - reminder creation should still succeed even if notification fails
-      }
       
       return reminder;
     } catch (error) {
@@ -379,116 +304,6 @@ class RemindersService {
 
       await updateDoc(reminderRef, updateData);
       
-      // Reschedule notification if any relevant fields were updated
-      if (updates.date || updates.contactName || updates.notes || updates.type) {
-        try {
-          const notificationService = NotificationService.getInstance();
-          
-          // Initialize notification service if needed
-          const initResult = await notificationService.initialize();
-          if (!initResult) {
-            console.warn('⚠️ Notification service initialization failed, skipping notification reschedule');
-            return true; // Don't fail the update operation
-          }
-          
-          // Cancel old notification first (this might fail if notification doesn't exist, which is OK)
-          try {
-            const cancelResult = await notificationService.cancelNotification(reminderId);
-          } catch (cancelError) {
-            console.warn('⚠️ Failed to cancel old notification (this might be normal if notification doesn\'t exist):', cancelError instanceof Error ? cancelError.message : String(cancelError));
-          }
-          
-          // Get the updated reminder data
-          const reminderSnap = await getDoc(reminderRef);
-          if (reminderSnap.exists()) {
-            const reminderData = reminderSnap.data();
-            
-            // Validate reminder data
-            if (!reminderData || !reminderData.date) {
-              console.error('❌ Invalid reminder data or missing date:', reminderData);
-              return true; // Don't fail the update operation
-            }
-            
-            // Handle different date formats from Firebase
-            let reminderDate: Date;
-            if (reminderData.date instanceof Date) {
-              reminderDate = reminderData.date;
-            } else if (reminderData.date && typeof reminderData.date === 'object' && 'seconds' in reminderData.date) {
-              // Handle Firebase Timestamp
-              reminderDate = new Date((reminderData.date as any).seconds * 1000);
-            } else if (typeof reminderData.date === 'string') {
-              reminderDate = new Date(reminderData.date);
-            } else {
-              console.error('❌ Invalid date format in reminder data:', reminderData.date);
-              return true; // Don't fail the update operation
-            }
-            
-            // Validate the parsed date
-            if (isNaN(reminderDate.getTime())) {
-              console.error('❌ Invalid parsed date:', reminderDate, 'from original:', reminderData.date);
-              return true; // Don't fail the update operation
-            }
-            
-            // Only schedule if the reminder is in the future
-            if (reminderDate > new Date()) {
-              try {
-                // Validate the date before scheduling
-                if (isNaN(reminderDate.getTime())) {
-                  console.error('❌ Invalid reminder date, cannot schedule notification:', reminderData.date);
-                  return true; // Don't fail the update operation
-                }
-                
-                // Ensure the date is valid and in the future
-                const now = new Date();
-                if (reminderDate <= now) {
-                  return true;
-                }
-                
-                const notificationId = await notificationService.scheduleNotificationForDateTime(
-                  reminderId,
-                  `Reminder: ${reminderData.contactName}`,
-                  reminderData.notes || `Don't forget to follow up with ${reminderData.contactName}`,
-                  reminderDate,
-                  {
-                    reminderId: reminderId,
-                    contactName: reminderData.contactName,
-                    type: reminderData.type,
-                    frequency: reminderData.frequency,
-                    tags: reminderData.tags,
-                  }
-                );
-                
-                if (!notificationId) {
-                  console.warn('⚠️ Failed to reschedule notification for reminder:', reminderId, '- notificationId is null');
-                }
-              } catch (scheduleError) {
-                console.error('❌ Error scheduling new notification:', scheduleError);
-                console.error('❌ Schedule error details:', {
-                  message: scheduleError instanceof Error ? scheduleError.message : String(scheduleError),
-                  reminderId,
-                  reminderDate: reminderDate.toISOString(),
-                  contactName: reminderData.contactName
-                });
-              }
-            } else {
-              // Reminder is in the past, not scheduling notification
-            }
-          } else {
-            console.error('❌ Reminder not found after update:', reminderId);
-          }
-        } catch (notificationError) {
-          console.error('❌ Error rescheduling notification:', notificationError);
-          console.error('❌ Error details:', {
-            message: notificationError instanceof Error ? notificationError.message : String(notificationError),
-            stack: notificationError instanceof Error ? notificationError.stack : undefined,
-            reminderId,
-            updates
-          });
-          // Don't fail the update operation if notification rescheduling fails
-        }
-      } else {
-        // No relevant fields updated, skipping notification reschedule
-      }
       
       return true;
     } catch (error) {
@@ -512,14 +327,6 @@ class RemindersService {
 
       await deleteDoc(reminderRef);
       
-      // Cancel associated notifications
-      try {
-        const notificationService = NotificationService.getInstance();
-        await notificationService.cancelNotification(reminderId);
-      } catch (notificationError) {
-        console.error('❌ Error cancelling notification:', notificationError);
-        // Don't fail the delete operation if notification cancellation fails
-      }
       
       return true;
     } catch (error) {

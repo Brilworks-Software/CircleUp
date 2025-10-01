@@ -1,4 +1,70 @@
-# CreateEditRelationshipModal Component
+# Components
+
+This directory contains reusable UI components for the app.
+
+## ContactSearchInput Component
+
+A reusable contact search input component that follows the same pattern as the AddActivityModal contact search functionality.
+
+### Features
+
+- **Real-time search** as you type
+- **Cross-platform support** - works with device contacts (mobile) and relationships (web)
+- **Dropdown results** with search suggestions
+- **Click outside to close** dropdown functionality
+- **Error handling** and validation support
+- **Customizable styling** and placeholder text
+- **Disabled state** support
+- **Clear button** to reset search
+
+### Usage
+
+```tsx
+import ContactSearchInput from '../components/ContactSearchInput';
+
+function MyComponent() {
+  const [selectedContact, setSelectedContact] = useState<{ id: string; name: string } | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [error, setError] = useState('');
+
+  const handleContactSelect = (contact: { id: string; name: string }) => {
+    setSelectedContact(contact);
+    setError('');
+  };
+
+  return (
+    <ContactSearchInput
+      onContactSelect={handleContactSelect}
+      placeholder="Search for a contact..."
+      value={searchQuery}
+      onChangeText={setSearchQuery}
+      error={error}
+    />
+  );
+}
+```
+
+### Props
+
+| Prop | Type | Required | Description |
+|------|------|----------|-------------|
+| `onContactSelect` | `(contact: { id: string; name: string }) => void` | Yes | Callback when a contact is selected |
+| `placeholder` | `string` | No | Placeholder text for the input |
+| `style` | `any` | No | Custom styles for the container |
+| `error` | `string` | No | Error message to display |
+| `value` | `string` | No | Controlled input value |
+| `onChangeText` | `(text: string) => void` | No | Callback when text changes |
+| `disabled` | `boolean` | No | Whether the input is disabled |
+| `showSearchIcon` | `boolean` | No | Whether to show the search icon (default: true) |
+| `maxResults` | `number` | No | Maximum number of search results to show (default: 5) |
+
+### Example
+
+See `components/ContactSearchExample.tsx` for a complete working example.
+
+---
+
+## CreateEditRelationshipModal Component
 
 A comprehensive modal component for creating and editing relationships in the app.
 

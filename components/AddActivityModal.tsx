@@ -18,7 +18,7 @@ import { X, ChevronDown, Search } from 'lucide-react-native';
 import { useActivity } from '../firebase/hooks/useActivity';
 import { useRelationships } from '../firebase/hooks/useRelationships';
 import { useAuth } from '../firebase/hooks/useAuth';
-import ReminderNotificationService from '../services/ReminderNotificationService';
+import RemindersService from '../firebase/services/RemindersService';
 
 interface AddActivityModalProps {
   visible: boolean;
@@ -121,7 +121,7 @@ export default function AddActivityModal({
     }
   };
   
-  const reminderNotificationService = ReminderNotificationService.getInstance();
+  const remindersService = RemindersService.getInstance();
   const [activeActivityTab, setActiveActivityTab] = useState<
     'note' | 'interaction' | 'reminder'
   >('note');
@@ -195,7 +195,6 @@ export default function AddActivityModal({
     | '3months'
     | '6months'
     | 'yearly'
-    | 'never'
   >('month');
   const [activityReminderNotes, setActivityReminderNotes] = useState('');
 
@@ -559,15 +558,13 @@ export default function AddActivityModal({
         isThisWeek: false,
       };
 
-      const reminderWithNotifications =
-        await reminderNotificationService.createReminderWithNotifications(
-          currentUser.uid,
-          reminderData,
-          [15, 30, 60] // 15 min, 30 min, 1 hour before due date
-        );
+      const reminder = await remindersService.createReminder(
+        currentUser.uid,
+        reminderData
+      );
 
       // Get the reminder document ID
-      const reminderId = reminderWithNotifications.id;
+      const reminderId = reminder.id;
 
       // Now create the activity with reference to the reminder document
       const activityData = {
@@ -588,7 +585,7 @@ export default function AddActivityModal({
 
       Alert.alert(
         'Success',
-        'Reminder activity created and notifications scheduled successfully!'
+        'Reminder activity created successfully!'
       );
       onClose();
       resetActivityForm();
@@ -643,11 +640,10 @@ export default function AddActivityModal({
 
       if (reminderId) {
         try {
-          await reminderNotificationService.updateReminderWithNotifications(
+          await remindersService.updateReminder(
             currentUser.uid,
             reminderId, // Use the actual reminder document ID
-            reminderData,
-            [15, 30, 60]
+            reminderData
           );
         } catch (reminderError) {
           console.warn('Could not update reminder document:', reminderError);
@@ -661,7 +657,7 @@ export default function AddActivityModal({
 
       Alert.alert(
         'Success',
-        'Reminder activity updated and notifications rescheduled!'
+        'Reminder activity updated successfully!'
       );
       onClose();
       resetActivityForm();
@@ -1443,7 +1439,6 @@ export default function AddActivityModal({
                           '3months',
                           '6months',
                           'yearly',
-                          'never',
                         ] as const
                       ).map((freq) => (
                         <TouchableOpacity

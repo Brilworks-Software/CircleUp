@@ -26,7 +26,7 @@ import { useActivity } from '../../firebase/hooks/useActivity';
 import AddActivityModal from '../../components/AddActivityModal';
 import EditActivityModal from '../../components/EditActivityModal';
 import CreateEditRelationshipModal from '../../components/CreateEditRelationshipModal';
-import ReminderNotificationService from '../../services/ReminderNotificationService';
+import RemindersService from '../../firebase/services/RemindersService';
 import { Tags } from '../../constants/Tags';
 import type { Contact, Relationship } from '../../firebase/types';
 
@@ -824,7 +824,7 @@ export default function RelationshipsScreen() {
 
     showAlert(
       'Delete Relationship',
-      `Are you sure you want to delete the relationship with ${contactName}? This will also delete all associated reminders, activities, and cancel all notifications.`,
+      `Are you sure you want to delete the relationship with ${contactName}? This will also delete all associated reminders and activities.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -845,11 +845,11 @@ export default function RelationshipsScreen() {
                 .filter(activity => activity.contactName === contactName);
 
 
-              // Delete all reminders and cancel their notifications
-              const reminderNotificationService = ReminderNotificationService.getInstance();
+              // Delete all reminders
+              const remindersService = RemindersService.getInstance();
               for (const reminderId of relationshipReminders) {
                 try {
-                  await reminderNotificationService.deleteReminderWithNotifications(currentUser.uid, reminderId);
+                  await remindersService.deleteReminder(currentUser.uid, reminderId);
                 } catch (error) {
                   console.error('❌ Error deleting reminder:', reminderId, error);
                   // Continue with other deletions even if one fails

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useActivity } from '../firebase/hooks/useActivity';
 import { useAuth } from '../firebase/hooks/useAuth';
-import ReminderNotificationService from '../services/ReminderNotificationService';
+import RemindersService from '../firebase/services/RemindersService';
 
 /**
  * Example component demonstrating how to create reminder activities
@@ -34,15 +34,14 @@ export default function ReminderActivityExample() {
         isThisWeek: false,
       };
 
-      const reminderNotificationService = ReminderNotificationService.getInstance();
-      const reminderWithNotifications = await reminderNotificationService.createReminderWithNotifications(
+      const remindersService = RemindersService.getInstance();
+      const reminder = await remindersService.createReminder(
         currentUser.uid,
-        reminderData,
-        [15, 30, 60] // 15 min, 30 min, 1 hour before due date
+        reminderData
       );
 
       // Get the reminder document ID
-      const reminderId = reminderWithNotifications.id;
+      const reminderId = reminder.id;
 
       // Now create the activity with reference to the reminder document
       const activityData = {

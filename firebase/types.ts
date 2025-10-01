@@ -6,11 +6,13 @@ export interface User {
   email: string;
   phone?: string;
   photoUrl?: string;
-  fcmToken?: string; // Firebase Cloud Messaging token for push notifications
+  fcmToken?: string[]; // Array of FCM tokens for push notifications
   createdAt: any;
   updatedAt?: any;
   settings?: UserSettings;
 }
+
+
 
 export interface UserSettings {
   theme?: 'light' | 'dark';

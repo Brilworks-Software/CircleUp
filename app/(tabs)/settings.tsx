@@ -25,7 +25,6 @@ import {
   CheckCircle
 } from 'lucide-react-native';
 import { useAuth } from '../../firebase/hooks/useAuth';
-import NotificationService from '../../services/NotificationService';
 
 // Web-compatible alert function
 const showAlert = (title: string, message: string, buttons?: any[]) => {
@@ -57,49 +56,9 @@ const showAlert = (title: string, message: string, buttons?: any[]) => {
 
 export default function SettingsScreen() {
   const { currentUser, signOut } = useAuth();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    checkNotificationStatus();
-  }, []);
-
-  const checkNotificationStatus = async () => {
-    try {
-      const notificationService = NotificationService.getInstance();
-      const enabled = await notificationService.areNotificationsEnabled();
-      setNotificationsEnabled(enabled);
-    } catch (error) {
-      console.error('Error checking notification status:', error);
-    }
-  };
-
-  const handleNotificationToggle = async (value: boolean) => {
-    try {
-      setIsLoading(true);
-      const notificationService = NotificationService.getInstance();
-      
-      if (value) {
-        const initialized = await notificationService.initialize();
-        if (initialized) {
-          setNotificationsEnabled(true);
-          Alert.alert('Success', 'Notifications enabled successfully!');
-        } else {
-          Alert.alert('Error', 'Failed to enable notifications. Please check your device settings.');
-        }
-      } else {
-        await notificationService.cancelAllNotifications();
-        setNotificationsEnabled(false);
-        Alert.alert('Success', 'Notifications disabled successfully!');
-      }
-    } catch (error) {
-      console.error('Error toggling notifications:', error);
-      Alert.alert('Error', 'Failed to update notification settings.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleDarkModeToggle = (value: boolean) => {
     setDarkMode(value);
@@ -129,40 +88,6 @@ export default function SettingsScreen() {
     );
   };
 
-  const handleOpenSettings = () => {
-    showAlert(
-      'Device Settings',
-      'To manage notification permissions, please go to your device settings.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Open Settings', onPress: () => Linking.openSettings() },
-      ]
-    );
-  };
-
-  const handleTestNotifications = async () => {
-    try {
-      const notificationService = NotificationService.getInstance();
-      const testTime = new Date(Date.now() + 5000); // 5 seconds from now
-      
-      const notificationId = await notificationService.scheduleNotificationForDateTime(
-        `test_${Date.now()}`,
-        'Test Notification',
-        'This is a test notification from CircleUp!',
-        testTime,
-        { type: 'test' }
-      );
-      
-      if (notificationId) {
-        showAlert('Success', 'Test notification scheduled! You should receive it in 5 seconds.');
-      } else {
-        showAlert('Error', 'Failed to schedule test notification.');
-      }
-    } catch (error) {
-      console.error('Error scheduling test notification:', error);
-      showAlert('Error', 'Failed to schedule test notification.');
-    }
-  };
 
   const SettingItem = ({ 
     icon: Icon, 

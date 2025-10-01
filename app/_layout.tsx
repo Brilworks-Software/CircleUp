@@ -4,7 +4,6 @@ import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
-import NotificationService from '../services/NotificationService';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -19,25 +18,6 @@ const queryClient = new QueryClient({
 export default function RootLayout() {
   useFrameworkReady();
 
-  useEffect(() => {
-    // Initialize notification service when app starts
-    const initializeNotifications = async () => {
-      try {
-        const notificationService = NotificationService.getInstance();
-        const initialized = await notificationService.initialize();
-        
-        if (initialized) {
-          console.log('Notification service initialized successfully');
-        } else {
-          console.warn('Notification service initialization failed');
-        }
-      } catch (error) {
-        console.error('Error initializing notification service:', error);
-      }
-    };
-
-    initializeNotifications();
-  }, []);
 
   return (
     <SafeAreaProvider>

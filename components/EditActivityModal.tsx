@@ -17,7 +17,7 @@ import { X, ChevronDown, Search, Calendar, Clock } from 'lucide-react-native';
 import { useActivity } from '../firebase/hooks/useActivity';
 import { useRelationships } from '../firebase/hooks/useRelationships';
 import { useAuth } from '../firebase/hooks/useAuth';
-import ReminderNotificationService from '../services/ReminderNotificationService';
+import RemindersService from '../firebase/services/RemindersService';
 
 interface EditActivityModalProps {
   visible: boolean;
@@ -35,7 +35,7 @@ export default function EditActivityModal({
   const { updateActivity } = useActivity();
   const { relationships } = useRelationships();
   const { currentUser } = useAuth();
-  const reminderNotificationService = ReminderNotificationService.getInstance();
+  const remindersService = RemindersService.getInstance();
   
   const [activeActivityTab, setActiveActivityTab] = useState<
     'note' | 'interaction' | 'reminder'
@@ -445,11 +445,10 @@ export default function EditActivityModal({
 
       if (reminderId) {
         try {
-          await reminderNotificationService.updateReminderWithNotifications(
+          await remindersService.updateReminder(
             currentUser.uid,
             reminderId, // Use the actual reminder document ID
-            reminderData,
-            [15, 30, 60]
+            reminderData
           );
         } catch (reminderError) {
           console.warn('Could not update reminder document:', reminderError);
@@ -463,7 +462,7 @@ export default function EditActivityModal({
 
       Alert.alert(
         'Success',
-        'Reminder activity updated and notifications rescheduled!'
+        'Reminder activity updated successfully!'
       );
       onClose();
       resetActivityForm();

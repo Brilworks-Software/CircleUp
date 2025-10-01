@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,21 +15,378 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import WebCompatibleDateTimePicker from '../../components/WebCompatibleDateTimePicker';
+// ContactSearchInput component will be defined inline below
 import { Calendar, Clock, Filter, Search, X, Plus, Bell, CircleCheck as CheckCircle, CircleAlert as AlertCircle, ChevronDown, Users, Phone, MessageCircle, Mail, ArrowLeft } from 'lucide-react-native';
 import { useRemindersInfinite } from '../../firebase/hooks/useRemindersInfinite';
 import { useAuth } from '../../firebase/hooks/useAuth';
 import { useRelationships } from '../../firebase/hooks/useRelationships';
 import { useActivity } from '../../firebase/hooks/useActivity';
+import { useContacts } from '../../firebase/hooks/useContacts';
 import { Tags } from '../../constants/Tags';
 import type { Reminder, ReminderTab, FilterType, Relationship, ReminderFrequency } from '../../firebase/types';
 import * as Contacts from 'expo-contacts';
 
+// ContactSearchInput Component Definition
+interface ContactSearchInputProps {
+  onContactSelect: (contact: { id: string; name: string }) => void;
+  placeholder?: string;
+  style?: any;
+  error?: string;
+  value?: string;
+  onChangeText?: (text: string) => void;
+  disabled?: boolean;
+  showSearchIcon?: boolean;
+  maxResults?: number;
+  onCreateNewContact?: (contactData: any) => void;
+}
+
+function ContactSearchInput({
+  onContactSelect,
+  placeholder = "Search contacts...",
+  style,
+  error,
+  value = '',
+  onChangeText,
+  disabled = false,
+  showSearchIcon = true,
+  maxResults = 5,
+  onCreateNewContact,
+}: ContactSearchInputProps) {
+  const { searchContacts, filterContacts } = useContacts();
+  const { relationships } = useRelationships();
+  const searchContainerRef = useRef<any>(null);
+  
+  // Local state for search functionality
+  const [searchQuery, setSearchQuery] = useState(value);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [filteredContacts, setFilteredContacts] = useState<Array<{id: string; name: string}>>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  
+  // Device contacts state (for mobile)
+  const [deviceContacts, setDeviceContacts] = useState<Contacts.Contact[]>([]);
+  const [hasContactPermission, setHasContactPermission] = useState(false);
+
+  // Load device contacts on mount (mobile only)
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      loadDeviceContacts();
+    }
+  }, []);
+
+  // Update local search query when value prop changes
+  useEffect(() => {
+    setSearchQuery(value);
+  }, [value]);
+
+  const loadDeviceContacts = async () => {
+    try {
+      const { status } = await Contacts.requestPermissionsAsync();
+      
+      if (status === 'granted') {
+        setHasContactPermission(true);
+        const { data } = await Contacts.getContactsAsync({
+          fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers, Contacts.Fields.Emails],
+        });
+        setDeviceContacts(data);
+      } else {
+        setHasContactPermission(false);
+      }
+    } catch (error) {
+      console.error('Error loading device contacts:', error);
+      setHasContactPermission(false);
+    }
+  };
+
+  const handleSearch = useCallback(async (query: string) => {
+    setSearchQuery(query);
+    onChangeText?.(query);
+    
+    if (query.trim()) {
+      setIsSearching(true);
+      let filtered: Array<{id: string; name: string}> = [];
+      
+      try {
+        if (Platform.OS === 'web') {
+          // Web: Use relationship data
+          filtered = relationships
+            .filter(rel => 
+              rel.contactName.toLowerCase().includes(query.toLowerCase())
+            )
+            .map(rel => ({
+              id: rel.contactId,
+              name: rel.contactName
+            }))
+            .slice(0, maxResults);
+        } else {
+          // Mobile: Use device contacts
+          filtered = deviceContacts
+            .filter(contact => 
+              contact.name?.toLowerCase().includes(query.toLowerCase()) ||
+              contact.phoneNumbers?.[0]?.number?.includes(query) ||
+              contact.emails?.[0]?.email?.toLowerCase().includes(query.toLowerCase())
+            )
+            .map((contact, index) => ({
+              id: (contact as any).id || `device_${Date.now()}_${index}`,
+              name: contact.name || 'Unknown'
+            }))
+            .slice(0, maxResults);
+        }
+        
+        setFilteredContacts(filtered);
+        setShowSearchResults(true);
+      } catch (error) {
+        console.error('Error searching contacts:', error);
+        setFilteredContacts([]);
+      } finally {
+        setIsSearching(false);
+      }
+    } else {
+      setShowSearchResults(false);
+      setFilteredContacts([]);
+    }
+  }, [relationships, deviceContacts, maxResults, onChangeText]);
+
+  const handleContactSelect = useCallback((contact: { id: string; name: string }) => {
+    onContactSelect(contact);
+    setSearchQuery(contact.name);
+    onChangeText?.(contact.name);
+    setShowSearchResults(false);
+    setFilteredContacts([]);
+  }, [onContactSelect, onChangeText]);
+
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery('');
+    onChangeText?.('');
+    setShowSearchResults(false);
+    setFilteredContacts([]);
+  }, [onChangeText]);
+
+  // Click outside handler for web
+  const handleClickOutside = useCallback((event: any) => {
+    if (Platform.OS === 'web' && searchContainerRef.current) {
+      const target = event.target;
+      const container = searchContainerRef.current;
+      
+      if (showSearchResults && !container.contains(target)) {
+        setShowSearchResults(false);
+        setFilteredContacts([]);
+      }
+    }
+  }, [showSearchResults]);
+
+  // Add click outside listener for web
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [handleClickOutside]);
+
+  return (
+    <View ref={searchContainerRef} style={[contactSearchStyles.container, style]}>
+      <View style={[contactSearchStyles.searchContainer, error && contactSearchStyles.errorContainer]}>
+        {showSearchIcon && (
+          <Search size={20} color="#6B7280" style={contactSearchStyles.searchIcon} />
+        )}
+        <TextInput
+          style={[contactSearchStyles.searchInput, disabled && contactSearchStyles.disabledInput]}
+          value={searchQuery}
+          onChangeText={handleSearch}
+          placeholder={placeholder}
+          placeholderTextColor="#9CA3AF"
+          editable={!disabled}
+          autoCorrect={false}
+          autoCapitalize="none"
+          focusable={false}
+          
+        />
+        {searchQuery.length > 0 && !disabled && (
+          <TouchableOpacity onPress={handleClearSearch} style={contactSearchStyles.clearButton}>
+            <X size={16} color="#6B7280" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {showSearchResults && (
+        <View style={[contactSearchStyles.searchResults, {position: (Platform.OS === 'android') ? "absolute" : "sticky"}]}>
+          {isSearching ? (
+            <View style={contactSearchStyles.loadingContainer}>
+              <Text style={contactSearchStyles.loadingText}>Searching...</Text>
+            </View>
+          ) : (
+            <View>
+              {/* Always show Add New Contact option at the top */}
+              {onCreateNewContact && searchQuery.trim() && (
+                <TouchableOpacity
+                  style={contactSearchStyles.addNewContactItem}
+                  onPress={() => {
+                    setShowSearchResults(false);
+                    setFilteredContacts([]);
+                    onCreateNewContact({ name: searchQuery });
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Plus size={16} color="#3B82F6" />
+                  <Text style={contactSearchStyles.addNewContactText}>
+                    Add "{searchQuery}" as new contact
+                  </Text>
+                </TouchableOpacity>
+              )}
+              
+              {/* Show existing contacts if any */}
+              {filteredContacts.length > 0 ? (
+                <FlatList
+                  data={filteredContacts}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={contactSearchStyles.searchResultItem}
+                      onPress={() => handleContactSelect(item)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={contactSearchStyles.searchResultText}>
+                        {item.name}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                />
+              ) : searchQuery.trim() && (
+                <View style={contactSearchStyles.noResultsContainer}>
+                  <Text style={contactSearchStyles.noResultsText}>
+                    {Platform.OS === 'web' 
+                      ? `No contacts found (Total relationships: ${relationships.length})`
+                      : `No contacts found (Device contacts: ${deviceContacts.length})`
+                    }
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+      )}
+
+      {error && (
+        <Text style={contactSearchStyles.errorText}>
+          {error}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+// ContactSearchInput Styles
+const contactSearchStyles = StyleSheet.create({
+  container: {
+    position: 'relative',
+    zIndex: 1,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#ffffff',
+    minHeight: 44,
+  },
+  errorContainer: {
+    borderColor: '#EF4444',
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#111827',
+    paddingVertical: 4,
+    borderColor: "transparent"
+  },
+  disabledInput: {
+    color: '#6B7280',
+    backgroundColor: '#F9FAFB',
+  },
+  clearButton: {
+    padding: 4,
+    marginLeft: 8,
+  },
+  searchResults: {
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    marginTop: 4,
+    maxHeight: 230,
+    zIndex: 9999,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  searchResultItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  searchResultText: {
+    fontSize: 16,
+    color: '#111827',
+  },
+  loadingContainer: {
+    padding: 12,
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  noResultsContainer: {
+    padding: 12,
+    alignItems: 'center',
+  },
+  noResultsText: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  addNewContactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    backgroundColor: '#F0F9FF',
+    borderLeftWidth: 3,
+    borderLeftColor: '#3B82F6',
+  },
+  addNewContactText: {
+    fontSize: 15,
+    color: '#1E40AF',
+    marginLeft: 8,
+    fontWeight: '600',
+  },
+});
 
 export default function RemindersScreen() {
   const router = useRouter();
   const { currentUser } = useAuth();
   
-  const { relationships, isLoading: relationshipsLoading } = useRelationships();
+  const { relationships, isLoading: relationshipsLoading, createRelationship } = useRelationships();
   const { createActivity } = useActivity();
   
   const [activeTab, setActiveTab] = useState<ReminderTab>('thisWeek');
@@ -80,8 +437,25 @@ export default function RemindersScreen() {
   
   // Contact Selection State
   const [selectedContact, setSelectedContact] = useState<Relationship | null>(null);
-  const [showContactPicker, setShowContactPicker] = useState(false);
   const [contactSearchQuery, setContactSearchQuery] = useState('');
+  const [contactSearchError, setContactSearchError] = useState('');
+  
+  // New Contact Creation State
+  const [showNewContactModal, setShowNewContactModal] = useState(false);
+  const [newContactName, setNewContactName] = useState('');
+  const [newContactPhone, setNewContactPhone] = useState('');
+  const [newContactEmail, setNewContactEmail] = useState('');
+  const [newContactWebsite, setNewContactWebsite] = useState('');
+  const [newContactLinkedin, setNewContactLinkedin] = useState('');
+  const [newContactTwitter, setNewContactTwitter] = useState('');
+  const [newContactInstagram, setNewContactInstagram] = useState('');
+  const [newContactFacebook, setNewContactFacebook] = useState('');
+  const [newContactCompany, setNewContactCompany] = useState('');
+  const [newContactJobTitle, setNewContactJobTitle] = useState('');
+  const [newContactAddress, setNewContactAddress] = useState('');
+  const [newContactBirthday, setNewContactBirthday] = useState('');
+  const [newContactNotes, setNewContactNotes] = useState('');
+  const [contactValidationErrors, setContactValidationErrors] = useState<Record<string, string>>({});
   
   // Contact Actions State
   const [showContactActions, setShowContactActions] = useState(false);
@@ -144,6 +518,78 @@ export default function RemindersScreen() {
   useEffect(() => {
     checkPermission();
   }, []);
+
+  // Handle contact selection from ContactSearchInput
+  const handleContactSelect = async (contact: { id: string; name: string }) => {
+    // Find the relationship that matches the selected contact
+    let relationship = relationships.find(rel => 
+      rel.contactId === contact.id || rel.contactName === contact.name
+    );
+    
+    if (relationship) {
+      // Use existing relationship
+      setSelectedContact(relationship);
+      setReminderContactName(contact.name);
+      setContactSearchError('');
+    } else {
+      // If no relationship found, create a new one
+      try {
+        if (!currentUser) {
+          Alert.alert('Error', 'User not authenticated');
+          return;
+        }
+
+        // Create a new relationship for this contact
+        const newRelationship: Relationship = {
+          id: `temp_${Date.now()}`,
+          contactId: contact.id,
+          contactName: contact.name,
+          lastContactDate: new Date().toISOString(),
+          lastContactMethod: 'other',
+          reminderFrequency: 'month',
+          nextReminderDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          tags: [],
+          notes: '',
+          familyInfo: { kids: '', siblings: '', spouse: '' },
+          contactData: {
+            phoneNumbers: [],
+            emails: [],
+            website: '',
+            linkedin: '',
+            twitter: '',
+            instagram: '',
+            facebook: '',
+            company: '',
+            jobTitle: '',
+            address: '',
+            birthday: '',
+            notes: '',
+          },
+        };
+
+        // Create the relationship in the database
+        const createdRelationship = await createRelationship(newRelationship);
+        
+        // Set the created relationship
+        setSelectedContact(createdRelationship);
+        setReminderContactName(contact.name);
+        setContactSearchError('');
+        
+        Alert.alert('Success', `New relationship created for ${contact.name}`);
+      } catch (error) {
+        console.error('Error creating relationship:', error);
+        Alert.alert('Error', 'Failed to create relationship for this contact');
+      }
+    }
+  };
+
+  // Handle contact search change
+  const handleContactSearchChange = (query: string) => {
+    setContactSearchQuery(query);
+    if (contactSearchError) {
+      setContactSearchError('');
+    }
+  };
 
   // Debug tab counts changes
 
@@ -215,6 +661,246 @@ export default function RemindersScreen() {
     endOfWeek.setHours(23, 59, 59, 999);
     
     return reminderDate >= startOfWeek && reminderDate <= endOfWeek;
+  };
+
+  // Contact validation functions
+  const validateContactEmail = (email: string): boolean => {
+    if (!email) return true; // Empty email is valid (optional field)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validateContactPhone = (phone: string): boolean => {
+    if (!phone) return true; // Empty phone is valid (optional field)
+    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+    const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
+    return phoneRegex.test(cleanPhone);
+  };
+
+  const validateContactURL = (url: string): boolean => {
+    if (!url) return true; // Empty URL is valid (optional field)
+    
+    // Clean the URL
+    let cleanUrl = url.trim();
+    
+    // Add protocol if missing
+    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+      cleanUrl = 'https://' + cleanUrl;
+    }
+    
+    try {
+      new URL(cleanUrl);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const validateContactBirthday = (birthday: string): boolean => {
+    if (!birthday) return true; // Empty birthday is valid (optional field)
+    const dateRegex = /^(0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01])\/\d{4}$/;
+    if (!dateRegex.test(birthday)) return false;
+    
+    const [month, day, year] = birthday.split('/').map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+  };
+
+  const validateContactForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    // Validate required fields
+    if (!newContactName.trim()) {
+      errors.contactName = 'Contact name is required';
+    } else if (newContactName.trim().length < 2) {
+      errors.contactName = 'Contact name must be at least 2 characters long';
+    }
+
+    // Validate contact information fields
+    if (newContactEmail && !validateContactEmail(newContactEmail)) {
+      errors.contactEmail = 'Please enter a valid email address';
+    }
+
+    if (newContactPhone && !validateContactPhone(newContactPhone)) {
+      errors.contactPhone = 'Please enter a valid phone number';
+    }
+
+    if (newContactWebsite && !validateContactURL(newContactWebsite)) {
+      errors.contactWebsite = 'Please enter a valid website URL (e.g., https://example.com)';
+    }
+
+    if (newContactLinkedin && !validateContactURL(newContactLinkedin)) {
+      errors.contactLinkedin = 'Please enter a valid LinkedIn URL (e.g., https://linkedin.com/in/username)';
+    }
+
+    if (newContactTwitter && newContactTwitter.trim()) {
+      // Twitter can be either a handle (@username) or URL
+      const isHandle = newContactTwitter.startsWith('@');
+      const isURL = newContactTwitter.startsWith('http') || newContactTwitter.includes('.');
+      
+      if (!isHandle && !isURL) {
+        errors.contactTwitter = 'Please enter a valid Twitter handle (@username) or URL';
+      } else if (isURL && !validateContactURL(newContactTwitter)) {
+        errors.contactTwitter = 'Please enter a valid Twitter URL (e.g., https://twitter.com/username)';
+      } else if (isHandle) {
+        // Validate handle format
+        const handleRegex = /^@[a-zA-Z0-9_]{1,15}$/;
+        if (!handleRegex.test(newContactTwitter)) {
+          errors.contactTwitter = 'Please enter a valid Twitter handle (@username, 1-15 characters, letters, numbers, and underscores only)';
+        }
+      }
+    }
+
+    if (newContactInstagram && newContactInstagram.trim()) {
+      // Instagram can be either a handle (@username) or URL
+      const isHandle = newContactInstagram.startsWith('@');
+      const isURL = newContactInstagram.startsWith('http') || newContactInstagram.includes('.');
+      
+      if (!isHandle && !isURL) {
+        errors.contactInstagram = 'Please enter a valid Instagram handle (@username) or URL';
+      } else if (isURL && !validateContactURL(newContactInstagram)) {
+        errors.contactInstagram = 'Please enter a valid Instagram URL (e.g., https://instagram.com/username)';
+      } else if (isHandle) {
+        // Validate handle format
+        const handleRegex = /^@[a-zA-Z0-9._]{1,30}$/;
+        if (!handleRegex.test(newContactInstagram)) {
+          errors.contactInstagram = 'Please enter a valid Instagram handle (@username, 1-30 characters, letters, numbers, dots, and underscores only)';
+        }
+      }
+    }
+
+    if (newContactFacebook && !validateContactURL(newContactFacebook)) {
+      errors.contactFacebook = 'Please enter a valid Facebook URL (e.g., https://facebook.com/username)';
+    }
+
+    if (newContactBirthday && !validateContactBirthday(newContactBirthday)) {
+      errors.contactBirthday = 'Please enter a valid birthday (MM/DD/YYYY)';
+    }
+
+    // Validate company and job title content
+    if (newContactCompany && newContactCompany.trim()) {
+      if (newContactCompany.length > 100) {
+        errors.contactCompany = 'Company name must be 100 characters or less';
+      } else if (newContactCompany.trim().length < 2) {
+        errors.contactCompany = 'Company name must be at least 2 characters long';
+      } else if (!/^[a-zA-Z0-9\s\-&.,'()]+$/.test(newContactCompany.trim())) {
+        errors.contactCompany = 'Company name contains invalid characters';
+      }
+    }
+
+    if (newContactJobTitle && newContactJobTitle.trim()) {
+      if (newContactJobTitle.length > 100) {
+        errors.contactJobTitle = 'Job title must be 100 characters or less';
+      } else if (newContactJobTitle.trim().length < 2) {
+        errors.contactJobTitle = 'Job title must be at least 2 characters long';
+      } else if (!/^[a-zA-Z0-9\s\-&.,'()]+$/.test(newContactJobTitle.trim())) {
+        errors.contactJobTitle = 'Job title contains invalid characters';
+      }
+    }
+
+    // Validate character limits
+    if (newContactAddress && newContactAddress.length > 200) {
+      errors.contactAddress = 'Address must be 200 characters or less';
+    }
+
+    if (newContactNotes && newContactNotes.length > 500) {
+      errors.contactNotes = 'Notes must be 500 characters or less';
+    }
+
+    setContactValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const clearContactFieldError = (fieldName: string) => {
+    if (contactValidationErrors[fieldName]) {
+      setContactValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[fieldName];
+        return newErrors;
+      });
+    }
+  };
+
+  const resetNewContactForm = () => {
+    setNewContactName('');
+    setNewContactPhone('');
+    setNewContactEmail('');
+    setNewContactWebsite('');
+    setNewContactLinkedin('');
+    setNewContactTwitter('');
+    setNewContactInstagram('');
+    setNewContactFacebook('');
+    setNewContactCompany('');
+    setNewContactJobTitle('');
+    setNewContactAddress('');
+    setNewContactBirthday('');
+    setNewContactNotes('');
+    setContactValidationErrors({});
+  };
+
+  const createNewContactAndRelationship = async () => {
+    if (!validateContactForm()) {
+      return;
+    }
+
+    if (!currentUser) {
+      Alert.alert('Error', 'User not authenticated');
+      return;
+    }
+
+    try {
+      // Create contact data object
+      const contactData = {
+        name: newContactName.trim(),
+        phoneNumbers: newContactPhone ? [{ number: newContactPhone }] : [],
+        emails: newContactEmail ? [{ email: newContactEmail }] : [],
+        website: newContactWebsite,
+        linkedin: newContactLinkedin,
+        twitter: newContactTwitter,
+        instagram: newContactInstagram,
+        facebook: newContactFacebook,
+        company: newContactCompany,
+        jobTitle: newContactJobTitle,
+        address: newContactAddress,
+        birthday: newContactBirthday,
+        notes: newContactNotes,
+      };
+
+      // Create a new relationship for the contact
+      const newRelationship: Relationship = {
+        id: `temp_${Date.now()}`,
+        contactId: `temp_${Date.now()}`,
+        contactName: contactData.name,
+        lastContactDate: new Date().toISOString(),
+        lastContactMethod: 'other',
+        reminderFrequency: 'month',
+        nextReminderDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        tags: [],
+        notes: contactData.notes,
+        familyInfo: { kids: '', siblings: '', spouse: '' },
+        contactData: contactData,
+      };
+
+      // Create the relationship in the database
+      const createdRelationship = await createRelationship(newRelationship);
+
+      // Set the selected contact and close modal
+      setSelectedContact(createdRelationship);
+      setReminderContactName(contactData.name);
+      setContactSearchError('');
+      setShowNewContactModal(false);
+      resetNewContactForm();
+
+      Alert.alert('Success', 'New contact and relationship created and selected!');
+    } catch (error) {
+      console.error('Error creating new contact and relationship:', error);
+      Alert.alert('Error', 'Failed to create new contact and relationship');
+    }
+  };
+
+  const handleCreateNewContact = (contactData: any) => {
+    setNewContactName(contactData.name || '');
+    setShowNewContactModal(true);
   };
 
 
@@ -452,11 +1138,19 @@ export default function RemindersScreen() {
     setReminderTags([]);
     setSelectedContact(null);
     setContactSearchQuery('');
+    setContactSearchError('');
   };
 
   const handleCreateReminder = async () => {
-    if (!currentUser || !selectedContact) {
-      Alert.alert('Error', 'Please select a contact');
+    if (!currentUser) {
+      Alert.alert('Error', 'User not authenticated');
+      return;
+    }
+
+    // Validation: Check if contact is selected
+    if (!selectedContact) {
+      setContactSearchError('Please select a contact');
+      Alert.alert('Validation Error', 'Please select a contact from the list or create a new one');
       return;
     }
     
@@ -479,15 +1173,27 @@ export default function RemindersScreen() {
     }
     
     try {
+      // Ensure we have a valid relationship
+      if (!selectedContact) {
+        Alert.alert('Error', 'Please select a contact before creating a reminder');
+        return;
+      }
+
+      // Use relationship data for the reminder
+      const contactName = selectedContact.contactName;
+      const contactId = selectedContact.contactId;
+      const relationshipId = selectedContact.id;
+      const tags = selectedContact.tags || [];
+
       // Create a new reminder
       await createReminder({
-        contactName: selectedContact.contactName,
-        contactId: selectedContact.contactId,
-        relationshipId: selectedContact.id,
+        contactName: contactName,
+        contactId: contactId,
+        relationshipId: relationshipId,
         type: reminderType,
         date: combinedDateTime.toISOString(),
         frequency: reminderFrequency,
-        tags: selectedContact.tags || [],
+        tags: tags,
         notes: reminderNote.trim(),
       });
       
@@ -1001,21 +1707,34 @@ export default function RemindersScreen() {
           <ScrollView style={styles.addReminderContent}>
             <View style={styles.reminderForm}>
               <Text style={styles.reminderFormLabel}>Contact *</Text>
-              <TouchableOpacity
-                style={styles.contactSelector}
-                onPress={() => setShowContactPicker(true)}
-              >
-                <View style={styles.contactSelectorContent}>
-                  <Users size={20} color="#6B7280" />
-                  <Text style={[
-                    styles.contactSelectorText,
-                    !selectedContact && styles.contactSelectorPlaceholder
-                  ]}>
-                    {selectedContact ? selectedContact.contactName : 'Select a contact...'}
+              <ContactSearchInput
+                onContactSelect={handleContactSelect}
+                placeholder="Search for a contact..."
+                value={selectedContact ? selectedContact.contactName : contactSearchQuery}
+                onChangeText={handleContactSearchChange}
+                error={contactSearchError}
+                style={styles.contactSearchInput}
+                onCreateNewContact={handleCreateNewContact}
+              />
+              
+              {/* {selectedContact && (
+                <View style={styles.selectedContactDisplay}>
+                  <CheckCircle size={16} color="#10B981" />
+                  <Text style={styles.selectedContactText}>
+                    Selected: {selectedContact.contactName}
                   </Text>
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setSelectedContact(null);
+                      setReminderContactName('');
+                      setContactSearchQuery('');
+                    }}
+                    style={styles.clearSelectionButton}
+                  >
+                    <X size={16} color="#6B7280" />
+                  </TouchableOpacity>
                 </View>
-                <ChevronDown size={20} color="#9CA3AF" />
-              </TouchableOpacity>
+              )} */}
               
               <Text style={styles.reminderFormLabel}>Type</Text>
               <View style={styles.typeSelector}>
@@ -1377,6 +2096,274 @@ export default function RemindersScreen() {
     );
   };
 
+  // New Contact Modal
+  const renderNewContactModal = () => (
+    <Modal visible={showNewContactModal} animationType="slide">
+      <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Create New Contact</Text>
+          <TouchableOpacity onPress={() => {
+            setShowNewContactModal(false);
+            resetNewContactForm();
+          }}>
+            <X size={24} color="#6B7280" />
+          </TouchableOpacity>
+        </View>
+        
+        <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Contact Information</Text>
+            
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Name *</Text>
+              <TextInput
+                style={[styles.input, contactValidationErrors.contactName && styles.inputError]}
+                value={newContactName}
+                onChangeText={(text) => {
+                  setNewContactName(text);
+                  clearContactFieldError('contactName');
+                }}
+                placeholder="Enter contact name"
+                placeholderTextColor="#9CA3AF"
+              />
+              {contactValidationErrors.contactName && (
+                <Text style={styles.errorText}>{contactValidationErrors.contactName}</Text>
+              )}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Phone Number</Text>
+              <TextInput
+                style={[styles.input, contactValidationErrors.contactPhone && styles.inputError]}
+                value={newContactPhone}
+                onChangeText={(text) => {
+                  setNewContactPhone(text);
+                  clearContactFieldError('contactPhone');
+                }}
+                placeholder="Enter phone number"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="phone-pad"
+              />
+              {contactValidationErrors.contactPhone && (
+                <Text style={styles.errorText}>{contactValidationErrors.contactPhone}</Text>
+              )}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Email</Text>
+              <TextInput
+                style={[styles.input, contactValidationErrors.contactEmail && styles.inputError]}
+                value={newContactEmail}
+                onChangeText={(text) => {
+                  setNewContactEmail(text);
+                  clearContactFieldError('contactEmail');
+                }}
+                placeholder="Enter email address"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              {contactValidationErrors.contactEmail && (
+                <Text style={styles.errorText}>{contactValidationErrors.contactEmail}</Text>
+              )}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Company</Text>
+              <TextInput
+                style={[styles.input, contactValidationErrors.contactCompany && styles.inputError]}
+                value={newContactCompany}
+                onChangeText={(text) => {
+                  setNewContactCompany(text);
+                  clearContactFieldError('contactCompany');
+                }}
+                placeholder="Enter company name"
+                placeholderTextColor="#9CA3AF"
+              />
+              {contactValidationErrors.contactCompany && (
+                <Text style={styles.errorText}>{contactValidationErrors.contactCompany}</Text>
+              )}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Job Title</Text>
+              <TextInput
+                style={[styles.input, contactValidationErrors.contactJobTitle && styles.inputError]}
+                value={newContactJobTitle}
+                onChangeText={(text) => {
+                  setNewContactJobTitle(text);
+                  clearContactFieldError('contactJobTitle');
+                }}
+                placeholder="Enter job title"
+                placeholderTextColor="#9CA3AF"
+              />
+              {contactValidationErrors.contactJobTitle && (
+                <Text style={styles.errorText}>{contactValidationErrors.contactJobTitle}</Text>
+              )}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Website</Text>
+              <TextInput
+                style={[styles.input, contactValidationErrors.contactWebsite && styles.inputError]}
+                value={newContactWebsite}
+                onChangeText={(text) => {
+                  setNewContactWebsite(text);
+                  clearContactFieldError('contactWebsite');
+                }}
+                placeholder="Enter website URL"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="url"
+                autoCapitalize="none"
+              />
+              {contactValidationErrors.contactWebsite && (
+                <Text style={styles.errorText}>{contactValidationErrors.contactWebsite}</Text>
+              )}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>LinkedIn</Text>
+              <TextInput
+                style={[styles.input, contactValidationErrors.contactLinkedin && styles.inputError]}
+                value={newContactLinkedin}
+                onChangeText={(text) => {
+                  setNewContactLinkedin(text);
+                  clearContactFieldError('contactLinkedin');
+                }}
+                placeholder="Enter LinkedIn profile URL"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="url"
+                autoCapitalize="none"
+              />
+              {contactValidationErrors.contactLinkedin && (
+                <Text style={styles.errorText}>{contactValidationErrors.contactLinkedin}</Text>
+              )}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>X (Twitter)</Text>
+              <TextInput
+                style={[styles.input, contactValidationErrors.contactTwitter && styles.inputError]}
+                value={newContactTwitter}
+                onChangeText={(text) => {
+                  setNewContactTwitter(text);
+                  clearContactFieldError('contactTwitter');
+                }}
+                placeholder="Enter X/Twitter handle or URL"
+                placeholderTextColor="#9CA3AF"
+                autoCapitalize="none"
+              />
+              {contactValidationErrors.contactTwitter && (
+                <Text style={styles.errorText}>{contactValidationErrors.contactTwitter}</Text>
+              )}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Instagram</Text>
+              <TextInput
+                style={[styles.input, contactValidationErrors.contactInstagram && styles.inputError]}
+                value={newContactInstagram}
+                onChangeText={(text) => {
+                  setNewContactInstagram(text);
+                  clearContactFieldError('contactInstagram');
+                }}
+                placeholder="Enter Instagram handle or URL"
+                placeholderTextColor="#9CA3AF"
+                autoCapitalize="none"
+              />
+              {contactValidationErrors.contactInstagram && (
+                <Text style={styles.errorText}>{contactValidationErrors.contactInstagram}</Text>
+              )}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Facebook</Text>
+              <TextInput
+                style={[styles.input, contactValidationErrors.contactFacebook && styles.inputError]}
+                value={newContactFacebook}
+                onChangeText={(text) => {
+                  setNewContactFacebook(text);
+                  clearContactFieldError('contactFacebook');
+                }}
+                placeholder="Enter Facebook profile URL"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="url"
+                autoCapitalize="none"
+              />
+              {contactValidationErrors.contactFacebook && (
+                <Text style={styles.errorText}>{contactValidationErrors.contactFacebook}</Text>
+              )}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Address</Text>
+              <TextInput
+                style={[styles.input, contactValidationErrors.contactAddress && styles.inputError]}
+                value={newContactAddress}
+                onChangeText={(text) => {
+                  setNewContactAddress(text);
+                  clearContactFieldError('contactAddress');
+                }}
+                placeholder="Enter address"
+                placeholderTextColor="#9CA3AF"
+                multiline
+                numberOfLines={2}
+              />
+              {contactValidationErrors.contactAddress && (
+                <Text style={styles.errorText}>{contactValidationErrors.contactAddress}</Text>
+              )}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Birthday</Text>
+              <TextInput
+                style={[styles.input, contactValidationErrors.contactBirthday && styles.inputError]}
+                value={newContactBirthday}
+                onChangeText={(text) => {
+                  setNewContactBirthday(text);
+                  clearContactFieldError('contactBirthday');
+                }}
+                placeholder="Enter birthday (MM/DD/YYYY)"
+                placeholderTextColor="#9CA3AF"
+              />
+              {contactValidationErrors.contactBirthday && (
+                <Text style={styles.errorText}>{contactValidationErrors.contactBirthday}</Text>
+              )}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Notes</Text>
+              <TextInput
+                style={[styles.input, styles.textArea, contactValidationErrors.contactNotes && styles.inputError]}
+                value={newContactNotes}
+                onChangeText={(text) => {
+                  setNewContactNotes(text);
+                  clearContactFieldError('contactNotes');
+                }}
+                placeholder="Enter additional notes"
+                placeholderTextColor="#9CA3AF"
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+              {contactValidationErrors.contactNotes && (
+                <Text style={styles.errorText}>{contactValidationErrors.contactNotes}</Text>
+              )}
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.saveButton, !newContactName.trim() && styles.saveButtonDisabled]}
+              onPress={createNewContactAndRelationship}
+              disabled={!newContactName.trim()}
+            >
+              <Text style={styles.saveButtonText}>Create Contact & Add to Reminder</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
+
   // Edit Reminder Modal
   const renderEditReminderModal = () => (
     <Modal visible={showEditReminderModal} animationType="slide" transparent>
@@ -1559,88 +2546,6 @@ export default function RemindersScreen() {
     </Modal>
   );
 
-  // Contact Picker Modal
-  const renderContactPickerModal = () => {
-    const filteredContacts = relationships.filter(contact =>
-      contact.contactName.toLowerCase().includes(contactSearchQuery.toLowerCase())
-    );
-
-    return (
-      <Modal visible={showContactPicker} animationType="slide" presentationStyle="pageSheet">
-        <SafeAreaView style={styles.contactPickerModal}>
-          <View style={styles.contactPickerHeader}>
-            <Text style={styles.contactPickerTitle}>Select Contact</Text>
-            <TouchableOpacity onPress={() => setShowContactPicker(false)}>
-              <X size={24} color="#6B7280" />
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.contactSearchContainer}>
-            <View style={styles.contactSearchInputContainer}>
-              <Search size={20} color="#6B7280" />
-              <TextInput
-                style={styles.contactSearchInput}
-                value={contactSearchQuery}
-                onChangeText={setContactSearchQuery}
-                placeholder="Search contacts..."
-                placeholderTextColor="#9CA3AF"
-              />
-            </View>
-          </View>
-
-          <ScrollView style={styles.contactList}>
-            {relationshipsLoading ? (
-              <View style={styles.loadingContainer}>
-                <Text style={styles.loadingText}>Loading contacts...</Text>
-              </View>
-            ) : filteredContacts.length > 0 ? (
-              filteredContacts.map((contact) => (
-                <TouchableOpacity
-                  key={contact.id}
-                  style={[
-                    styles.contactItem,
-                    selectedContact?.id === contact.id && styles.selectedContactItem
-                  ]}
-                  onPress={() => {
-                    setSelectedContact(contact);
-                    setReminderContactName(contact.contactName);
-                    setShowContactPicker(false);
-                    setContactSearchQuery('');
-                  }}
-                >
-                  <View style={styles.contactItemContent}>
-                    <View style={styles.contactAvatar}>
-                      <Text style={styles.contactAvatarText}>
-                        {contact.contactName.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                    <View style={styles.contactInfo}>
-                      <Text style={styles.contactName}>{contact.contactName}</Text>
-                      <Text style={styles.contactType}>{contact.lastContactMethod}</Text>
-                    </View>
-                  </View>
-                  {selectedContact?.id === contact.id && (
-                    <CheckCircle size={20} color="#3B82F6" />
-                  )}
-                </TouchableOpacity>
-              ))
-            ) : (
-              <View style={styles.emptyContactsContainer}>
-                <Users size={48} color="#9CA3AF" />
-                <Text style={styles.emptyContactsTitle}>No contacts found</Text>
-                <Text style={styles.emptyContactsSubtitle}>
-                  {contactSearchQuery 
-                    ? 'Try a different search term' 
-                    : 'Add contacts in the Relationships tab first'
-                  }
-                </Text>
-              </View>
-            )}
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
-    );
-  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -1769,8 +2674,8 @@ export default function RemindersScreen() {
       {renderReminderDetail()}
       {renderAddReminderModal()}
       {renderEditReminderModal()}
-      {renderContactPickerModal()}
       {renderContactActionsModal()}
+      {renderNewContactModal()}
 
       {/* Date Pickers for Native Platforms */}
       {Platform.OS !== 'web' && showDatePicker && (
@@ -2467,6 +3372,10 @@ const styles = StyleSheet.create({
   createReminderButtonTextDisabled: {
     color: '#9CA3AF',
   },
+  // Contact Search Input Styles
+  contactSearchInput: {
+    marginBottom: 16,
+  },
   // Contact Picker Styles
   contactSelector: {
     flexDirection: 'row',
@@ -2529,12 +3438,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
-  },
-  contactSearchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#374151',
-    marginLeft: 8,
   },
   contactList: {
     flex: 1,
@@ -2722,5 +3625,88 @@ const styles = StyleSheet.create({
   },
   contactActionSubtitleDisabled: {
     color: '#9CA3AF',
+  },
+  // New Contact Modal Styles
+  formContainer: {
+    flex: 1,
+    paddingHorizontal: 24,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 16,
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#374151',
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  saveButton: {
+    backgroundColor: '#3B82F6',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  saveButtonDisabled: {
+    backgroundColor: '#E5E7EB',
+  },
+  saveButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Selected Contact Display Styles
+  selectedContactDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#10B981',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 8,
+  },
+  selectedContactText: {
+    fontSize: 14,
+    color: '#059669',
+    marginLeft: 8,
+    flex: 1,
+    fontWeight: '500',
+  },
+  clearSelectionButton: {
+    padding: 4,
+    marginLeft: 8,
   },
 });
