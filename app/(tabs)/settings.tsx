@@ -8,6 +8,7 @@ import {
   Alert,
   ScrollView,
   Linking,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
@@ -25,6 +26,34 @@ import {
 } from 'lucide-react-native';
 import { useAuth } from '../../firebase/hooks/useAuth';
 import NotificationService from '../../services/NotificationService';
+
+// Web-compatible alert function
+const showAlert = (title: string, message: string, buttons?: any[]) => {
+  if (Platform.OS === 'web') {
+    if (!buttons || buttons.length === 0) {
+      window.alert(`${title}\n\n${message}`);
+      return;
+    }
+    
+    if (buttons.length === 2 && buttons[0].text === 'Cancel' && buttons[1].text === 'Sign Out') {
+      const result = window.confirm(`${title}\n\n${message}`);
+      if (result && buttons[1].onPress) {
+        buttons[1].onPress();
+      }
+      return;
+    }
+    
+    const result = window.confirm(`${title}\n\n${message}\n\nClick OK to continue or Cancel to abort.`);
+    if (result) {
+      const actionButton = buttons.find(btn => btn.text !== 'Cancel');
+      if (actionButton && actionButton.onPress) {
+        actionButton.onPress();
+      }
+    }
+  } else {
+    Alert.alert(title, message, buttons);
+  }
+};
 
 export default function SettingsScreen() {
   const { currentUser, signOut } = useAuth();
@@ -75,11 +104,11 @@ export default function SettingsScreen() {
   const handleDarkModeToggle = (value: boolean) => {
     setDarkMode(value);
     // TODO: Implement dark mode functionality
-    Alert.alert('Coming Soon', 'Dark mode will be available in a future update.');
+    showAlert('Coming Soon', 'Dark mode will be available in a future update.');
   };
 
   const handleSignOut = () => {
-    Alert.alert(
+    showAlert(
       'Sign Out',
       'Are you sure you want to sign out?',
       [
@@ -92,7 +121,7 @@ export default function SettingsScreen() {
               await signOut();
             } catch (error) {
               console.error('Error signing out:', error);
-              Alert.alert('Error', 'Failed to sign out. Please try again.');
+              showAlert('Error', 'Failed to sign out. Please try again.');
             }
           },
         },
@@ -101,7 +130,7 @@ export default function SettingsScreen() {
   };
 
   const handleOpenSettings = () => {
-    Alert.alert(
+    showAlert(
       'Device Settings',
       'To manage notification permissions, please go to your device settings.',
       [
@@ -125,13 +154,13 @@ export default function SettingsScreen() {
       );
       
       if (notificationId) {
-        Alert.alert('Success', 'Test notification scheduled! You should receive it in 5 seconds.');
+        showAlert('Success', 'Test notification scheduled! You should receive it in 5 seconds.');
       } else {
-        Alert.alert('Error', 'Failed to schedule test notification.');
+        showAlert('Error', 'Failed to schedule test notification.');
       }
     } catch (error) {
       console.error('Error scheduling test notification:', error);
-      Alert.alert('Error', 'Failed to schedule test notification.');
+      showAlert('Error', 'Failed to schedule test notification.');
     }
   };
 
@@ -218,7 +247,7 @@ export default function SettingsScreen() {
             icon={Shield}
             title="Privacy Policy"
             subtitle="Learn how we protect your data"
-            onPress={() => Alert.alert('Privacy Policy', 'Privacy policy will be available soon.')}
+            onPress={() => showAlert('Privacy Policy', 'Privacy policy will be available soon.')}
           />
           {/* <SettingItem
             icon={Shield}
@@ -235,13 +264,13 @@ export default function SettingsScreen() {
             icon={HelpCircle}
             title="Help Center"
             subtitle="Get help and support"
-            onPress={() => Alert.alert('Help Center', 'Help center will be available soon.')}
+            onPress={() => showAlert('Help Center', 'Help center will be available soon.')}
           />
           <SettingItem
             icon={Info}
             title="About"
             subtitle="App version and information"
-            onPress={() => Alert.alert('About', 'CircleUp v1.0.0\nBuilt with React Native and Expo')}
+            onPress={() => showAlert('About', 'CircleUp v1.0.0\nBuilt with React Native and Expo')}
           />
         </View>
 

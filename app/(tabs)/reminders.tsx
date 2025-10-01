@@ -112,6 +112,12 @@ export default function RemindersScreen() {
   // Check contacts permission
   const checkPermission = async () => {
     try {
+      if (Platform.OS === 'web') {
+        // For web, skip permission check and set permission to false
+        setHasPermission(false);
+        return;
+      }
+      
       const { status } = await Contacts.requestPermissionsAsync();
       setHasPermission(status === 'granted');
       if (status === 'granted') {

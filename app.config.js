@@ -39,7 +39,7 @@ export default {
       typedRoutes: true
     },
     android: {
-      package: "com.bhavikbhanushali.boltexponativewind",
+      package: "com.circleUp.app",
       googleServicesFile: "./google-services.json"
     },
     extra: {

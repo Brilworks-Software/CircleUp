@@ -748,7 +748,10 @@ export default function AddActivityModal({
 
   // Load device contacts (mobile only)
   const loadDeviceContacts = async () => {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web') {
+      setHasContactPermission(false);
+      return;
+    }
     
     try {
       setIsLoadingDeviceContacts(true);
@@ -849,14 +852,14 @@ export default function AddActivityModal({
   }, [showContactSearch]);
 
   // Add click outside listener for web
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
-    }
-  }, [handleClickOutside]);
+  // useEffect(() => {
+  //   if (Platform.OS === 'web') {
+  //     document.addEventListener('mousedown', handleClickOutside);
+  //     return () => {
+  //       document.removeEventListener('mousedown', handleClickOutside);
+  //     };
+  //   }
+  // }, [handleClickOutside]);
 
   return (
     <Modal

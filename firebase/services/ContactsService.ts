@@ -16,6 +16,7 @@ import {
 import { db } from '../config';
 import type { Contact, ContactInteraction } from '../types';
 import * as ExpoContacts from 'expo-contacts';
+import { Platform } from 'react-native';
 
 export interface CreateContactData {
   name: string;
@@ -54,6 +55,11 @@ class ContactsService {
    */
   async requestContactsPermission(): Promise<boolean> {
     try {
+      if (Platform.OS === 'web') {
+        // For web, skip permission request and return false
+        return false;
+      }
+      
       const { status } = await ExpoContacts.requestPermissionsAsync();
       return status === 'granted';
     } catch (error) {
@@ -67,6 +73,11 @@ class ContactsService {
    */
   async getContactsPermissionStatus(): Promise<ExpoContacts.PermissionStatus> {
     try {
+      if (Platform.OS === 'web') {
+        // For web, return denied status
+        return 'denied';
+      }
+      
       const { status } = await ExpoContacts.getPermissionsAsync();
       return status;
     } catch (error) {
@@ -80,6 +91,11 @@ class ContactsService {
    */
   async importContacts(userId: string): Promise<Contact[]> {
     try {
+      if (Platform.OS === 'web') {
+        // For web, return empty array as contacts cannot be imported
+        return [];
+      }
+      
       const { status } = await ExpoContacts.getPermissionsAsync();
       if (status !== 'granted') {
         throw new Error('Contacts permission not granted');

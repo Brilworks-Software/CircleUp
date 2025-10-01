@@ -17,7 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Contacts from 'expo-contacts';
-import { Plus, Users, Bell, Clock, MessageSquare, StickyNote, FileText, Phone, Calendar, CheckCircle, X, Save, Trash2, Mail, MessageCircle, User, AlertCircle, Search, ChevronRight } from 'lucide-react-native';
+import { Plus, Users, Bell, Clock, MessageSquare, StickyNote, FileText, Phone, Calendar, CheckCircle, X, Save, Trash2, Mail, MessageCircle, User, AlertCircle, Search, ChevronRight, LogOut } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useAuth } from '../../firebase/hooks/useAuth';
 import { useUser } from '../../firebase/hooks/useUser';
@@ -31,6 +31,34 @@ import CreateEditRelationshipModal from '../../components/CreateEditRelationship
 import RelationshipInfoModal from '../../components/RelationshipInfoModal';
 import WebCompatibleDateTimePicker from '../../components/WebCompatibleDateTimePicker';
 import type { Reminder, ReminderFrequency, Contact, Relationship, LastContactOption, ContactMethod, ReminderFrequency as RelationshipReminderFrequency } from '../../firebase/types';
+
+// Web-compatible alert function
+const showAlert = (title: string, message: string, buttons?: any[]) => {
+  if (Platform.OS === 'web') {
+    if (!buttons || buttons.length === 0) {
+      window.alert(`${title}\n\n${message}`);
+      return;
+    }
+    
+    if (buttons.length === 2 && buttons[0].text === 'Cancel' && buttons[1].text === 'Sign Out') {
+      const result = window.confirm(`${title}\n\n${message}`);
+      if (result && buttons[1].onPress) {
+        buttons[1].onPress();
+      }
+      return;
+    }
+    
+    const result = window.confirm(`${title}\n\n${message}\n\nClick OK to continue or Cancel to abort.`);
+    if (result) {
+      const actionButton = buttons.find(btn => btn.text !== 'Cancel');
+      if (actionButton && actionButton.onPress) {
+        actionButton.onPress();
+      }
+    }
+  } else {
+    Alert.alert(title, message, buttons);
+  }
+};
 
 export default function HomeScreen() {
   const { currentUser, signOut } = useAuth();
@@ -216,14 +244,43 @@ export default function HomeScreen() {
 
  
 
+  const handleSignOut = () => {
+    showAlert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut();
+              router.replace("/(auth)/login")
+            } catch (error) {
+              console.error('Error signing out:', error);
+              showAlert('Error', 'Failed to sign out. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const requestContactsPermission = async () => {
     try {
+      if (Platform.OS === 'web') {
+        // For web, skip permission request and set permission to false
+        setHasContactPermission(false);
+        return;
+      }
+      
       const { status } = await Contacts.requestPermissionsAsync();
       if (status === 'granted') {
         setHasContactPermission(true);
         await loadDeviceContacts();
       } else {
-        Alert.alert(
+        showAlert(
           'Permission Required',
           'This app needs access to your contacts to provide full functionality.',
           [
@@ -283,36 +340,8 @@ export default function HomeScreen() {
     );
     
     if (existingRelationship) {
-      // Show options: Edit relationship or View relationship
-      Alert.alert(
-        'Relationship Exists',
-        `A relationship already exists for ${contactName}. What would you like to do?`,
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel'
-          },
-          {
-            text: 'Edit Relationship',
-            onPress: () => {
-              // Open edit modal with existing relationship
-              setEditingRelationship(existingRelationship);
-              setSelectedContact({
-                id: existingRelationship.contactId,
-                name: existingRelationship.contactName,
-              });
-              setShowAddRelationshipModal(true);
-            }
-          },
-          {
-            text: 'View Relationship',
-            onPress: () => {
-              // Navigate to relationships page
-              router.push('/(tabs)/relationships');
-            }
-          }
-        ]
-      );
+      setSelectedRelationshipForInfo(existingRelationship);
+      setShowRelationshipInfoModal(true);
     } else {
       // Create new relationship
       setSelectedContact({
@@ -1763,7 +1792,9 @@ export default function HomeScreen() {
               </Text>
               <Text style={styles.subtitle}>Manage your connections</Text>
             </View>
-           
+            <TouchableOpacity style={styles.logoutButton} onPress={handleSignOut}>
+              <LogOut size={20} color="#6B7280" />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -2038,14 +2069,14 @@ export default function HomeScreen() {
                               setShowRelationshipInfoModal(true);
                             }}
                           >
-                            <View style={styles.relationshipCardHeader}>
+                            {/* <View style={styles.relationshipCardHeader}>
                               <TouchableOpacity 
                                 style={styles.relationshipCardClose}
                                 onPress={() => handleDeleteRelationship(relationship.id, relationship.contactName)}
                               >
                                 <X size={16} color="#6B7280" />
                               </TouchableOpacity>
-                            </View>
+                            </View> */}
                             
                             <View style={styles.relationshipAvatar}>
                               <Text style={styles.relationshipAvatarText}>
@@ -2741,9 +2772,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   logoutButton: {
-    padding: 8,
+    padding: 12,
     borderRadius: 8,
     backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   title: {
     fontSize: 24,

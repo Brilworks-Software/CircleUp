@@ -91,6 +91,10 @@ export default function LoginScreen() {
     router.push('/(auth)/signup');
   };
 
+  const goToForgotPassword = () => {
+    router.push('/(auth)/forgot-password');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView 
@@ -162,7 +166,7 @@ export default function LoginScreen() {
               )}
             </View>
 
-            <TouchableOpacity style={styles.forgotPassword}>
+            <TouchableOpacity style={styles.forgotPassword} onPress={goToForgotPassword}>
               <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
             </TouchableOpacity>
 

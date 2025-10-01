@@ -339,8 +339,8 @@ export default function RelationshipsScreen() {
   const checkPermission = async () => {
     try {
       if (Platform.OS === 'web') {
-        // For web, check if Web Contacts API is available
-        setHasPermission('contacts' in navigator);
+        // For web, skip permission check and set permission to false
+        setHasPermission(false);
       } else {
         const { status } = await Contacts.getPermissionsAsync();
         setHasPermission(status === 'granted');
@@ -353,11 +353,9 @@ export default function RelationshipsScreen() {
   const requestPermission = async () => {
     try {
       if (Platform.OS === 'web') {
-        // For web, check if Web Contacts API is available
-        setHasPermission('contacts' in navigator);
-        if ('contacts' in navigator) {
-          // Web Contacts API is available, we can proceed
-        }
+        // For web, skip permission request and set permission to false
+        setHasPermission(false);
+        return;
       } else {
         const { status } = await Contacts.requestPermissionsAsync();
         setHasPermission(status === 'granted');

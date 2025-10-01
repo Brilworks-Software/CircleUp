@@ -25,6 +25,7 @@ const firebaseConfig = {
 // Initialize Firebase
 let app: FirebaseApp;
 let auth: Auth;
+let messaging;
 
 // Initialize Firebase services
 if (!getApps().length) {
@@ -44,4 +45,8 @@ if (!getApps().length) {
   }
   const db = getFirestore(app);
   const storage = getStorage(app);
-export { app, auth, db, storage };
+  if (Platform.OS === 'web') {
+    const {getMessaging} = require('firebase/messaging');
+    messaging = getMessaging(app);
+  }
+export { app, auth, db, storage, messaging };

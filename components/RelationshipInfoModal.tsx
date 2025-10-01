@@ -997,21 +997,22 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     flexDirection: 'row',
-    gap: 8,
+    alignItems: 'center',
+    width: '100%',
   },
   getInTouchButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    flex: 1,
+    backgroundColor: '#ffffff',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    marginRight: 12,
   },
   getInTouchText: {
-    color: '#ffffff',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
+    color: '#3B82F6',
+    textAlign: 'center',
   },
   detailScrollView: {
     flex: 1,
@@ -1264,15 +1265,17 @@ const styles = StyleSheet.create({
   },
   // More button styles
   moreButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   moreButtonText: {
+    fontSize: 20,
     color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
   // Detail Actions Modal styles
   detailActionsOverlay: {

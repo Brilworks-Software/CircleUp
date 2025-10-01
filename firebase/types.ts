@@ -6,6 +6,7 @@ export interface User {
   email: string;
   phone?: string;
   photoUrl?: string;
+  fcmToken?: string; // Firebase Cloud Messaging token for push notifications
   createdAt: any;
   updatedAt?: any;
   settings?: UserSettings;
