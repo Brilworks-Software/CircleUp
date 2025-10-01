@@ -210,6 +210,72 @@ export const useContacts = () => {
     }
   }, [contactsService, user?.uid]);
 
+  const createContact = useCallback(async (contactData: import('../services/ContactsService').CreateContactData): Promise<Contact> => {
+    if (!user?.uid) throw new Error('User not authenticated');
+    
+    try {
+      setError(null);
+      const newContact = await contactsService.createContact(user.uid, contactData);
+      
+      // Update local state
+      setContacts(prev => [...prev, newContact]);
+      setFilteredContacts(prev => [...prev, newContact]);
+      
+      return newContact;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create contact');
+      throw err;
+    }
+  }, [contactsService, user?.uid]);
+
+  const updateContact = useCallback(async (contactId: string, updateData: import('../services/ContactsService').UpdateContactData): Promise<boolean> => {
+    if (!user?.uid) return false;
+    
+    try {
+      setError(null);
+      const success = await contactsService.updateContact(user.uid, contactId, updateData);
+      
+      if (success) {
+        // Update local state
+        setContacts(prev => prev.map(contact => 
+          contact.id === contactId 
+            ? { ...contact, ...updateData, updatedAt: new Date().toISOString() }
+            : contact
+        ));
+        setFilteredContacts(prev => prev.map(contact => 
+          contact.id === contactId 
+            ? { ...contact, ...updateData, updatedAt: new Date().toISOString() }
+            : contact
+        ));
+      }
+      
+      return success;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update contact');
+      return false;
+    }
+  }, [contactsService, user?.uid]);
+
+  const deleteContact = useCallback(async (contactId: string): Promise<boolean> => {
+    if (!user?.uid) return false;
+    
+    try {
+      setError(null);
+      const success = await contactsService.deleteContact(user.uid, contactId);
+      
+      if (success) {
+        // Update local state
+        setContacts(prev => prev.filter(contact => contact.id !== contactId));
+        setFilteredContacts(prev => prev.filter(contact => contact.id !== contactId));
+      }
+      
+      return success;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete contact');
+      return false;
+    }
+  }, [contactsService, user?.uid]);
+
   // Helper function to filter contacts locally (for immediate UI updates)
   const filterContacts = useCallback((query: string) => {
     if (!query.trim()) {
@@ -262,6 +328,9 @@ export const useContacts = () => {
     getContactsCount,
     getInteractionsCount,
     getContactsWithLastInteraction,
+    createContact,
+    updateContact,
+    deleteContact,
     
     // Helper functions
     filterContacts,

@@ -23,6 +23,7 @@ interface ContactSearchInputProps {
   disabled?: boolean;
   showSearchIcon?: boolean;
   maxResults?: number;
+  onCreateNewContact?: (contactData: any) => void;
 }
 
 export default function ContactSearchInput({
@@ -35,6 +36,7 @@ export default function ContactSearchInput({
   disabled = false,
   showSearchIcon = true,
   maxResults = 5,
+  onCreateNewContact,
 }: ContactSearchInputProps) {
   const { searchContacts, filterContacts } = useContacts();
   const { relationships } = useRelationships();
@@ -217,7 +219,7 @@ export default function ContactSearchInput({
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             />
-          ) : (
+          ) : searchQuery.trim() && (
             <View style={styles.noResultsContainer}>
               <Text style={styles.noResultsText}>
                 {Platform.OS === 'web' 
@@ -225,6 +227,15 @@ export default function ContactSearchInput({
                   : `No contacts found (Device contacts: ${deviceContacts.length})`
                 }
               </Text>
+              {onCreateNewContact && (
+                <TouchableOpacity
+                  style={styles.createNewContactButton}
+                  onPress={() => onCreateNewContact({ name: searchQuery })}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.createNewContactText}>+ Create "{searchQuery}"</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
         </View>
@@ -323,5 +334,18 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     fontSize: 12,
     marginTop: 4,
+  },
+  createNewContactButton: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  createNewContactText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

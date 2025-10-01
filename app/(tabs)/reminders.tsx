@@ -66,36 +66,12 @@ function ContactSearchInput({
   const [deviceContacts, setDeviceContacts] = useState<Contacts.Contact[]>([]);
   const [hasContactPermission, setHasContactPermission] = useState(false);
 
-  // Load device contacts on mount (mobile only)
-  useEffect(() => {
-    if (Platform.OS !== 'web') {
-      loadDeviceContacts();
-    }
-  }, []);
 
   // Update local search query when value prop changes
   useEffect(() => {
     setSearchQuery(value);
   }, [value]);
 
-  const loadDeviceContacts = async () => {
-    try {
-      const { status } = await Contacts.requestPermissionsAsync();
-      
-      if (status === 'granted') {
-        setHasContactPermission(true);
-        const { data } = await Contacts.getContactsAsync({
-          fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers, Contacts.Fields.Emails],
-        });
-        setDeviceContacts(data);
-      } else {
-        setHasContactPermission(false);
-      }
-    } catch (error) {
-      console.error('Error loading device contacts:', error);
-      setHasContactPermission(false);
-    }
-  };
 
   const handleSearch = useCallback(async (query: string) => {
     setSearchQuery(query);
@@ -487,8 +463,8 @@ export default function RemindersScreen() {
   const checkPermission = async () => {
     try {
       if (Platform.OS === 'web') {
-        // For web, skip permission check and set permission to false
-        setHasPermission(false);
+        // For web, assume permission is available (Web Contacts API handles this)
+        setHasPermission(true);
         return;
       }
       
@@ -499,6 +475,7 @@ export default function RemindersScreen() {
       }
     } catch (error) {
       console.error('Error requesting contacts permission:', error);
+      setHasPermission(false);
     }
   };
 
@@ -517,6 +494,13 @@ export default function RemindersScreen() {
   // Load contacts on component mount
   useEffect(() => {
     checkPermission();
+  }, []);
+
+  // Load device contacts on mount (mobile only) for ContactSearchInput
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      checkPermission();
+    }
   }, []);
 
   // Handle contact selection from ContactSearchInput
@@ -838,6 +822,79 @@ export default function RemindersScreen() {
     setContactValidationErrors({});
   };
 
+  // Web-compatible contact creation using Web Contacts API
+  const createWebContact = async (contactData: any) => {
+    if (!('contacts' in navigator)) {
+      throw new Error('Web Contacts API not supported in this browser');
+    }
+
+    try {
+      // Create contact properties for Web Contacts API
+      const contactProperties: any = {
+        name: [contactData.name],
+      };
+
+      // Add phone numbers
+      if (contactData.phoneNumbers && contactData.phoneNumbers.length > 0) {
+        contactProperties.tel = contactData.phoneNumbers.map((phone: any) => phone.number);
+      }
+
+      // Add emails
+      if (contactData.emails && contactData.emails.length > 0) {
+        contactProperties.email = contactData.emails.map((email: any) => email.email);
+      }
+
+      // Add organization info
+      if (contactData.company) {
+        contactProperties.org = contactData.company;
+      }
+
+      // Add job title as note
+      if (contactData.jobTitle) {
+        contactProperties.note = contactData.jobTitle;
+      }
+
+      // Add address
+      if (contactData.addresses && contactData.addresses.length > 0) {
+        contactProperties.adr = contactData.addresses.map((addr: any) => [
+          '', // P.O. Box
+          '', // Extended Address
+          addr.street || '', // Street Address
+          '', // Locality
+          addr.city || '', // Region
+          addr.postalCode || '', // Postal Code
+          addr.country || '' // Country Name
+        ]);
+      }
+
+      // Add website
+      if (contactData.website) {
+        contactProperties.url = [contactData.website];
+      }
+
+      // Use Web Contacts API to create contact
+      const contact = await (navigator as any).contacts.create(contactProperties);
+      return contact;
+    } catch (error) {
+      console.error('❌ Error creating web contact:', error);
+      
+      // Provide more specific error messages based on the error type
+      if (error instanceof Error) {
+        if (error.message.includes('not supported')) {
+          throw new Error('Web Contacts API not supported in this browser');
+        } else if (error.message.includes('permission')) {
+          throw new Error('Permission denied for Web Contacts API');
+        } else if (error.message.includes('network')) {
+          throw new Error('Network error while creating contact');
+        } else {
+          throw new Error(`Web contact creation failed: ${error.message}`);
+        }
+      } else {
+        throw new Error('Unknown error occurred while creating web contact');
+      }
+    }
+  };
+
   const createNewContactAndRelationship = async () => {
     if (!validateContactForm()) {
       return;
@@ -866,10 +923,110 @@ export default function RemindersScreen() {
         notes: newContactNotes,
       };
 
+      // Try to create device contact first (if permission is available)
+      let deviceContactId = null;
+      if (hasPermission) {
+        try {
+          // Build contact data for device contacts
+          const fullName = contactData.name.trim();
+          const nameParts = fullName.split(' ');
+          const firstName = nameParts[0] || '';
+          const familyName = nameParts.slice(1).join(' ') || '';
+
+          const deviceContactData: any = {
+            [Contacts.Fields.FirstName]: firstName,
+            [Contacts.Fields.LastName]: familyName,
+            [Contacts.Fields.Name]: fullName,
+          };
+
+          // Add phone number if provided
+          if (contactData.phoneNumbers.length > 0) {
+            deviceContactData[Contacts.Fields.PhoneNumbers] = contactData.phoneNumbers.map(phone => ({ 
+              number: phone.number, 
+              label: 'mobile',
+              isPrimary: true
+            }));
+          }
+
+          // Add email if provided
+          if (contactData.emails.length > 0) {
+            deviceContactData[Contacts.Fields.Emails] = contactData.emails.map(email => ({ 
+              email: email.email, 
+              label: 'work',
+              isPrimary: true
+            }));
+          }
+
+          // Add company and job title as organization info
+          if (contactData.company || contactData.jobTitle) {
+            deviceContactData[Contacts.Fields.Company] = contactData.company || '';
+            deviceContactData[Contacts.Fields.JobTitle] = contactData.jobTitle || '';
+          }
+
+          // Add address if provided
+          if (contactData.address) {
+            deviceContactData[Contacts.Fields.Addresses] = [{ 
+              street: contactData.address, 
+              label: 'home',
+              isPrimary: true
+            }];
+          }
+
+          // Add birthday if provided
+          if (contactData.birthday) {
+            deviceContactData[Contacts.Fields.Birthday] = { 
+              day: 1, 
+              month: 1, 
+              year: new Date().getFullYear() // Default year, user can edit later
+            };
+          }
+
+          // Add notes if provided
+          if (contactData.notes) {
+            deviceContactData[Contacts.Fields.Note] = contactData.notes;
+          }
+
+          if (Platform.OS === 'web') {
+            // Use Web Contacts API for web platform
+            const webContact = await createWebContact({
+              name: fullName,
+              phoneNumbers: deviceContactData[Contacts.Fields.PhoneNumbers] || [],
+              emails: deviceContactData[Contacts.Fields.Emails] || [],
+              company: deviceContactData[Contacts.Fields.Company] || '',
+              jobTitle: deviceContactData[Contacts.Fields.JobTitle] || '',
+              addresses: deviceContactData[Contacts.Fields.Addresses] || [],
+              website: contactData.website || undefined,
+            });
+            deviceContactId = webContact?.id || `web_${Date.now()}`;
+          } else {
+            // Use Expo Contacts for mobile platforms
+            deviceContactId = await Contacts.addContactAsync(deviceContactData);
+          }
+        } catch (contactError) {
+          console.error('❌ Error adding contact to device:', contactError);
+          console.error('❌ Contact data that failed:', contactData);
+          
+          // Show platform-specific error messages
+          if (Platform.OS === 'web') {
+            const errorMessage = contactError instanceof Error ? contactError.message : 'Unknown error';
+            Alert.alert(
+              'Web Contact Creation Failed',
+              `Unable to create contact in your device contacts: ${errorMessage}. The relationship will still be created.`
+            );
+          } else {
+            Alert.alert(
+              'Contact Creation Failed',
+              'Unable to add contact to device contacts. The relationship will still be created.'
+            );
+          }
+          // Continue with relationship creation even if device contact fails
+        }
+      }
+
       // Create a new relationship for the contact
       const newRelationship: Relationship = {
         id: `temp_${Date.now()}`,
-        contactId: `temp_${Date.now()}`,
+        contactId: deviceContactId || `temp_${Date.now()}`,
         contactName: contactData.name,
         lastContactDate: new Date().toISOString(),
         lastContactMethod: 'other',
@@ -891,7 +1048,11 @@ export default function RemindersScreen() {
       setShowNewContactModal(false);
       resetNewContactForm();
 
-      Alert.alert('Success', 'New contact and relationship created and selected!');
+      const successMessage = deviceContactId 
+        ? 'New contact created in device and relationship created!'
+        : 'New relationship created! (Device contact creation failed)';
+      
+      Alert.alert('Success', successMessage);
     } catch (error) {
       console.error('Error creating new contact and relationship:', error);
       Alert.alert('Error', 'Failed to create new contact and relationship');

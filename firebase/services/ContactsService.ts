@@ -20,14 +20,34 @@ import { Platform } from 'react-native';
 
 export interface CreateContactData {
   name: string;
-  phoneNumbers?: { number: string }[];
-  emails?: { email: string }[];
+  phoneNumbers?: { number: string; label?: string }[];
+  emails?: { email: string; label?: string }[];
+  website?: string;
+  linkedin?: string;
+  twitter?: string;
+  instagram?: string;
+  facebook?: string;
+  company?: string;
+  jobTitle?: string;
+  address?: string;
+  birthday?: string;
+  notes?: string;
 }
 
 export interface UpdateContactData {
   name?: string;
-  phoneNumbers?: { number: string }[];
-  emails?: { email: string }[];
+  phoneNumbers?: { number: string; label?: string }[];
+  emails?: { email: string; label?: string }[];
+  website?: string;
+  linkedin?: string;
+  twitter?: string;
+  instagram?: string;
+  facebook?: string;
+  company?: string;
+  jobTitle?: string;
+  address?: string;
+  birthday?: string;
+  notes?: string;
 }
 
 export interface CreateInteractionData {
@@ -75,14 +95,14 @@ class ContactsService {
     try {
       if (Platform.OS === 'web') {
         // For web, return denied status
-        return 'denied';
+        return ExpoContacts.PermissionStatus.DENIED;
       }
       
       const { status } = await ExpoContacts.getPermissionsAsync();
       return status;
     } catch (error) {
       console.error('Error getting contacts permission status:', error);
-      return 'undetermined';
+      return ExpoContacts.PermissionStatus.UNDETERMINED;
     }
   }
 
@@ -207,6 +227,91 @@ class ContactsService {
     } catch (error) {
       console.error('Error searching contacts:', error);
       return [];
+    }
+  }
+
+  /**
+   * Create a new contact
+   */
+  async createContact(userId: string, contactData: CreateContactData): Promise<Contact> {
+    try {
+      const contactRef = doc(collection(db, this.CONTACTS_COLLECTION));
+      const contact: Contact = {
+        id: contactRef.id,
+        name: contactData.name,
+        phoneNumbers: contactData.phoneNumbers || [],
+        emails: contactData.emails || [],
+        website: contactData.website || '',
+        linkedin: contactData.linkedin || '',
+        twitter: contactData.twitter || '',
+        instagram: contactData.instagram || '',
+        facebook: contactData.facebook || '',
+        company: contactData.company || '',
+        jobTitle: contactData.jobTitle || '',
+        address: contactData.address || '',
+        birthday: contactData.birthday || '',
+        notes: contactData.notes || '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      await setDoc(contactRef, {
+        ...contact,
+        userId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      return contact;
+    } catch (error) {
+      console.error('Error creating contact:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update a contact
+   */
+  async updateContact(userId: string, contactId: string, updateData: UpdateContactData): Promise<boolean> {
+    try {
+      const contactRef = doc(db, this.CONTACTS_COLLECTION, contactId);
+      
+      // Verify the contact belongs to the user
+      const contactSnap = await getDoc(contactRef);
+      if (!contactSnap.exists() || contactSnap.data().userId !== userId) {
+        return false;
+      }
+
+      await updateDoc(contactRef, {
+        ...updateData,
+        updatedAt: serverTimestamp(),
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error updating contact:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Delete a contact
+   */
+  async deleteContact(userId: string, contactId: string): Promise<boolean> {
+    try {
+      const contactRef = doc(db, this.CONTACTS_COLLECTION, contactId);
+      
+      // Verify the contact belongs to the user
+      const contactSnap = await getDoc(contactRef);
+      if (!contactSnap.exists() || contactSnap.data().userId !== userId) {
+        return false;
+      }
+
+      await deleteDoc(contactRef);
+      return true;
+    } catch (error) {
+      console.error('Error deleting contact:', error);
+      return false;
     }
   }
 
