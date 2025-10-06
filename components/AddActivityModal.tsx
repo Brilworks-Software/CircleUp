@@ -702,6 +702,23 @@ export default function AddActivityModal({
   };
 
   const handleTabSwitch = (tab: 'note' | 'interaction' | 'reminder') => {
+    // Sync notes across all tabs before switching
+    const currentNotes = 
+      activeActivityTab === 'note' ? noteContent :
+      activeActivityTab === 'interaction' ? interactionNotes :
+      activityReminderNotes;
+    
+    // Apply the current notes to all tabs
+    if (currentNotes) {
+      if (tab === 'note') {
+        setNoteContent(currentNotes);
+      } else if (tab === 'interaction') {
+        setInteractionNotes(currentNotes);
+      } else if (tab === 'reminder') {
+        setActivityReminderNotes(currentNotes);
+      }
+    }
+    
     setActiveActivityTab(tab);
 
     // Animate tab switches
@@ -1362,7 +1379,7 @@ export default function AddActivityModal({
                   </View> */}
 
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Note *</Text>
+                    <Text style={styles.inputLabel}>Notes *</Text>
                     <TextInput
                       style={[
                         styles.activityTextArea,
@@ -1370,7 +1387,7 @@ export default function AddActivityModal({
                       ]}
                       value={noteContent}
                       onChangeText={setNoteContent}
-                      placeholder="Write your note here..."
+                      placeholder="Enter notes..."
                       placeholderTextColor="#9CA3AF"
                       multiline
                       textAlignVertical="top"
@@ -1548,7 +1565,7 @@ export default function AddActivityModal({
                       ]}
                       value={interactionNotes}
                       onChangeText={setInteractionNotes}
-                      placeholder="Describe the interaction..."
+                      placeholder="Enter notes..."
                       placeholderTextColor="#9CA3AF"
                       multiline
                       textAlignVertical="top"
@@ -1808,7 +1825,7 @@ export default function AddActivityModal({
                       style={styles.activityTextArea}
                       value={activityReminderNotes}
                       onChangeText={setActivityReminderNotes}
-                      placeholder="Additional notes..."
+                      placeholder="Enter notes..."
                       placeholderTextColor="#9CA3AF"
                       multiline
                       textAlignVertical="top"
@@ -2190,16 +2207,15 @@ export default function AddActivityModal({
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Notes</Text>
                 <TextInput
-                  style={[styles.input, styles.textArea, contactValidationErrors.contactNotes && styles.inputError]}
+                  style={[styles.activityTextArea, contactValidationErrors.contactNotes && styles.inputError]}
                   value={newContactNotes}
                   onChangeText={(text) => {
                     setNewContactNotes(text);
                     clearContactFieldError('contactNotes');
                   }}
-                  placeholder="Enter additional notes"
+                  placeholder="Enter notes..."
                   placeholderTextColor="#9CA3AF"
                   multiline
-                  numberOfLines={3}
                   textAlignVertical="top"
                 />
                 {contactValidationErrors.contactNotes && (

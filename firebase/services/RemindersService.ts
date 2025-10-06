@@ -18,6 +18,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config';
 import type { Reminder, ReminderTab, FilterType } from '../types';
+import {Timestamp} from 'firebase/firestore';
 
 export interface CreateReminderData {
   contactName: string;
@@ -229,6 +230,29 @@ class RemindersService {
     }
   }
 
+  normalizeToZeroSeconds(inputTime: any) {
+    let date;
+  
+    // Handle Firestore Timestamp
+    if (inputTime && typeof inputTime.toDate === 'function') {
+      date = inputTime.toDate();
+    }
+    // Handle JS Date
+    else if (inputTime instanceof Date) {
+      date = inputTime;
+    }
+    // Handle string or number
+    else {
+      date = new Date(inputTime);
+    }
+  
+    // Set seconds and milliseconds to 0
+    date.setSeconds(0, 0);
+  
+    // Return Firestore Timestamp
+    return Timestamp.fromDate(date);
+  }
+
   /**
    * Create a new reminder
    */
@@ -251,7 +275,7 @@ class RemindersService {
         
         const docData: any = {
           ...reminderData,
-          date: new Date(reminderData.date), // Convert string to Date object for Firebase timestamp storage
+          date: this.normalizeToZeroSeconds(reminderData.date), // Convert string to Date object for Firebase timestamp storage
           userId,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -297,7 +321,7 @@ class RemindersService {
 
       // Handle date updates - convert string to Date object for Firebase timestamp storage
       if (updates.date) {
-        updateData.date = new Date(updates.date);
+        updateData.date = this.normalizeToZeroSeconds(updates.date);
         // Note: isOverdue and isThisWeek are calculated fields, not stored in DB
         // They will be recalculated when the reminder is fetched
       }
