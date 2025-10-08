@@ -11,7 +11,12 @@ export default {
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
     ios: {
-      supportsTablet: true
+      supportsTablet: true,
+      bundleIdentifier: "com.circleUp.app",
+      config: {
+        usesNonExemptEncryption: false
+      },
+      googleServicesFile: "./GoogleService-Info.plist"
     },
     web: {
       bundler: "metro",

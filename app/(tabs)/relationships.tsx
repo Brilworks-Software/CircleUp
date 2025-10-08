@@ -3125,7 +3125,7 @@ export default function RelationshipsScreen() {
             
             {/* Bottom Input */}
             <View style={styles.bottomInput}>
-              <TouchableOpacity style={styles.inputMenuButton}>
+              <TouchableOpacity style={styles.inputMenuButton} onPress={openAddActivityModal}>
                 <Text style={styles.inputMenuText}>☰</Text>
               </TouchableOpacity>
               <TouchableOpacity 
