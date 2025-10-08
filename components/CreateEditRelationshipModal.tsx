@@ -201,7 +201,7 @@ export default function CreateEditRelationshipModal({
       // Creating new relationship with pre-selected contact
       setSelectedContact(initialContact);
       
-      // Pre-populate contact data from initial contact
+      // Pre-populate contact data from initial contact - prioritize existing data over individual fields
       setContactPhone(initialContact.phoneNumbers?.[0]?.number || '');
       setContactEmail(initialContact.emails?.[0]?.email || '');
       setContactCompany(initialContact.company || '');
@@ -552,8 +552,9 @@ export default function CreateEditRelationshipModal({
         notes,
         familyInfo,
         contactData: {
-          phoneNumbers: contactPhone ? [{ number: contactPhone, label: 'mobile' }] : [],
-          emails: contactEmail ? [{ email: contactEmail, label: 'work' }] : [],
+          // Store all phone numbers and emails from the selected contact, fallback to manual input
+          phoneNumbers: selectedContact?.phoneNumbers || (contactPhone ? [{ number: contactPhone, label: 'mobile' }] : []),
+          emails: selectedContact?.emails || (contactEmail ? [{ email: contactEmail, label: 'work' }] : []),
           website: contactWebsite,
           linkedin: contactLinkedin,
           twitter: contactTwitter,

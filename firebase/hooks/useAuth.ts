@@ -15,6 +15,7 @@ export const useAuth = () => {
   const createUserMutation = useCreateUser();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoadingUser, setIsLoadingUser] = useState(true);
+  const [fcmTokenRegistered, setFcmTokenRegistered] = useState(false);
 
   // Set up real-time auth state listener
   useEffect(() => {
@@ -28,21 +29,25 @@ export const useAuth = () => {
         queryClient.invalidateQueries({ queryKey: ['currentUser'] });
         queryClient.invalidateQueries({ queryKey: ['user', user.uid] });
         
-        // Add FCM token for the logged-in user
-        try {
-          await addUserFCMToken();
-        } catch (error) {
-          console.error('Failed to add FCM token on login:', error);
+        // Add FCM token for the logged-in user (only once per session)
+        if (!fcmTokenRegistered) {
+          try {
+            await addUserFCMToken();
+            setFcmTokenRegistered(true);
+          } catch (error) {
+            console.error('Failed to add FCM token on login:', error);
+          }
         }
       } else {
-        // User is signed out - clear user data
+        // User is signed out - clear user data and reset FCM token flag
         userStore.clearUser();
         queryClient.clear();
+        setFcmTokenRegistered(false);
       }
     });
 
     return unsubscribe;
-  }, [queryClient]);
+  }, [queryClient, fcmTokenRegistered]);
 
   const signInMutation = useMutation({
     mutationFn: (credentials: AuthCredentials) =>
@@ -68,12 +73,7 @@ export const useAuth = () => {
           }
         });
         
-        // Add FCM token for the newly created user
-        try {
-          await addUserFCMToken();
-        } catch (error) {
-          console.error('Failed to add FCM token on signup:', error);
-        }
+        // FCM token will be added automatically by the auth state listener
       }
       
       return userCredential;

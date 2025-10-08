@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import WebCompatibleDateTimePicker from '../../components/WebCompatibleDateTimePicker';
-// ContactSearchInput component will be defined inline below
+import ContactSearchInput from '../../components/ContactSearchInput';
 import { Calendar, Clock, Filter, Search, X, Plus, Bell, CircleCheck as CheckCircle, CircleAlert as AlertCircle, ChevronDown, Users, Phone, MessageCircle, Mail, ArrowLeft } from 'lucide-react-native';
 import { useRemindersInfinite } from '../../firebase/hooks/useRemindersInfinite';
 import { useAuth } from '../../firebase/hooks/useAuth';
@@ -23,340 +23,9 @@ import { useRelationships } from '../../firebase/hooks/useRelationships';
 import { useActivity } from '../../firebase/hooks/useActivity';
 import { useContacts } from '../../firebase/hooks/useContacts';
 import { Tags } from '../../constants/Tags';
+import { ReminderTypes, getReminderTypeDisplayName } from '../../constants/ReminderTypes';
 import type { Reminder, ReminderTab, FilterType, Relationship, ReminderFrequency } from '../../firebase/types';
 import * as Contacts from 'expo-contacts';
-
-// ContactSearchInput Component Definition
-interface ContactSearchInputProps {
-  onContactSelect: (contact: { id: string; name: string }) => void;
-  placeholder?: string;
-  style?: any;
-  error?: string;
-  value?: string;
-  onChangeText?: (text: string) => void;
-  disabled?: boolean;
-  showSearchIcon?: boolean;
-  maxResults?: number;
-  onCreateNewContact?: (contactData: any) => void;
-}
-
-function ContactSearchInput({
-  onContactSelect,
-  placeholder = "Search contacts...",
-  style,
-  error,
-  value = '',
-  onChangeText,
-  disabled = false,
-  showSearchIcon = true,
-  maxResults = 5,
-  onCreateNewContact,
-}: ContactSearchInputProps) {
-  const { searchContacts, filterContacts } = useContacts();
-  const { relationships } = useRelationships();
-  const searchContainerRef = useRef<any>(null);
-  
-  // Local state for search functionality
-  const [searchQuery, setSearchQuery] = useState(value);
-  const [showSearchResults, setShowSearchResults] = useState(false);
-  const [filteredContacts, setFilteredContacts] = useState<Array<{id: string; name: string}>>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  
-  // Device contacts state (for mobile)
-  const [deviceContacts, setDeviceContacts] = useState<Contacts.Contact[]>([]);
-  const [hasContactPermission, setHasContactPermission] = useState(false);
-
-
-  // Update local search query when value prop changes
-  useEffect(() => {
-    setSearchQuery(value);
-  }, [value]);
-
-
-  const handleSearch = useCallback(async (query: string) => {
-    setSearchQuery(query);
-    onChangeText?.(query);
-    
-    if (query.trim()) {
-      setIsSearching(true);
-      let filtered: Array<{id: string; name: string}> = [];
-      
-      try {
-        if (Platform.OS === 'web') {
-          // Web: Use relationship data
-          filtered = relationships
-            .filter(rel => 
-              rel.contactName.toLowerCase().includes(query.toLowerCase())
-            )
-            .map(rel => ({
-              id: rel.contactId,
-              name: rel.contactName
-            }))
-            .slice(0, maxResults);
-        } else {
-          // Mobile: Use device contacts
-          filtered = deviceContacts
-            .filter(contact => 
-              contact.name?.toLowerCase().includes(query.toLowerCase()) ||
-              contact.phoneNumbers?.[0]?.number?.includes(query) ||
-              contact.emails?.[0]?.email?.toLowerCase().includes(query.toLowerCase())
-            )
-            .map((contact, index) => ({
-              id: (contact as any).id || `device_${Date.now()}_${index}`,
-              name: contact.name || 'Unknown'
-            }))
-            .slice(0, maxResults);
-        }
-        
-        setFilteredContacts(filtered);
-        setShowSearchResults(true);
-      } catch (error) {
-        console.error('Error searching contacts:', error);
-        setFilteredContacts([]);
-      } finally {
-        setIsSearching(false);
-      }
-    } else {
-      setShowSearchResults(false);
-      setFilteredContacts([]);
-    }
-  }, [relationships, deviceContacts, maxResults, onChangeText]);
-
-  const handleContactSelect = useCallback((contact: { id: string; name: string }) => {
-    onContactSelect(contact);
-    setSearchQuery(contact.name);
-    onChangeText?.(contact.name);
-    setShowSearchResults(false);
-    setFilteredContacts([]);
-  }, [onContactSelect, onChangeText]);
-
-  const handleClearSearch = useCallback(() => {
-    setSearchQuery('');
-    onChangeText?.('');
-    setShowSearchResults(false);
-    setFilteredContacts([]);
-  }, [onChangeText]);
-
-  // Click outside handler for web
-  const handleClickOutside = useCallback((event: any) => {
-    if (Platform.OS === 'web' && searchContainerRef.current) {
-      const target = event.target;
-      const container = searchContainerRef.current;
-      
-      if (showSearchResults && !container.contains(target)) {
-        setShowSearchResults(false);
-        setFilteredContacts([]);
-      }
-    }
-  }, [showSearchResults]);
-
-  // Add click outside listener for web
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
-    }
-  }, [handleClickOutside]);
-
-  return (
-    <View ref={searchContainerRef} style={[contactSearchStyles.container, style]}>
-      <View style={[contactSearchStyles.searchContainer, error && contactSearchStyles.errorContainer]}>
-        {showSearchIcon && (
-          <Search size={20} color="#6B7280" style={contactSearchStyles.searchIcon} />
-        )}
-        <TextInput
-          style={[contactSearchStyles.searchInput, disabled && contactSearchStyles.disabledInput]}
-          value={searchQuery}
-          onChangeText={handleSearch}
-          placeholder={placeholder}
-          placeholderTextColor="#9CA3AF"
-          editable={!disabled}
-          autoCorrect={false}
-          autoCapitalize="none"
-          focusable={false}
-          
-        />
-        {searchQuery.length > 0 && !disabled && (
-          <TouchableOpacity onPress={handleClearSearch} style={contactSearchStyles.clearButton}>
-            <X size={16} color="#6B7280" />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {showSearchResults && (
-        <View style={[contactSearchStyles.searchResults, {position: (Platform.OS === 'android') ? "absolute" : "sticky"}]}>
-          {isSearching ? (
-            <View style={contactSearchStyles.loadingContainer}>
-              <Text style={contactSearchStyles.loadingText}>Searching...</Text>
-            </View>
-          ) : (
-            <View>
-              {/* Always show Add New Contact option at the top */}
-              {onCreateNewContact && searchQuery.trim() && (
-                <TouchableOpacity
-                  style={contactSearchStyles.addNewContactItem}
-                  onPress={() => {
-                    setShowSearchResults(false);
-                    setFilteredContacts([]);
-                    onCreateNewContact({ name: searchQuery });
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Plus size={16} color="#3B82F6" />
-                  <Text style={contactSearchStyles.addNewContactText}>
-                    Add "{searchQuery}" as new contact
-                  </Text>
-                </TouchableOpacity>
-              )}
-              
-              {/* Show existing contacts if any */}
-              {filteredContacts.length > 0 ? (
-                <FlatList
-                  data={filteredContacts}
-                  keyExtractor={(item) => item.id}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={contactSearchStyles.searchResultItem}
-                      onPress={() => handleContactSelect(item)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={contactSearchStyles.searchResultText}>
-                        {item.name}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                  showsVerticalScrollIndicator={false}
-                  keyboardShouldPersistTaps="handled"
-                />
-              ) : searchQuery.trim() && (
-                <View style={contactSearchStyles.noResultsContainer}>
-                  <Text style={contactSearchStyles.noResultsText}>
-                    {Platform.OS === 'web' 
-                      ? `No contacts found (Total relationships: ${relationships.length})`
-                      : `No contacts found (Device contacts: ${deviceContacts.length})`
-                    }
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
-        </View>
-      )}
-
-      {error && (
-        <Text style={contactSearchStyles.errorText}>
-          {error}
-        </Text>
-      )}
-    </View>
-  );
-}
-
-// ContactSearchInput Styles
-const contactSearchStyles = StyleSheet.create({
-  container: {
-    position: 'relative',
-    zIndex: 1,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#ffffff',
-    minHeight: 44,
-  },
-  errorContainer: {
-    borderColor: '#EF4444',
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#111827',
-    paddingVertical: 4,
-    borderColor: "transparent"
-  },
-  disabledInput: {
-    color: '#6B7280',
-    backgroundColor: '#F9FAFB',
-  },
-  clearButton: {
-    padding: 4,
-    marginLeft: 8,
-  },
-  searchResults: {
-    top: '100%',
-    left: 0,
-    right: 0,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    marginTop: 4,
-    maxHeight: 230,
-    zIndex: 9999,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-  },
-  searchResultItem: {
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  searchResultText: {
-    fontSize: 16,
-    color: '#111827',
-  },
-  loadingContainer: {
-    padding: 12,
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  noResultsContainer: {
-    padding: 12,
-    alignItems: 'center',
-  },
-  noResultsText: {
-    fontSize: 12,
-    color: '#6B7280',
-    textAlign: 'center',
-  },
-  errorText: {
-    color: '#EF4444',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  addNewContactItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    backgroundColor: '#F0F9FF',
-    borderLeftWidth: 3,
-    borderLeftColor: '#3B82F6',
-  },
-  addNewContactText: {
-    fontSize: 15,
-    color: '#1E40AF',
-    marginLeft: 8,
-    fontWeight: '600',
-  },
-});
 
 export default function RemindersScreen() {
   const router = useRouter();
@@ -407,7 +76,7 @@ export default function RemindersScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [reminderContactName, setReminderContactName] = useState('');
-  const [reminderType, setReminderType] = useState('follow_up');
+  const [reminderType, setReminderType] = useState(ReminderTypes.FollowUp);
   const [reminderFrequency, setReminderFrequency] = useState('once');
   const [reminderTags, setReminderTags] = useState<string[]>([]);
   
@@ -432,6 +101,21 @@ export default function RemindersScreen() {
   const [newContactBirthday, setNewContactBirthday] = useState('');
   const [newContactNotes, setNewContactNotes] = useState('');
   const [contactValidationErrors, setContactValidationErrors] = useState<Record<string, string>>({});
+
+  // Contacts permission state
+  const [hasPermission, setHasPermission] = useState<boolean>(false);
+
+  useEffect(() => {
+    const checkContactsPermission = async () => {
+      if (Platform.OS === 'web') {
+        setHasPermission(false);
+        return;
+      }
+      const { status } = await Contacts.requestPermissionsAsync();
+      setHasPermission(status === 'granted');
+    };
+    checkContactsPermission();
+  }, []);
   
   // Contact Actions State
   const [showContactActions, setShowContactActions] = useState(false);
@@ -444,12 +128,8 @@ export default function RemindersScreen() {
   const [editReminderTime, setEditReminderTime] = useState(new Date());
   const [showEditDatePicker, setShowEditDatePicker] = useState(false);
   const [showEditTimePicker, setShowEditTimePicker] = useState(false);
-  const [editReminderType, setEditReminderType] = useState('follow_up');
+  const [editReminderType, setEditReminderType] = useState(ReminderTypes.FollowUp);
   const [editReminderFrequency, setEditReminderFrequency] = useState('once');
-  
-  // Device contacts state
-  const [deviceContacts, setDeviceContacts] = useState<Contacts.Contact[]>([]);
-  const [hasPermission, setHasPermission] = useState(false);
   
   // Check if selected date/time is in the past
   const isDateTimeInPast = () => {
@@ -458,50 +138,6 @@ export default function RemindersScreen() {
     combinedDateTime.setMinutes(reminderTime.getMinutes());
     return combinedDateTime <= new Date();
   };
-
-  // Check contacts permission
-  const checkPermission = async () => {
-    try {
-      if (Platform.OS === 'web') {
-        // For web, assume permission is available (Web Contacts API handles this)
-        setHasPermission(true);
-        return;
-      }
-      
-      const { status } = await Contacts.requestPermissionsAsync();
-      setHasPermission(status === 'granted');
-      if (status === 'granted') {
-        loadDeviceContacts();
-      }
-    } catch (error) {
-      console.error('Error requesting contacts permission:', error);
-      setHasPermission(false);
-    }
-  };
-
-  // Load device contacts
-  const loadDeviceContacts = async () => {
-    try {
-      const { data } = await Contacts.getContactsAsync({
-        fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Emails],
-      });
-      setDeviceContacts(data);
-    } catch (error) {
-      console.error('Error loading device contacts:', error);
-    }
-  };
-
-  // Load contacts on component mount
-  useEffect(() => {
-    checkPermission();
-  }, []);
-
-  // Load device contacts on mount (mobile only) for ContactSearchInput
-  useEffect(() => {
-    if (Platform.OS !== 'web') {
-      checkPermission();
-    }
-  }, []);
 
   // Handle contact selection from ContactSearchInput
   const handleContactSelect = async (contact: { id: string; name: string }) => {
@@ -577,12 +213,12 @@ export default function RemindersScreen() {
 
   // Debug tab counts changes
 
-  const filterOptions = [
+  const filterOptions = useMemo(() => [
     { key: 'all', label: 'All Reminders' },
     ...Object.values(Tags).map(tag => ({ key: tag, label: tag }))
-  ];
+  ], []);
 
-  const frequencyOptions = [
+  const frequencyOptions = useMemo(() => [
     { key: 'once', label: 'Once' },
     { key: 'daily', label: 'Daily' },
     { key: 'week', label: 'Weekly' },
@@ -590,17 +226,17 @@ export default function RemindersScreen() {
     { key: '3months', label: 'Every 3 Months' },
     { key: '6months', label: 'Every 6 Months' },
     { key: 'yearly', label: 'Yearly' },
-  ];
+  ], []);
 
 
-  const isOverdue = (dateString: string): boolean => {
+  const isOverdue = useCallback((dateString: string): boolean => {
     const reminderDate = new Date(dateString);
     const now = new Date();
     now.setHours(23, 59, 59, 999); // End of today
     return reminderDate < now;
-  };
+  }, []);
 
-  const calculateNextReminderDate = (currentDate: string, frequency: string): string => {
+  const calculateNextReminderDate = useCallback((currentDate: string, frequency: string): string => {
     const date = new Date(currentDate);
     
     switch (frequency) {
@@ -631,9 +267,9 @@ export default function RemindersScreen() {
     }
     
     return date.toISOString();
-  };
+  }, []);
 
-  const isThisWeek = (dateString: string): boolean => {
+  const isThisWeek = useCallback((dateString: string): boolean => {
     const reminderDate = new Date(dateString);
     const now = new Date();
     const startOfWeek = new Date(now);
@@ -645,7 +281,7 @@ export default function RemindersScreen() {
     endOfWeek.setHours(23, 59, 59, 999);
     
     return reminderDate >= startOfWeek && reminderDate <= endOfWeek;
-  };
+  }, []);
 
   // Contact validation functions
   const validateContactEmail = (email: string): boolean => {
@@ -1065,7 +701,7 @@ export default function RemindersScreen() {
   };
 
 
-  const formatDate = (dateString: string): string => {
+  const formatDate = useCallback((dateString: string): string => {
     const date = new Date(dateString);
     
     // Check if the date is valid
@@ -1098,7 +734,7 @@ export default function RemindersScreen() {
       day: 'numeric',
       year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
     });
-  };
+  }, []);
 
   const handleReminderPress = (reminder: Reminder) => {
     setSelectedReminder(reminder);
@@ -1294,7 +930,7 @@ export default function RemindersScreen() {
       return new Date(now.getTime() + 30 * 60 * 1000); // Current time + 30 minutes
     });
     setReminderContactName('');
-    setReminderType('follow_up');
+    setReminderType(ReminderTypes.FollowUp);
     setReminderFrequency('once');
     setReminderTags([]);
     setSelectedContact(null);
@@ -1419,11 +1055,8 @@ export default function RemindersScreen() {
     }
     
     const relationshipPhone = relationship?.contactData?.phoneNumbers?.[0]?.number;
-    const deviceContact = deviceContacts.find(contact => 
-      contact.name === selectedReminder.contactName
-    );
     
-    const phoneNumber = relationshipPhone || deviceContact?.phoneNumbers?.[0]?.number;
+    const phoneNumber = relationshipPhone;
     
     if (phoneNumber) {
       const url = `tel:${phoneNumber}`;
@@ -1443,7 +1076,7 @@ export default function RemindersScreen() {
     } else {
       Alert.alert(
         'No Phone Number', 
-        `Phone number not available for ${selectedReminder.contactName}. Please add contact information in your relationship or device contacts.`,
+        `Phone number not available for ${selectedReminder.contactName}. Please add contact information in your relationship.`,
         [{ text: 'OK', onPress: () => setShowContactActions(false) }]
       );
     }
@@ -1465,11 +1098,8 @@ export default function RemindersScreen() {
     }
     
     const relationshipPhone = relationship?.contactData?.phoneNumbers?.[0]?.number;
-    const deviceContact = deviceContacts.find(contact => 
-      contact.name === selectedReminder.contactName
-    );
     
-    const phoneNumber = relationshipPhone || deviceContact?.phoneNumbers?.[0]?.number;
+    const phoneNumber = relationshipPhone;
     
     if (phoneNumber) {
       const url = `sms:${phoneNumber}`;
@@ -1489,7 +1119,7 @@ export default function RemindersScreen() {
     } else {
       Alert.alert(
         'No Phone Number', 
-        `Phone number not available for ${selectedReminder.contactName}. Please add contact information in your relationship or device contacts.`,
+        `Phone number not available for ${selectedReminder.contactName}. Please add contact information in your relationship.`,
         [{ text: 'OK', onPress: () => setShowContactActions(false) }]
       );
     }
@@ -1511,11 +1141,8 @@ export default function RemindersScreen() {
     }
     
     const relationshipPhone = relationship?.contactData?.phoneNumbers?.[0]?.number;
-    const deviceContact = deviceContacts.find(contact => 
-      contact.name === selectedReminder.contactName
-    );
     
-    const phoneNumber = relationshipPhone || deviceContact?.phoneNumbers?.[0]?.number;
+    const phoneNumber = relationshipPhone;
     
     if (phoneNumber) {
       const cleanPhoneNumber = phoneNumber.replace(/\D/g, ''); // Remove non-digits
@@ -1540,7 +1167,7 @@ export default function RemindersScreen() {
     } else {
       Alert.alert(
         'No Phone Number', 
-        `Phone number not available for ${selectedReminder.contactName}. Please add contact information in your relationship or device contacts.`,
+        `Phone number not available for ${selectedReminder.contactName}. Please add contact information in your relationship.`,
         [{ text: 'OK', onPress: () => setShowContactActions(false) }]
       );
     }
@@ -1562,11 +1189,8 @@ export default function RemindersScreen() {
     }
     
     const relationshipEmail = relationship?.contactData?.emails?.[0]?.email;
-    const deviceContact = deviceContacts.find(contact => 
-      contact.name === selectedReminder.contactName
-    );
     
-    const email = relationshipEmail || deviceContact?.emails?.[0]?.email;
+    const email = relationshipEmail;
     
     if (email) {
       const url = `mailto:${email}`;
@@ -1586,18 +1210,18 @@ export default function RemindersScreen() {
     } else {
       Alert.alert(
         'No Email Address', 
-        `Email address not available for ${selectedReminder.contactName}. Please add contact information in your relationship or device contacts.`,
+        `Email address not available for ${selectedReminder.contactName}. Please add contact information in your relationship.`,
         [{ text: 'OK', onPress: () => setShowContactActions(false) }]
       );
     }
   };
 
-  const renderReminder = ({ item }: { item: Reminder }) => (
+  const renderReminder = useCallback(({ item }: { item: Reminder }) => (
     <TouchableOpacity style={styles.reminderCard} onPress={() => handleReminderPress(item)}>
       <View style={styles.reminderHeader}>
         <View style={styles.reminderInfo}>
           <Text style={styles.contactName}>{item.contactName}</Text>
-          <Text style={styles.reminderType}>{item.type}</Text>
+          <Text style={styles.reminderType}>{getReminderTypeDisplayName(item.type)}</Text>
         </View>
         <View style={styles.reminderStatus}>
           {item.isOverdue ? (
@@ -1634,13 +1258,13 @@ export default function RemindersScreen() {
         <Text style={styles.notes} numberOfLines={1}>{item.notes}</Text>
       )}
     </TouchableOpacity>
-  );
+  ), []);
 
-  const getTabCount = (tab: ReminderTab): number => {
+  const getTabCount = useCallback((tab: ReminderTab): number => {
     // Use tabCounts from the hook for accurate counts
     const count = tabCounts[tab] || 0;
     return count;
-  };
+  }, [tabCounts]);
 
   const renderAllReminders = () => (
     <Modal visible={showAllReminders} animationType="slide">
@@ -1763,7 +1387,7 @@ export default function RemindersScreen() {
           <ScrollView style={styles.detailContent}>
             <View style={styles.detailSection}>
               <Text style={styles.detailLabel}>Reminder Type</Text>
-              <Text style={styles.detailValue}>{selectedReminder.type}</Text>
+              <Text style={styles.detailValue}>{getReminderTypeDisplayName(selectedReminder.type)}</Text>
             </View>
 
             <View style={styles.detailSection}>
@@ -1899,7 +1523,7 @@ export default function RemindersScreen() {
               
               <Text style={styles.reminderFormLabel}>Type</Text>
               <View style={styles.typeSelector}>
-                {['follow_up', 'meeting', 'call', 'birthday', 'other'].map((type) => (
+                {Object.values(ReminderTypes).map((type) => (
                   <TouchableOpacity
                     key={type}
                     style={[
@@ -1912,7 +1536,7 @@ export default function RemindersScreen() {
                       styles.typeOptionText,
                       reminderType === type && styles.typeOptionTextSelected
                     ]}>
-                      {type.replace('_', ' ').toUpperCase()}
+                      {getReminderTypeDisplayName(type)}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -2082,18 +1706,14 @@ export default function RemindersScreen() {
       );
     }
 
-    // Get contact data from relationship document, fallback to device contacts
+    // Get contact data from relationship document
     const relationshipPhone = relationship?.contactData?.phoneNumbers?.[0]?.number;
     const relationshipEmail = relationship?.contactData?.emails?.[0]?.email;
     
-    const deviceContact = deviceContacts.find(contact => 
-      contact.name === selectedReminder.contactName
-    );
-
-    const hasPhone = relationshipPhone || (deviceContact?.phoneNumbers && deviceContact.phoneNumbers.length > 0);
-    const hasEmail = relationshipEmail || (deviceContact?.emails && deviceContact.emails.length > 0);
-    const phoneNumber = relationshipPhone || (deviceContact?.phoneNumbers?.[0]?.number || '');
-    const email = relationshipEmail || (deviceContact?.emails?.[0]?.email || '');
+    const hasPhone = !!relationshipPhone;
+    const hasEmail = !!relationshipEmail;
+    const phoneNumber = relationshipPhone || '';
+    const email = relationshipEmail || '';
 
     return (
       <Modal visible={showContactActions} animationType="slide" transparent>
@@ -2125,14 +1745,13 @@ export default function RemindersScreen() {
                   <Text style={styles.noContactInfoText}>No contact information available</Text>
                   <Text style={styles.noContactInfoSubtext}>
                     {relationship ? 
-                      'Add contact details in your relationship or device contacts' : 
-                      'Add contact details in your device contacts'
+                      'Add contact details in your relationship' : 
+                      'Add contact details in your relationship'
                     }
                   </Text>
                   {/* Debug information - remove this after testing */}
                   <Text style={[styles.noContactInfoSubtext, { marginTop: 10, fontSize: 12 }]}>
-                    Debug: Relationship {relationship ? 'found' : 'not found'}, 
-                    Device contact {deviceContact ? 'found' : 'not found'}
+                    Debug: Relationship {relationship ? 'found' : 'not found'}
                   </Text>
                 </View>
               )}
@@ -2549,7 +2168,7 @@ export default function RemindersScreen() {
               
               <Text style={styles.reminderFormLabel}>Type</Text>
               <View style={styles.typeSelector}>
-                {['follow_up', 'meeting', 'call', 'birthday', 'other'].map((type) => (
+                {Object.values(ReminderTypes).map((type) => (
                   <TouchableOpacity
                     key={type}
                     style={[
@@ -2562,7 +2181,7 @@ export default function RemindersScreen() {
                       styles.typeOptionText,
                       editReminderType === type && styles.typeOptionTextSelected
                     ]}>
-                      {type.replace('_', ' ').toUpperCase()}
+                      {getReminderTypeDisplayName(type)}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -2810,6 +2429,19 @@ export default function RemindersScreen() {
             }}
             refreshing={isFetching && !isFetchingNextPage}
             onRefresh={refetch}
+            // Performance optimizations for Android
+            removeClippedSubviews={Platform.OS === 'android'}
+            maxToRenderPerBatch={10}
+            updateCellsBatchingPeriod={50}
+            initialNumToRender={10}
+            windowSize={10}
+            getItemLayout={(data, index) => ({
+              length: 120, // Approximate height of reminder card
+              offset: 120 * index,
+              index,
+            })}
+            // Optimize re-renders
+            extraData={`${activeTab}-${searchQuery}-${selectedFilter}`}
           />
         ) : (
           <View style={styles.emptyState}>
@@ -2830,13 +2462,13 @@ export default function RemindersScreen() {
 
       
 
-      {renderAllReminders()}
-      {renderFiltersModal()}
-      {renderReminderDetail()}
-      {renderAddReminderModal()}
-      {renderEditReminderModal()}
-      {renderContactActionsModal()}
-      {renderNewContactModal()}
+      {showAllReminders && renderAllReminders()}
+      {showFilters && renderFiltersModal()}
+      {showReminderDetail && renderReminderDetail()}
+      {showAddReminderModal && renderAddReminderModal()}
+      {showEditReminderModal && renderEditReminderModal()}
+      {showContactActions && renderContactActionsModal()}
+      {showNewContactModal && renderNewContactModal()}
 
       {/* Date Pickers for Native Platforms */}
       {Platform.OS !== 'web' && showDatePicker && (
@@ -2921,11 +2553,15 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 12,
     backgroundColor: '#ffffff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    // Reduce shadows on Android for better performance
+    ...(Platform.OS === 'android' ? {
+      elevation: 1,
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 2,
+    }),
   },
   tabContainer: {
     flexDirection: 'row',
@@ -2946,19 +2582,27 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderRadius: 12,
     gap: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    // Reduce shadows on Android for better performance
+    ...(Platform.OS === 'android' ? {
+      elevation: 1,
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 2,
+    }),
   },
   activeTab: {
     backgroundColor: '#ffffff',
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
+    // Reduce shadows on Android for better performance
+    ...(Platform.OS === 'android' ? {
+      elevation: 2,
+    } : {
+      shadowColor: '#3B82F6',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 4,
+    }),
   },
   tabText: {
     fontSize: 14,
@@ -2999,11 +2643,15 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
+    // Reduce shadows on Android for better performance
+    ...(Platform.OS === 'android' ? {
+      elevation: 2,
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 8,
+    }),
   },
   reminderHeader: {
     flexDirection: 'row',

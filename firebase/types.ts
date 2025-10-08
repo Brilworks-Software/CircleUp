@@ -1,5 +1,7 @@
 // src/types/dbTypes.ts
 
+import type { ReminderType } from '../constants/ReminderTypes';
+
 export interface User {
   id?: string; // Firestore document ID
   name: string;
@@ -157,7 +159,7 @@ export interface ReminderActivity extends BaseActivity {
   contactId: string;
   contactName: string;
   reminderDate: string;
-  reminderType: string;
+  reminderType: ReminderType;
   frequency: ReminderFrequency;
   isCompleted: boolean;
   completedAt?: string;
@@ -184,7 +186,7 @@ export interface CreateActivityData {
   isCompleted?: boolean;
   // Reminder specific
   reminderDate?: string;
-  reminderType?: string;
+  reminderType?: ReminderType;
   frequency?: ReminderFrequency;
   reminderId?: string; // Reference to the reminder document
   completedAt?: string; // When the reminder was completed
@@ -205,7 +207,7 @@ export interface UpdateActivityData {
   location?: string;
   // Reminder specific
   reminderDate?: string;
-  reminderType?: string;
+  reminderType?: ReminderType;
   frequency?: ReminderFrequency;
   isCompleted?: boolean;
   completedAt?: string;

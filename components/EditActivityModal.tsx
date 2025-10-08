@@ -11,12 +11,14 @@ import {
   Animated,
   Platform,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import WebCompatibleDateTimePicker from './WebCompatibleDateTimePicker';
 import { X, ChevronDown, Search, Calendar, Clock } from 'lucide-react-native';
 import { useActivity } from '../firebase/hooks/useActivity';
 import { useRelationships } from '../firebase/hooks/useRelationships';
 import { useAuth } from '../firebase/hooks/useAuth';
+import { ReminderTypes, getReminderTypeDisplayName } from '../constants/ReminderTypes';
 import RemindersService from '../firebase/services/RemindersService';
 
 interface EditActivityModalProps {
@@ -73,7 +75,7 @@ export default function EditActivityModal({
   // Reminder activity states
   const [activityReminderTitle, setActivityReminderTitle] = useState('');
   const [activityReminderDate, setActivityReminderDate] = useState(new Date());
-  const [activityReminderType, setActivityReminderType] = useState('follow_up');
+  const [activityReminderType, setActivityReminderType] = useState(ReminderTypes.FollowUp);
   const [activityReminderFrequency, setActivityReminderFrequency] = useState<
     | 'once'
     | 'daily'
@@ -90,6 +92,9 @@ export default function EditActivityModal({
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
   >({});
+
+  // Activity update loading state
+  const [isUpdatingActivity, setIsUpdatingActivity] = useState(false);
 
   // Date picker states
   const [showInteractionDatePicker, setShowInteractionDatePicker] =
@@ -134,7 +139,7 @@ export default function EditActivityModal({
             ? new Date(activity.reminderDate)
             : new Date()
         );
-        setActivityReminderType(activity.reminderType || 'follow_up');
+        setActivityReminderType(activity.reminderType || ReminderTypes.FollowUp);
         setActivityReminderFrequency(activity.frequency || 'month');
         setActivityReminderNotes(activity.description || '');
       }
@@ -155,7 +160,7 @@ export default function EditActivityModal({
     setInteractionLocation('');
     setActivityReminderTitle('');
     setActivityReminderDate(new Date());
-    setActivityReminderType('follow_up');
+    setActivityReminderType(ReminderTypes.FollowUp);
     setActivityReminderFrequency('month');
     setActivityReminderNotes('');
     setValidationErrors({});
@@ -481,12 +486,24 @@ export default function EditActivityModal({
       return;
     }
 
-    if (activeActivityTab === 'note') {
-      await updateNoteActivity();
-    } else if (activeActivityTab === 'interaction') {
-      await updateInteractionActivity();
-    } else if (activeActivityTab === 'reminder') {
-      await updateReminderActivity();
+    setIsUpdatingActivity(true);
+
+    try {
+      if (activeActivityTab === 'note') {
+        await updateNoteActivity();
+      } else if (activeActivityTab === 'interaction') {
+        await updateInteractionActivity();
+      } else if (activeActivityTab === 'reminder') {
+        await updateReminderActivity();
+      }
+    } catch (error) {
+      console.error('Error updating activity:', error);
+      Alert.alert(
+        'Error',
+        'Failed to update activity. Please try again.'
+      );
+    } finally {
+      setIsUpdatingActivity(false);
     }
   };
 
@@ -571,7 +588,7 @@ export default function EditActivityModal({
                   </View> */}
 
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Content *</Text>
+                    <Text style={styles.inputLabel}>Notes *</Text>
                     <TextInput
                       style={[
                         styles.activityTextArea,
@@ -895,13 +912,7 @@ export default function EditActivityModal({
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Type</Text>
                     <View style={styles.reminderTypeButtons}>
-                      {[
-                        'follow_up',
-                        'meeting',
-                        'call',
-                        'birthday',
-                        'other',
-                      ].map((type) => (
+                      {Object.values(ReminderTypes).map((type) => (
                         <TouchableOpacity
                           key={type}
                           style={[
@@ -918,7 +929,7 @@ export default function EditActivityModal({
                                 styles.activeReminderTypeButtonText,
                             ]}
                           >
-                            {type.replace('_', ' ')}
+                            {getReminderTypeDisplayName(type)}
                           </Text>
                         </TouchableOpacity>
                       ))}
@@ -1085,9 +1096,22 @@ export default function EditActivityModal({
             </View>
             <TouchableOpacity
               onPress={handleUpdateActivity}
-              style={styles.addActivitySaveButton}
+              style={[
+                styles.addActivitySaveButton,
+                isUpdatingActivity && styles.addActivitySaveButtonDisabled
+              ]}
+              disabled={isUpdatingActivity}
             >
-              <Text style={styles.addActivitySaveButtonText}>Update</Text>
+              {isUpdatingActivity ? (
+                <View style={styles.saveButtonLoadingContainer}>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <Text style={[styles.addActivitySaveButtonText, { marginLeft: 8 }]}>
+                    Updating...
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.addActivitySaveButtonText}>Update</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -1184,6 +1208,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
     
+  },
+  addActivitySaveButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+    opacity: 0.7,
+  },
+  saveButtonLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   // Activity Type Tabs
   activityTypeTabs: {

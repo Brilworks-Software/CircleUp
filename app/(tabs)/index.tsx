@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from 'react';
 import {
   View,
   Text,
@@ -17,7 +23,28 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Contacts from 'expo-contacts';
-import { Plus, Users, Bell, Clock, MessageSquare, StickyNote, FileText, Phone, Calendar, CheckCircle, X, Save, Trash2, Mail, MessageCircle, User, AlertCircle, Search, ChevronRight, LogOut } from 'lucide-react-native';
+import {
+  Plus,
+  Users,
+  Bell,
+  Clock,
+  MessageSquare,
+  StickyNote,
+  FileText,
+  Phone,
+  Calendar,
+  CheckCircle,
+  X,
+  Save,
+  Trash2,
+  Mail,
+  MessageCircle,
+  User,
+  AlertCircle,
+  Search,
+  ChevronRight,
+  LogOut,
+} from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useAuth } from '../../firebase/hooks/useAuth';
 import { useUser } from '../../firebase/hooks/useUser';
@@ -30,7 +57,17 @@ import EditActivityModal from '../../components/EditActivityModal';
 import CreateEditRelationshipModal from '../../components/CreateEditRelationshipModal';
 import RelationshipInfoModal from '../../components/RelationshipInfoModal';
 import WebCompatibleDateTimePicker from '../../components/WebCompatibleDateTimePicker';
-import type { Reminder, ReminderFrequency, Contact, Relationship, LastContactOption, ContactMethod, ReminderFrequency as RelationshipReminderFrequency } from '../../firebase/types';
+import type {
+  Reminder,
+  ReminderFrequency,
+  Contact,
+  Relationship,
+  LastContactOption,
+  ContactMethod,
+  ReminderFrequency as RelationshipReminderFrequency,
+} from '../../firebase/types';
+import { ReminderTypes, getReminderTypeDisplayName } from '../../constants/ReminderTypes';
+import { get } from 'firebase/database';
 
 // Web-compatible alert function
 const showAlert = (title: string, message: string, buttons?: any[]) => {
@@ -39,18 +76,24 @@ const showAlert = (title: string, message: string, buttons?: any[]) => {
       window.alert(`${title}\n\n${message}`);
       return;
     }
-    
-    if (buttons.length === 2 && buttons[0].text === 'Cancel' && buttons[1].text === 'Sign Out') {
+
+    if (
+      buttons.length === 2 &&
+      buttons[0].text === 'Cancel' &&
+      buttons[1].text === 'Sign Out'
+    ) {
       const result = window.confirm(`${title}\n\n${message}`);
       if (result && buttons[1].onPress) {
         buttons[1].onPress();
       }
       return;
     }
-    
-    const result = window.confirm(`${title}\n\n${message}\n\nClick OK to continue or Cancel to abort.`);
+
+    const result = window.confirm(
+      `${title}\n\n${message}\n\nClick OK to continue or Cancel to abort.`
+    );
     if (result) {
-      const actionButton = buttons.find(btn => btn.text !== 'Cancel');
+      const actionButton = buttons.find((btn) => btn.text !== 'Cancel');
       if (actionButton && actionButton.onPress) {
         actionButton.onPress();
       }
@@ -62,41 +105,74 @@ const showAlert = (title: string, message: string, buttons?: any[]) => {
 
 export default function HomeScreen() {
   const { currentUser, signOut } = useAuth();
-  const { data: userProfile, isLoading: isLoadingProfile } = useUser(currentUser?.uid || '');
-  const { stats, isLoading: isLoadingStats, getRemindersStats, getRelationshipsStats } = useStats();
-  const { activities, isLoading: isLoadingActivities, getRecentActivities, updateActivity, deleteActivity, createActivity } = useActivity();
-  const { relationships, isLoading: isLoadingRelationships, createRelationship, updateRelationship, deleteRelationship } = useRelationships();
-  
+  const { data: userProfile, isLoading: isLoadingProfile } = useUser(
+    currentUser?.uid || ''
+  );
+  const {
+    stats,
+    isLoading: isLoadingStats,
+    getRemindersStats,
+    getRelationshipsStats,
+  } = useStats();
+  const {
+    activities,
+    isLoading: isLoadingActivities,
+    getRecentActivities,
+    updateActivity,
+    deleteActivity,
+    createActivity,
+  } = useActivity();
+  const {
+    relationships,
+    isLoading: isLoadingRelationships,
+    createRelationship,
+    updateRelationship,
+    deleteRelationship,
+  } = useRelationships();
+
   // Reminders data for different categories
-  const { 
-    reminders: missedReminders, 
-    tabCounts: reminderCounts, 
+  const {
+    reminders: missedReminders,
+    tabCounts: reminderCounts,
     isLoading: isLoadingReminders,
     updateReminder,
-    deleteReminder
+    deleteReminder,
   } = useRemindersInfinite('missed', '', 'all');
-  
-  const { reminders: thisWeekReminders } = useRemindersInfinite('thisWeek', '', 'all');
-  const { reminders: upcomingReminders } = useRemindersInfinite('upcoming', '', 'all');
-  
+
+  const { reminders: thisWeekReminders } = useRemindersInfinite(
+    'thisWeek',
+    '',
+    'all'
+  );
+  const { reminders: upcomingReminders } = useRemindersInfinite(
+    'upcoming',
+    '',
+    'all'
+  );
+
   // Active reminder tab state
-  const [activeReminderTab, setActiveReminderTab] = useState<'missed' | 'thisWeek' | 'upcoming'>('missed');
-  
+  const [activeReminderTab, setActiveReminderTab] = useState<
+    'missed' | 'thisWeek' | 'upcoming'
+  >('missed');
+
   // Reminder modal states
-  const [selectedReminder, setSelectedReminder] = useState<Reminder | null>(null);
+  const [selectedReminder, setSelectedReminder] = useState<Reminder | null>(
+    null
+  );
   const [showReminderDetail, setShowReminderDetail] = useState(false);
   const [showEditReminderModal, setShowEditReminderModal] = useState(false);
   const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
-  
+
   // Edit reminder form states
   const [editReminderNote, setEditReminderNote] = useState('');
   const [editReminderDate, setEditReminderDate] = useState(new Date());
   const [editReminderTime, setEditReminderTime] = useState(new Date());
-  const [editReminderType, setEditReminderType] = useState('follow_up');
-  const [editReminderFrequency, setEditReminderFrequency] = useState<ReminderFrequency>('once');
+  const [editReminderType, setEditReminderType] = useState(ReminderTypes.FollowUp);
+  const [editReminderFrequency, setEditReminderFrequency] =
+    useState<ReminderFrequency>('once');
   const [showEditDatePicker, setShowEditDatePicker] = useState(false);
   const [showEditTimePicker, setShowEditTimePicker] = useState(false);
-  
+
   const [isInitializing, setIsInitializing] = useState(true);
   const [isAppReady, setIsAppReady] = useState(false);
   const [realTimeStats, setRealTimeStats] = useState({
@@ -107,36 +183,51 @@ export default function HomeScreen() {
   const [isLoadingRealTimeStats, setIsLoadingRealTimeStats] = useState(false);
   const [hasLoadedInitialStats, setHasLoadedInitialStats] = useState(false);
 
+  // Navigation state to prevent multiple taps
+  const [isNavigating, setIsNavigating] = useState(false);
+  const navigationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Modal states
-  const [editActivityModalVisible, setEditActivityModalVisible] = useState(false);
+  const [editActivityModalVisible, setEditActivityModalVisible] =
+    useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [addActivityModalVisible, setAddActivityModalVisible] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<any>(null);
-  
+
   // Relationships modal states
-  const [showAddRelationshipModal, setShowAddRelationshipModal] = useState(false);
+  const [showAddRelationshipModal, setShowAddRelationshipModal] =
+    useState(false);
   const [showContactList, setShowContactList] = useState(false);
   const [showNewContactModal, setShowNewContactModal] = useState(false);
-  const [showRelationshipInfoModal, setShowRelationshipInfoModal] = useState(false);
+  const [showRelationshipInfoModal, setShowRelationshipInfoModal] =
+    useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [contactSearchQuery, setContactSearchQuery] = useState('');
-  const [editingRelationship, setEditingRelationship] = useState<Relationship | null>(null);
-  const [selectedRelationshipForInfo, setSelectedRelationshipForInfo] = useState<Relationship | null>(null);
-  const [showEditRelationshipModal, setShowEditRelationshipModal] = useState(false);
-  
+  const [editingRelationship, setEditingRelationship] =
+    useState<Relationship | null>(null);
+  const [selectedRelationshipForInfo, setSelectedRelationshipForInfo] =
+    useState<Relationship | null>(null);
+  const [showEditRelationshipModal, setShowEditRelationshipModal] =
+    useState(false);
+
   // Device contacts state
   const [deviceContacts, setDeviceContacts] = useState<Contacts.Contact[]>([]);
-  const [filteredDeviceContacts, setFilteredDeviceContacts] = useState<Contacts.Contact[]>([]);
+  const [filteredDeviceContacts, setFilteredDeviceContacts] = useState<
+    Contacts.Contact[]
+  >([]);
   const [isLoadingDeviceContacts, setIsLoadingDeviceContacts] = useState(false);
   const [hasContactPermission, setHasContactPermission] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  
-  // Device contacts state
+
+  // Device contacts pagination state
   const [hasMoreDeviceContacts, setHasMoreDeviceContacts] = useState(false);
-  
+  const [contactsPage, setContactsPage] = useState(0);
+  const [isLoadingMoreContacts, setIsLoadingMoreContacts] = useState(false);
+  const CONTACTS_PAGE_SIZE = 50;
+
   // Contact Actions State
   const [showContactActions, setShowContactActions] = useState(false);
-  
+
   // New contact form states
   const [newContactName, setNewContactName] = useState('');
   const [newContactPhone, setNewContactPhone] = useState('');
@@ -151,7 +242,9 @@ export default function HomeScreen() {
   const [newContactAddress, setNewContactAddress] = useState('');
   const [newContactBirthday, setNewContactBirthday] = useState('');
   const [newContactNotes, setNewContactNotes] = useState('');
-  const [contactValidationErrors, setContactValidationErrors] = useState<Record<string, string>>({});
+  const [contactValidationErrors, setContactValidationErrors] = useState<
+    Record<string, string>
+  >({});
 
   // Initialize app and handle all loading states
   useEffect(() => {
@@ -160,7 +253,7 @@ export default function HomeScreen() {
         // First, initialize basic app setup
         await requestContactsPermission();
         setIsInitializing(false);
-        
+
         // Wait for user to be available before proceeding
         if (currentUser?.uid) {
           // Load initial stats with loading indicator
@@ -177,30 +270,89 @@ export default function HomeScreen() {
     initializeAppSequence();
   }, [currentUser?.uid]);
 
+  const loadRealTimeStats = useCallback(
+    async (isInitialLoad = false) => {
+      if (!currentUser?.uid || isLoadingRealTimeStats) return;
+
+      try {
+        // Only show loading state for initial load or if we haven't loaded stats yet
+        if (isInitialLoad || !hasLoadedInitialStats) {
+          setIsLoadingRealTimeStats(true);
+        }
+
+        const [remindersStats, relationshipsStats] = await Promise.all([
+          getRemindersStats(),
+          getRelationshipsStats(),
+        ]);
+
+        // Always update stats, but only show loading indicator for initial load
+        setRealTimeStats({
+          totalReminders: remindersStats.total,
+          totalRelationships: relationshipsStats.total,
+          overdueReminders: remindersStats.overdue,
+        });
+
+        if (isInitialLoad) {
+          setHasLoadedInitialStats(true);
+        }
+      } catch (error) {
+        console.error('Error loading real-time stats:', error);
+      } finally {
+        setIsLoadingRealTimeStats(false);
+      }
+    },
+    [
+      currentUser?.uid,
+      isLoadingRealTimeStats,
+      hasLoadedInitialStats,
+      getRemindersStats,
+      getRelationshipsStats,
+    ]
+  );
+
+  // Debounced version to prevent excessive API calls
+  const debouncedLoadStats = useCallback(
+    (() => {
+      let timeoutId: ReturnType<typeof setTimeout>;
+      return (isInitialLoad = false) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          loadRealTimeStats(isInitialLoad);
+        }, 300); // 300ms debounce
+      };
+    })(),
+    [loadRealTimeStats]
+  );
+
   // Set up periodic refresh for real-time stats (only after app is ready)
   useEffect(() => {
     if (!isAppReady || !currentUser?.uid) return;
 
     // Refresh stats every minute to catch overdue reminders (without loading indicator)
     const interval = setInterval(() => {
-      loadRealTimeStats(false);
+      debouncedLoadStats(false);
     }, 60000); // 60 seconds
 
     return () => clearInterval(interval);
-  }, [isAppReady, currentUser?.uid]);
+  }, [isAppReady, currentUser?.uid, debouncedLoadStats]);
 
   // Refresh stats when screen comes into focus (with debounce, no loading indicator)
   useFocusEffect(
     React.useCallback(() => {
-      if (currentUser?.uid && !isLoadingRealTimeStats && hasLoadedInitialStats) {
-        // Add a small delay to prevent rapid successive calls
-        const timeoutId = setTimeout(() => {
-          loadRealTimeStats(false);
-        }, 100);
-        
-        return () => clearTimeout(timeoutId);
+      if (
+        currentUser?.uid &&
+        !isLoadingRealTimeStats &&
+        hasLoadedInitialStats
+      ) {
+        // Use debounced version to prevent rapid successive calls
+        debouncedLoadStats(false);
       }
-    }, [currentUser?.uid, isLoadingRealTimeStats, hasLoadedInitialStats])
+    }, [
+      currentUser?.uid,
+      isLoadingRealTimeStats,
+      hasLoadedInitialStats,
+      debouncedLoadStats,
+    ])
   );
 
   // Load device contacts on mobile when component mounts
@@ -210,61 +362,55 @@ export default function HomeScreen() {
     }
   }, [isAppReady]);
 
-  const loadRealTimeStats = async (isInitialLoad = false) => {
-    if (!currentUser?.uid || isLoadingRealTimeStats) return;
-    
-    try {
-      // Only show loading state for initial load or if we haven't loaded stats yet
-      if (isInitialLoad || !hasLoadedInitialStats) {
-        setIsLoadingRealTimeStats(true);
-      }
-      
-      const [remindersStats, relationshipsStats] = await Promise.all([
-        getRemindersStats(),
-        getRelationshipsStats(),
-      ]);
-      
-      // Always update stats, but only show loading indicator for initial load
-      setRealTimeStats({
-        totalReminders: remindersStats.total,
-        totalRelationships: relationshipsStats.total,
-        overdueReminders: remindersStats.overdue,
-      });
-      
-      if (isInitialLoad) {
-        setHasLoadedInitialStats(true);
-      }
-    } catch (error) {
-      console.error('Error loading real-time stats:', error);
-    } finally {
-      setIsLoadingRealTimeStats(false);
-    }
-  };
+  // Debounced navigation function to prevent multiple taps
+  const handleDebouncedNavigation = useCallback(
+    (route: string) => {
+      if (isNavigating) return;
 
+      setIsNavigating(true);
 
- 
+      // Clear any existing timeout
+      if (navigationTimeoutRef.current) {
+        clearTimeout(navigationTimeoutRef.current);
+      }
+
+      // Navigate immediately
+      router.push(route as any);
+
+      // Reset navigation state after a delay
+      navigationTimeoutRef.current = setTimeout(() => {
+        setIsNavigating(false);
+      }, 1000); // 1 second cooldown
+    },
+    [isNavigating]
+  );
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (navigationTimeoutRef.current) {
+        clearTimeout(navigationTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleSignOut = () => {
-    showAlert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await signOut();
-              router.replace("/(auth)/login")
-            } catch (error) {
-              console.error('Error signing out:', error);
-              showAlert('Error', 'Failed to sign out. Please try again.');
-            }
-          },
+    showAlert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await signOut();
+            router.replace('/(auth)/login');
+          } catch (error) {
+            console.error('Error signing out:', error);
+            showAlert('Error', 'Failed to sign out. Please try again.');
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const requestContactsPermission = async () => {
@@ -274,7 +420,7 @@ export default function HomeScreen() {
         setHasContactPermission(false);
         return;
       }
-      
+
       const { status } = await Contacts.requestPermissionsAsync();
       if (status === 'granted') {
         setHasContactPermission(true);
@@ -294,51 +440,78 @@ export default function HomeScreen() {
     }
   };
 
-  const loadDeviceContacts = async (reset = true) => {
-    try {
-      setIsLoadingDeviceContacts(true);
-      
-      // Load all contacts at once without pagination
-      const { data } = await Contacts.getContactsAsync({
-        fields: [
-          Contacts.Fields.Name,
-          Contacts.Fields.PhoneNumbers,
-          Contacts.Fields.Emails,
-        ],
-        // Remove pageSize and pageOffset to get all contacts
-      });
-      
-      
-      // Filter and sort contacts
-      const processedContacts = data
-        .filter(contact => contact.name && contact.name.trim()) // Only contacts with names
-        .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-      
-      
-      setDeviceContacts(processedContacts);
-      setFilteredDeviceContacts(processedContacts);
-      setHasMoreDeviceContacts(false); // No more contacts to load
-      
-    } catch (error) {
-      console.error('Error loading device contacts:', error);
-    } finally {
-      setIsLoadingDeviceContacts(false);
-    }
-  };
+  const loadDeviceContacts = useCallback(
+    async (reset = true) => {
+      try {
+        if (reset) {
+          setIsLoadingDeviceContacts(true);
+          setContactsPage(0);
+          setDeviceContacts([]);
+          setFilteredDeviceContacts([]);
+        } else {
+          setIsLoadingMoreContacts(true);
+        }
 
+        const pageToLoad = reset ? 0 : contactsPage + 1;
+
+        // Load contacts with pagination
+        const { data } = await Contacts.getContactsAsync({
+          fields: [
+            Contacts.Fields.Name,
+            Contacts.Fields.PhoneNumbers,
+            Contacts.Fields.Emails,
+          ],
+          pageSize: CONTACTS_PAGE_SIZE,
+          pageOffset: pageToLoad * CONTACTS_PAGE_SIZE,
+        });
+
+        // Filter and sort contacts
+        const processedContacts = data
+          .filter((contact) => contact.name && contact.name.trim()) // Only contacts with names
+          .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+        if (reset) {
+          setDeviceContacts(processedContacts);
+          setFilteredDeviceContacts(processedContacts);
+        } else {
+          setDeviceContacts((prev) => [...prev, ...processedContacts]);
+          setFilteredDeviceContacts((prev) => [...prev, ...processedContacts]);
+        }
+
+        // Check if there are more contacts to load
+        setHasMoreDeviceContacts(data.length === CONTACTS_PAGE_SIZE);
+        setContactsPage(pageToLoad);
+      } catch (error) {
+        console.error('Error loading device contacts:', error);
+      } finally {
+        setIsLoadingDeviceContacts(false);
+        setIsLoadingMoreContacts(false);
+      }
+    },
+    [contactsPage, CONTACTS_PAGE_SIZE]
+  );
+
+  // Load more contacts when reaching end of list
+  const loadMoreContacts = useCallback(() => {
+    if (!isLoadingMoreContacts && hasMoreDeviceContacts) {
+      loadDeviceContacts(false);
+    }
+  }, [isLoadingMoreContacts, hasMoreDeviceContacts, loadDeviceContacts]);
 
   // Handle device contact selection with relationship check
-  const handleDeviceContactPress = (contact: Contacts.Contact, index: number) => {
+  const handleDeviceContactPress = (
+    contact: Contacts.Contact,
+    index: number
+  ) => {
     const contactName = contact.name || 'Unknown';
-    
+
     console.log(contact);
-    
-    
+
     // Check if relationship already exists
-    const existingRelationship = relationships.find(rel => 
-      rel.contactName.toLowerCase() === contactName.toLowerCase()
+    const existingRelationship = relationships.find(
+      (rel) => rel.contactName.toLowerCase() === contactName.toLowerCase()
     );
-    
+
     if (existingRelationship) {
       setSelectedRelationshipForInfo(existingRelationship);
       setShowRelationshipInfoModal(true);
@@ -347,31 +520,45 @@ export default function HomeScreen() {
       setSelectedContact({
         id: (contact as any).id || `device_${index}`,
         name: contactName,
-        phoneNumbers: contact.phoneNumbers || [],
-        emails: contact.emails || [],
+        phoneNumbers:
+          contact.phoneNumbers?.map((p) => ({
+            number: p.number || '',
+            label: p.label,
+          })) || [],
+        emails:
+          contact.emails?.map((e) => ({
+            email: e.email || '',
+            label: e.label,
+          })) || [],
       });
       setShowAddRelationshipModal(true);
     }
   };
 
-  const filterDeviceContacts = (query: string) => {
-    setContactSearchQuery(query);
-    if (!query.trim()) {
-      setFilteredDeviceContacts(deviceContacts);
-      return;
-    }
-    
-    const filtered = deviceContacts.filter(contact => 
-      contact.name?.toLowerCase().includes(query.toLowerCase()) ||
-      contact.phoneNumbers?.[0]?.number?.includes(query) ||
-      contact.emails?.[0]?.email?.toLowerCase().includes(query.toLowerCase())
-    );
-    setFilteredDeviceContacts(filtered);
-  };
+  const filterDeviceContacts = useCallback(
+    (query: string) => {
+      setContactSearchQuery(query);
+      if (!query.trim()) {
+        setFilteredDeviceContacts(deviceContacts);
+        return;
+      }
+
+      const filtered = deviceContacts.filter(
+        (contact) =>
+          contact.name?.toLowerCase().includes(query.toLowerCase()) ||
+          contact.phoneNumbers?.[0]?.number?.includes(query) ||
+          contact.emails?.[0]?.email
+            ?.toLowerCase()
+            .includes(query.toLowerCase())
+      );
+      setFilteredDeviceContacts(filtered);
+    },
+    [deviceContacts]
+  );
 
   // Contact list modal functions
   const openContactList = () => {
-    if (Platform.OS === "web") {
+    if (Platform.OS === 'web') {
       setShowNewContactModal(true);
       return;
     }
@@ -384,7 +571,7 @@ export default function HomeScreen() {
 
   // Load contacts when modal opens
   const handleContactListOpen = () => {
-    if (Platform.OS === "web") {
+    if (Platform.OS === 'web') {
       setShowNewContactModal(true);
       return;
     }
@@ -401,12 +588,12 @@ export default function HomeScreen() {
 
   const handleDeviceContactSelect = (contact: Contacts.Contact) => {
     const contactName = contact.name || 'Unknown';
-    
+
     // Check if relationship already exists
-    const existingRelationship = relationships.find(rel => 
-      rel.contactName.toLowerCase() === contactName.toLowerCase()
+    const existingRelationship = relationships.find(
+      (rel) => rel.contactName.toLowerCase() === contactName.toLowerCase()
     );
-    
+
     if (existingRelationship) {
       // Show options: Edit relationship or View relationship
       Alert.alert(
@@ -415,7 +602,7 @@ export default function HomeScreen() {
         [
           {
             text: 'Cancel',
-            style: 'cancel'
+            style: 'cancel',
           },
           {
             text: 'Edit Relationship',
@@ -424,11 +611,11 @@ export default function HomeScreen() {
               setEditingRelationship(existingRelationship);
               setSelectedContact({
                 id: existingRelationship.contactId,
-                name: existingRelationship.contactName
+                name: existingRelationship.contactName,
               });
               setShowContactList(false);
               setShowAddRelationshipModal(true);
-            }
+            },
           },
           {
             text: 'View Relationship',
@@ -436,41 +623,45 @@ export default function HomeScreen() {
               // Navigate to relationships page
               setShowContactList(false);
               router.push('/(tabs)/relationships');
-            }
-          }
+            },
+          },
         ]
       );
     } else {
       // Create new relationship
       setSelectedContact({
         id: (contact as any).id || `device_${Date.now()}`,
-        name: contactName
+        name: contactName,
       });
       setShowContactList(false);
       setShowAddRelationshipModal(true);
     }
   };
 
-
-  const renderDeviceContact = ({ item }: { item: Contacts.Contact }) => (
-    <TouchableOpacity 
-      style={styles.contactItem} 
-      onPress={() => handleDeviceContactSelect(item)}
-    >
-      <View style={styles.contactItemContent}>
-        <Text style={styles.contactItemName}>{item.name}</Text>
-        {item.phoneNumbers && item.phoneNumbers[0] && (
-          <Text style={styles.contactItemPhone}>{item.phoneNumbers[0].number}</Text>
-        )}
-        {item.emails && item.emails[0] && (
-          <Text style={styles.contactItemEmail}>{item.emails[0].email}</Text>
-        )}
-      </View>
-      <View style={styles.deviceContactAction}>
-        <Text style={styles.deviceContactActionText}>Select</Text>
-        <ChevronRight size={16} color="#10B981" />
-      </View>
-    </TouchableOpacity>
+  const renderDeviceContact = useCallback(
+    ({ item }: { item: Contacts.Contact }) => (
+      <TouchableOpacity
+        style={styles.contactItem}
+        onPress={() => handleDeviceContactSelect(item)}
+      >
+        <View style={styles.contactItemContent}>
+          <Text style={styles.contactItemName}>{item.name}</Text>
+          {item.phoneNumbers && item.phoneNumbers[0] && (
+            <Text style={styles.contactItemPhone}>
+              {item.phoneNumbers[0].number}
+            </Text>
+          )}
+          {item.emails && item.emails[0] && (
+            <Text style={styles.contactItemEmail}>{item.emails[0].email}</Text>
+          )}
+        </View>
+        <View style={styles.deviceContactAction}>
+          <Text style={styles.deviceContactActionText}>Select</Text>
+          <ChevronRight size={16} color="#10B981" />
+        </View>
+      </TouchableOpacity>
+    ),
+    []
   );
 
   // Activity handlers
@@ -494,7 +685,7 @@ export default function HomeScreen() {
 
     try {
       const success = await deleteActivity(selectedActivity.id);
-      
+
       if (success) {
         setDeleteModalVisible(false);
         setSelectedActivity(null);
@@ -533,7 +724,10 @@ export default function HomeScreen() {
   };
 
   // Relationships handlers
-  const handleDeleteRelationship = async (relationshipId: string, contactName: string) => {
+  const handleDeleteRelationship = async (
+    relationshipId: string,
+    contactName: string
+  ) => {
     Alert.alert(
       'Delete Relationship',
       `Are you sure you want to delete your relationship with ${contactName}?`,
@@ -571,21 +765,25 @@ export default function HomeScreen() {
     setShowAddRelationshipModal(true);
   };
 
-
   const selectContact = (contact: Contact) => {
     // Check if relationship already exists
-    const existingRelationship = relationships.find(r => r.contactId === contact.id);
+    const existingRelationship = relationships.find(
+      (r) => r.contactId === contact.id
+    );
     if (existingRelationship) {
       Alert.alert(
         'Relationship Exists',
         `You already have a relationship with ${contact.name}. Would you like to edit it?`,
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Edit', onPress: () => {
-            setSelectedContact(contact);
-            setShowContactList(false);
-            setShowAddRelationshipModal(true);
-          }},
+          {
+            text: 'Edit',
+            onPress: () => {
+              setSelectedContact(contact);
+              setShowContactList(false);
+              setShowAddRelationshipModal(true);
+            },
+          },
         ]
       );
       return;
@@ -633,41 +831,41 @@ export default function HomeScreen() {
 
   const validateContactURL = (url: string): boolean => {
     if (!url) return true; // Empty URL is valid (optional field)
-    
+
     // Clean the URL
     let cleanUrl = url.trim();
-    
+
     // Add protocol if missing
     if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
       cleanUrl = `https://${cleanUrl}`;
     }
-    
+
     try {
       const urlObj = new URL(cleanUrl);
-      
+
       // Check if it's a valid protocol
       if (!['http:', 'https:'].includes(urlObj.protocol)) {
         return false;
       }
-      
+
       // Check if hostname is valid (not empty and has at least one dot for domain)
       if (!urlObj.hostname || !urlObj.hostname.includes('.')) {
         return false;
       }
-      
+
       // Check for valid domain structure
       const domainParts = urlObj.hostname.split('.');
       if (domainParts.length < 2) {
         return false;
       }
-      
+
       // Check that each part of the domain is not empty
       for (const part of domainParts) {
         if (!part || part.length === 0) {
           return false;
         }
       }
-      
+
       return true;
     } catch {
       return false;
@@ -678,14 +876,16 @@ export default function HomeScreen() {
     if (!birthday) return true; // Empty birthday is valid (optional field)
     const dateRegex = /^(0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01])\/\d{4}$/;
     if (!dateRegex.test(birthday)) return false;
-    
+
     const [month, day, year] = birthday.split('/').map(Number);
     const date = new Date(year, month - 1, day);
-    return date.getFullYear() === year && 
-           date.getMonth() === month - 1 && 
-           date.getDate() === day &&
-           year >= 1900 && 
-           year <= new Date().getFullYear();
+    return (
+      date.getFullYear() === year &&
+      date.getMonth() === month - 1 &&
+      date.getDate() === day &&
+      year >= 1900 &&
+      year <= new Date().getFullYear()
+    );
   };
 
   const validateContactForm = (): boolean => {
@@ -708,27 +908,33 @@ export default function HomeScreen() {
     }
 
     if (newContactWebsite && !validateContactURL(newContactWebsite)) {
-      errors.contactWebsite = 'Please enter a valid website URL (e.g., https://example.com)';
+      errors.contactWebsite =
+        'Please enter a valid website URL (e.g., https://example.com)';
     }
 
     if (newContactLinkedin && !validateContactURL(newContactLinkedin)) {
-      errors.contactLinkedin = 'Please enter a valid LinkedIn URL (e.g., https://linkedin.com/in/username)';
+      errors.contactLinkedin =
+        'Please enter a valid LinkedIn URL (e.g., https://linkedin.com/in/username)';
     }
 
     if (newContactTwitter && newContactTwitter.trim()) {
       // Twitter can be either a handle (@username) or URL
       const isHandle = newContactTwitter.startsWith('@');
-      const isURL = newContactTwitter.startsWith('http') || newContactTwitter.includes('.');
-      
+      const isURL =
+        newContactTwitter.startsWith('http') || newContactTwitter.includes('.');
+
       if (!isHandle && !isURL) {
-        errors.contactTwitter = 'Please enter a valid Twitter handle (@username) or URL';
+        errors.contactTwitter =
+          'Please enter a valid Twitter handle (@username) or URL';
       } else if (isURL && !validateContactURL(newContactTwitter)) {
-        errors.contactTwitter = 'Please enter a valid Twitter URL (e.g., https://twitter.com/username)';
+        errors.contactTwitter =
+          'Please enter a valid Twitter URL (e.g., https://twitter.com/username)';
       } else if (isHandle) {
         // Validate handle format
         const handleRegex = /^@[a-zA-Z0-9_]{1,15}$/;
         if (!handleRegex.test(newContactTwitter)) {
-          errors.contactTwitter = 'Please enter a valid Twitter handle (@username, 1-15 characters, letters, numbers, and underscores only)';
+          errors.contactTwitter =
+            'Please enter a valid Twitter handle (@username, 1-15 characters, letters, numbers, and underscores only)';
         }
       }
     }
@@ -736,23 +942,29 @@ export default function HomeScreen() {
     if (newContactInstagram && newContactInstagram.trim()) {
       // Instagram can be either a handle (@username) or URL
       const isHandle = newContactInstagram.startsWith('@');
-      const isURL = newContactInstagram.startsWith('http') || newContactInstagram.includes('.');
-      
+      const isURL =
+        newContactInstagram.startsWith('http') ||
+        newContactInstagram.includes('.');
+
       if (!isHandle && !isURL) {
-        errors.contactInstagram = 'Please enter a valid Instagram handle (@username) or URL';
+        errors.contactInstagram =
+          'Please enter a valid Instagram handle (@username) or URL';
       } else if (isURL && !validateContactURL(newContactInstagram)) {
-        errors.contactInstagram = 'Please enter a valid Instagram URL (e.g., https://instagram.com/username)';
+        errors.contactInstagram =
+          'Please enter a valid Instagram URL (e.g., https://instagram.com/username)';
       } else if (isHandle) {
         // Validate handle format
         const handleRegex = /^@[a-zA-Z0-9._]{1,30}$/;
         if (!handleRegex.test(newContactInstagram)) {
-          errors.contactInstagram = 'Please enter a valid Instagram handle (@username, 1-30 characters, letters, numbers, dots, and underscores only)';
+          errors.contactInstagram =
+            'Please enter a valid Instagram handle (@username, 1-30 characters, letters, numbers, dots, and underscores only)';
         }
       }
     }
 
     if (newContactFacebook && !validateContactURL(newContactFacebook)) {
-      errors.contactFacebook = 'Please enter a valid Facebook URL (e.g., https://facebook.com/username)';
+      errors.contactFacebook =
+        'Please enter a valid Facebook URL (e.g., https://facebook.com/username)';
     }
 
     if (newContactBirthday && !validateContactBirthday(newContactBirthday)) {
@@ -764,7 +976,8 @@ export default function HomeScreen() {
       if (newContactCompany.length > 100) {
         errors.contactCompany = 'Company name must be 100 characters or less';
       } else if (newContactCompany.trim().length < 2) {
-        errors.contactCompany = 'Company name must be at least 2 characters long';
+        errors.contactCompany =
+          'Company name must be at least 2 characters long';
       } else if (!/^[a-zA-Z0-9\s\-&.,'()]+$/.test(newContactCompany.trim())) {
         errors.contactCompany = 'Company name contains invalid characters';
       }
@@ -795,11 +1008,65 @@ export default function HomeScreen() {
 
   const clearContactFieldError = (fieldName: string) => {
     if (contactValidationErrors[fieldName]) {
-      setContactValidationErrors(prev => {
+      setContactValidationErrors((prev) => {
         const newErrors = { ...prev };
         delete newErrors[fieldName];
         return newErrors;
       });
+    }
+  };
+
+  const saveContactToDevice = async (
+    contactData: Contact
+  ): Promise<string | null> => {
+    try {
+      // Check permission first
+      const { status } = await Contacts.requestPermissionsAsync();
+      if (status !== 'granted') {
+        showAlert(
+          'Permission Required',
+          'Cannot save contact to device without contacts permission'
+        );
+        return null;
+      }
+
+      // Prepare contact data for device
+      const nameParts = contactData.name.split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+
+      const deviceContact = {
+        [Contacts.Fields.FirstName]: firstName,
+        [Contacts.Fields.LastName]: lastName,
+        [Contacts.Fields.PhoneNumbers]:
+          contactData.phoneNumbers?.map((phone) => ({
+            number: phone.number,
+            isPrimary: true,
+            label: phone.label || 'mobile',
+          })) || [],
+        [Contacts.Fields.Emails]:
+          contactData.emails?.map((email) => ({
+            email: email.email,
+            isPrimary: true,
+            label: email.label || 'work',
+          })) || [],
+        [Contacts.Fields.Company]: contactData.company || '',
+        [Contacts.Fields.JobTitle]: contactData.jobTitle || '',
+        [Contacts.Fields.Addresses]: contactData.address
+          ? [
+              {
+                street: contactData.address,
+                label: 'work',
+              },
+            ]
+          : [],
+      };
+
+      const contactId = await Contacts.addContactAsync(deviceContact);
+      return contactId;
+    } catch (error) {
+      console.error('Error saving contact to device:', error);
+      throw error;
     }
   };
 
@@ -810,39 +1077,85 @@ export default function HomeScreen() {
 
     try {
       setIsSaving(true);
-      
+
       // Create a new contact object
       const newContact: Contact = {
         id: `new_${Date.now()}`,
         name: newContactName.trim(),
-        phoneNumbers: newContactPhone ? [{ number: newContactPhone, label: 'mobile' }] : undefined,
-        emails: newContactEmail ? [{ email: newContactEmail, label: 'work' }] : undefined,
-        website: newContactWebsite || "",
-        linkedin: newContactLinkedin || "",
-        twitter: newContactTwitter || "",
-        instagram: newContactInstagram || "",
-        facebook: newContactFacebook || "",
-        company: newContactCompany || "",
-        jobTitle: newContactJobTitle || "",
-        address: newContactAddress || "",
-        birthday: newContactBirthday || "",
-        notes: newContactNotes || "",
+        phoneNumbers: newContactPhone
+          ? [{ number: newContactPhone, label: 'mobile' }]
+          : undefined,
+        emails: newContactEmail
+          ? [{ email: newContactEmail, label: 'work' }]
+          : undefined,
+        website: newContactWebsite || '',
+        linkedin: newContactLinkedin || '',
+        twitter: newContactTwitter || '',
+        instagram: newContactInstagram || '',
+        facebook: newContactFacebook || '',
+        company: newContactCompany || '',
+        jobTitle: newContactJobTitle || '',
+        address: newContactAddress || '',
+        birthday: newContactBirthday || '',
+        notes: newContactNotes || '',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
 
-      setSelectedContact(newContact);
-      setShowNewContactModal(false);
-      resetNewContactForm();
-      setShowAddRelationshipModal(true);
+      // For mobile platforms with permission, ask user if they want to save to device
+      if (Platform.OS !== 'web' && hasContactPermission) {
+        showAlert(
+          'Save Contact',
+          `Would you like to save ${newContactName.trim()} to your device contacts as well?`,
+          [
+            {
+              text: 'App Only',
+              onPress: () => {
+                proceedWithRelationship(newContact);
+              },
+            },
+            {
+              text: 'Save to Device',
+              onPress: async () => {
+                try {
+                  await saveContactToDevice(newContact);
+                  showAlert('Success', 'Contact saved to device successfully!');
+                  proceedWithRelationship(newContact);
+                } catch (error) {
+                  console.error('Error saving contact to device:', error);
+                  showAlert(
+                    'Error',
+                    'Failed to save contact to device, but you can still create the relationship.',
+                    [
+                      {
+                        text: 'Continue',
+                        onPress: () => proceedWithRelationship(newContact),
+                      },
+                    ]
+                  );
+                }
+              },
+            },
+          ]
+        );
+      } else {
+        // For web platform or mobile without contact permission, proceed directly to create relationship only
+        proceedWithRelationship(newContact);
+      }
     } catch (error) {
       console.error('Error creating new contact:', error);
-      Alert.alert('Error', 'Failed to create new contact');
+      showAlert('Error', 'Failed to create new contact');
     } finally {
       setIsSaving(false);
     }
   };
 
+  const proceedWithRelationship = (contact: Contact) => {
+    setSelectedContact(contact);
+    setShowNewContactModal(false);
+    resetNewContactForm();
+    setShowAddRelationshipModal(true);
+  };
 
   // Reminder handlers
   const handleReminderPress = (reminder: Reminder) => {
@@ -852,26 +1165,40 @@ export default function HomeScreen() {
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
-    
+
     if (isNaN(date.getTime())) {
       return 'Invalid Date';
     }
-    
+
     const now = new Date();
-    const todayUTC = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-    const targetDateUTC = new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
-    
-    const diffInDays = Math.floor((todayUTC.getTime() - targetDateUTC.getTime()) / (1000 * 60 * 60 * 24));
-    
+    const todayUTC = new Date(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate()
+    );
+    const targetDateUTC = new Date(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate()
+    );
+
+    const diffInDays = Math.floor(
+      (todayUTC.getTime() - targetDateUTC.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
     if (diffInDays === 0) {
-      const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const timeString = date.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
       return `Today ${timeString}`;
     }
     if (diffInDays === -1) return 'Tomorrow';
     if (diffInDays === 1) return 'Yesterday';
     if (diffInDays > 0 && diffInDays <= 7) return `${diffInDays} days ago`;
-    if (diffInDays < 0 && diffInDays >= -7) return `In ${Math.abs(diffInDays)} days`;
-    
+    if (diffInDays < 0 && diffInDays >= -7)
+      return `In ${Math.abs(diffInDays)} days`;
+
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -879,9 +1206,12 @@ export default function HomeScreen() {
     });
   };
 
-  const calculateNextReminderDate = (currentDate: string, frequency: string): string => {
+  const calculateNextReminderDate = (
+    currentDate: string,
+    frequency: string
+  ): string => {
     const date = new Date(currentDate);
-    
+
     switch (frequency) {
       case 'once':
         return currentDate;
@@ -908,13 +1238,17 @@ export default function HomeScreen() {
       default:
         return currentDate;
     }
-    
+
     return date.toISOString();
   };
 
   const markAsDone = async (reminderId: string) => {
     try {
-      const reminder = [...missedReminders, ...thisWeekReminders, ...upcomingReminders].find(r => r.id === reminderId);
+      const reminder = [
+        ...missedReminders,
+        ...thisWeekReminders,
+        ...upcomingReminders,
+      ].find((r) => r.id === reminderId);
       if (!reminder) {
         Alert.alert('Error', 'Reminder not found.');
         return;
@@ -925,7 +1259,9 @@ export default function HomeScreen() {
         await createActivity({
           type: 'reminder',
           title: `Reminder completed: ${reminder.contactName}`,
-          description: `Completed reminder: ${reminder.type}${reminder.notes ? ` - ${reminder.notes}` : ''}`,
+          description: `Completed reminder: ${reminder.type}${
+            reminder.notes ? ` - ${reminder.notes}` : ''
+          }`,
           tags: ['completed', 'reminder'],
           contactId: reminder.contactId || '',
           contactName: reminder.contactName,
@@ -951,13 +1287,16 @@ export default function HomeScreen() {
       }
 
       // For recurring reminders, calculate next date and update
-      const nextDate = calculateNextReminderDate(reminder.date, reminder.frequency);
-      
+      const nextDate = calculateNextReminderDate(
+        reminder.date,
+        reminder.frequency
+      );
+
       await updateReminder({
         reminderId: reminderId,
         updates: {
           date: nextDate,
-        }
+        },
       });
 
       // Create a new activity for the rescheduled reminder
@@ -965,7 +1304,9 @@ export default function HomeScreen() {
         await createActivity({
           type: 'reminder',
           title: `Reminder rescheduled: ${reminder.contactName}`,
-          description: `Rescheduled reminder: ${reminder.type}${reminder.notes ? ` - ${reminder.notes}` : ''} (Next: ${formatDate(nextDate)})`,
+          description: `Rescheduled reminder: ${reminder.type}${
+            reminder.notes ? ` - ${reminder.notes}` : ''
+          } (Next: ${formatDate(nextDate)})`,
           tags: ['rescheduled', 'reminder'],
           contactId: reminder.contactId || '',
           contactName: reminder.contactName,
@@ -977,9 +1318,12 @@ export default function HomeScreen() {
       } catch (activityError) {
         console.error('Error creating reschedule activity:', activityError);
       }
-      
+
       setShowReminderDetail(false);
-      Alert.alert('Success', `Reminder rescheduled for ${formatDate(nextDate)}!`);
+      Alert.alert(
+        'Success',
+        `Reminder rescheduled for ${formatDate(nextDate)}!`
+      );
     } catch (error) {
       console.error('Error marking reminder as done:', error);
       Alert.alert('Error', 'Failed to update reminder.');
@@ -988,22 +1332,29 @@ export default function HomeScreen() {
 
   const snoozeReminder = async (reminderId: string, days: number) => {
     try {
-      const reminder = [...missedReminders, ...thisWeekReminders, ...upcomingReminders].find(r => r.id === reminderId);
+      const reminder = [
+        ...missedReminders,
+        ...thisWeekReminders,
+        ...upcomingReminders,
+      ].find((r) => r.id === reminderId);
       if (!reminder) return;
-      
+
       // Use the updateReminder function from the hook (already available at component level)
       const newDate = new Date(reminder.date);
       newDate.setDate(newDate.getDate() + days);
-      
+
       await updateReminder({
         reminderId,
         updates: {
           date: newDate.toISOString(),
-        }
+        },
       });
-      
+
       setShowReminderDetail(false);
-      Alert.alert('Success', `Reminder snoozed for ${days} day${days > 1 ? 's' : ''}!`);
+      Alert.alert(
+        'Success',
+        `Reminder snoozed for ${days} day${days > 1 ? 's' : ''}!`
+      );
     } catch (error) {
       console.error('Error snoozing reminder:', error);
       Alert.alert('Error', 'Failed to snooze reminder.');
@@ -1019,29 +1370,33 @@ export default function HomeScreen() {
   // Contact action functions
   const handleCall = async () => {
     if (!selectedReminder) return;
-    
+
     // Find the relationship data first, then fallback to device contacts
-    let relationship = relationships.find(rel => 
-      rel.contactName === selectedReminder.contactName
+    let relationship = relationships.find(
+      (rel) => rel.contactName === selectedReminder.contactName
     );
-    
+
     // If not found, try case-insensitive match
     if (!relationship) {
-      relationship = relationships.find(rel => 
-        rel.contactName.toLowerCase().trim() === selectedReminder.contactName.toLowerCase().trim()
+      relationship = relationships.find(
+        (rel) =>
+          rel.contactName.toLowerCase().trim() ===
+          selectedReminder.contactName.toLowerCase().trim()
       );
     }
-    
-    const relationshipPhone = relationship?.contactData?.phoneNumbers?.[0]?.number;
-    const deviceContact = deviceContacts.find(contact => 
-      contact.name === selectedReminder.contactName
+
+    const relationshipPhone =
+      relationship?.contactData?.phoneNumbers?.[0]?.number;
+    const deviceContact = deviceContacts.find(
+      (contact) => contact.name === selectedReminder.contactName
     );
-    
-    const phoneNumber = relationshipPhone || deviceContact?.phoneNumbers?.[0]?.number;
-    
+
+    const phoneNumber =
+      relationshipPhone || deviceContact?.phoneNumbers?.[0]?.number;
+
     if (phoneNumber) {
       const url = `tel:${phoneNumber}`;
-      
+
       try {
         const supported = await Linking.canOpenURL(url);
         if (supported) {
@@ -1056,7 +1411,7 @@ export default function HomeScreen() {
       }
     } else {
       Alert.alert(
-        'No Phone Number', 
+        'No Phone Number',
         `Phone number not available for ${selectedReminder.contactName}. Please add contact information in your relationship or device contacts.`,
         [{ text: 'OK', onPress: () => setShowContactActions(false) }]
       );
@@ -1065,29 +1420,33 @@ export default function HomeScreen() {
 
   const handleMessage = async () => {
     if (!selectedReminder) return;
-    
+
     // Find the relationship data first, then fallback to device contacts
-    let relationship = relationships.find(rel => 
-      rel.contactName === selectedReminder.contactName
+    let relationship = relationships.find(
+      (rel) => rel.contactName === selectedReminder.contactName
     );
-    
+
     // If not found, try case-insensitive match
     if (!relationship) {
-      relationship = relationships.find(rel => 
-        rel.contactName.toLowerCase().trim() === selectedReminder.contactName.toLowerCase().trim()
+      relationship = relationships.find(
+        (rel) =>
+          rel.contactName.toLowerCase().trim() ===
+          selectedReminder.contactName.toLowerCase().trim()
       );
     }
-    
-    const relationshipPhone = relationship?.contactData?.phoneNumbers?.[0]?.number;
-    const deviceContact = deviceContacts.find(contact => 
-      contact.name === selectedReminder.contactName
+
+    const relationshipPhone =
+      relationship?.contactData?.phoneNumbers?.[0]?.number;
+    const deviceContact = deviceContacts.find(
+      (contact) => contact.name === selectedReminder.contactName
     );
-    
-    const phoneNumber = relationshipPhone || deviceContact?.phoneNumbers?.[0]?.number;
-    
+
+    const phoneNumber =
+      relationshipPhone || deviceContact?.phoneNumbers?.[0]?.number;
+
     if (phoneNumber) {
       const url = `sms:${phoneNumber}`;
-      
+
       try {
         const supported = await Linking.canOpenURL(url);
         if (supported) {
@@ -1102,7 +1461,7 @@ export default function HomeScreen() {
       }
     } else {
       Alert.alert(
-        'No Phone Number', 
+        'No Phone Number',
         `Phone number not available for ${selectedReminder.contactName}. Please add contact information in your relationship or device contacts.`,
         [{ text: 'OK', onPress: () => setShowContactActions(false) }]
       );
@@ -1111,41 +1470,51 @@ export default function HomeScreen() {
 
   const handleWhatsApp = async () => {
     if (!selectedReminder) return;
-    
+
     // Find the relationship data first, then fallback to device contacts
-    let relationship = relationships.find(rel => 
-      rel.contactName === selectedReminder.contactName
+    let relationship = relationships.find(
+      (rel) => rel.contactName === selectedReminder.contactName
     );
-    
+
     // If not found, try case-insensitive match
     if (!relationship) {
-      relationship = relationships.find(rel => 
-        rel.contactName.toLowerCase().trim() === selectedReminder.contactName.toLowerCase().trim()
+      relationship = relationships.find(
+        (rel) =>
+          rel.contactName.toLowerCase().trim() ===
+          selectedReminder.contactName.toLowerCase().trim()
       );
     }
-    
-    const relationshipPhone = relationship?.contactData?.phoneNumbers?.[0]?.number;
-    const deviceContact = deviceContacts.find(contact => 
-      contact.name === selectedReminder.contactName
+
+    const relationshipPhone =
+      relationship?.contactData?.phoneNumbers?.[0]?.number;
+    const deviceContact = deviceContacts.find(
+      (contact) => contact.name === selectedReminder.contactName
     );
-    
-    const phoneNumber = relationshipPhone || deviceContact?.phoneNumbers?.[0]?.number;
-    
+
+    const phoneNumber =
+      relationshipPhone || deviceContact?.phoneNumbers?.[0]?.number;
+
     if (phoneNumber) {
       const cleanPhoneNumber = phoneNumber.replace(/\D/g, ''); // Remove non-digits
-      
+
       // Use different URL schemes for web vs mobile
-      const url = Platform.OS === 'web' 
-        ? `https://wa.me/${cleanPhoneNumber}`
-        : `whatsapp://send?phone=${cleanPhoneNumber}`;
-      
+      const url =
+        Platform.OS === 'web'
+          ? `https://wa.me/${cleanPhoneNumber}`
+          : `whatsapp://send?phone=${cleanPhoneNumber}`;
+
       try {
         const supported = await Linking.canOpenURL(url);
         if (supported) {
           await Linking.openURL(url);
           setShowContactActions(false);
         } else {
-          Alert.alert('Error', Platform.OS === 'web' ? 'Unable to open WhatsApp Web' : 'WhatsApp is not installed');
+          Alert.alert(
+            'Error',
+            Platform.OS === 'web'
+              ? 'Unable to open WhatsApp Web'
+              : 'WhatsApp is not installed'
+          );
         }
       } catch (error) {
         console.error('Error opening WhatsApp:', error);
@@ -1153,7 +1522,7 @@ export default function HomeScreen() {
       }
     } else {
       Alert.alert(
-        'No Phone Number', 
+        'No Phone Number',
         `Phone number not available for ${selectedReminder.contactName}. Please add contact information in your relationship or device contacts.`,
         [{ text: 'OK', onPress: () => setShowContactActions(false) }]
       );
@@ -1162,29 +1531,31 @@ export default function HomeScreen() {
 
   const handleEmail = async () => {
     if (!selectedReminder) return;
-    
+
     // Find the relationship data first, then fallback to device contacts
-    let relationship = relationships.find(rel => 
-      rel.contactName === selectedReminder.contactName
+    let relationship = relationships.find(
+      (rel) => rel.contactName === selectedReminder.contactName
     );
-    
+
     // If not found, try case-insensitive match
     if (!relationship) {
-      relationship = relationships.find(rel => 
-        rel.contactName.toLowerCase().trim() === selectedReminder.contactName.toLowerCase().trim()
+      relationship = relationships.find(
+        (rel) =>
+          rel.contactName.toLowerCase().trim() ===
+          selectedReminder.contactName.toLowerCase().trim()
       );
     }
-    
+
     const relationshipEmail = relationship?.contactData?.emails?.[0]?.email;
-    const deviceContact = deviceContacts.find(contact => 
-      contact.name === selectedReminder.contactName
+    const deviceContact = deviceContacts.find(
+      (contact) => contact.name === selectedReminder.contactName
     );
-    
+
     const email = relationshipEmail || deviceContact?.emails?.[0]?.email;
-    
+
     if (email) {
       const url = `mailto:${email}`;
-      
+
       try {
         const supported = await Linking.canOpenURL(url);
         if (supported) {
@@ -1199,7 +1570,7 @@ export default function HomeScreen() {
       }
     } else {
       Alert.alert(
-        'No Email Address', 
+        'No Email Address',
         `Email address not available for ${selectedReminder.contactName}. Please add contact information in your relationship or device contacts.`,
         [{ text: 'OK', onPress: () => setShowContactActions(false) }]
       );
@@ -1219,22 +1590,25 @@ export default function HomeScreen() {
 
   const handleUpdateReminder = async () => {
     if (!editingReminder) return;
-    
+
     if (!editReminderNote || editReminderNote.trim() === '') {
       Alert.alert('Validation Error', 'Please enter a note for the reminder.');
       return;
     }
-    
+
     const combinedDateTime = new Date(editReminderDate);
     combinedDateTime.setHours(editReminderTime.getHours());
     combinedDateTime.setMinutes(editReminderTime.getMinutes());
-    
+
     const now = new Date();
     if (combinedDateTime <= now) {
-      Alert.alert('Validation Error', 'Please select a future date and time for the reminder.');
+      Alert.alert(
+        'Validation Error',
+        'Please select a future date and time for the reminder.'
+      );
       return;
     }
-    
+
     try {
       // Use the updateReminder function from the hook (already available at component level)
       await updateReminder({
@@ -1244,9 +1618,9 @@ export default function HomeScreen() {
           date: combinedDateTime.toISOString(),
           type: editReminderType,
           frequency: editReminderFrequency,
-        }
+        },
       });
-      
+
       setShowEditReminderModal(false);
       setEditingReminder(null);
       Alert.alert('Success', 'Reminder updated successfully!');
@@ -1284,13 +1658,18 @@ export default function HomeScreen() {
     );
   };
 
-
   // Reminder Detail Modal
   const renderReminderDetailModal = () => (
-    <Modal visible={showReminderDetail} animationType="slide" presentationStyle="pageSheet">
+    <Modal
+      visible={showReminderDetail}
+      animationType="slide"
+      presentationStyle="pageSheet"
+    >
       <SafeAreaView style={styles.reminderDetailModal}>
         <View style={styles.reminderModalHeader}>
-          <Text style={styles.reminderModalTitle}>{selectedReminder?.contactName}</Text>
+          <Text style={styles.reminderModalTitle}>
+            {selectedReminder?.contactName}
+          </Text>
           <TouchableOpacity onPress={() => setShowReminderDetail(false)}>
             <X size={24} color="#6B7280" />
           </TouchableOpacity>
@@ -1300,15 +1679,19 @@ export default function HomeScreen() {
           <ScrollView style={styles.reminderDetailContent}>
             <View style={styles.reminderDetailSection}>
               <Text style={styles.reminderDetailLabel}>Reminder Type</Text>
-              <Text style={styles.reminderDetailValue}>{selectedReminder.type}</Text>
+              <Text style={styles.reminderDetailValue}>
+                {selectedReminder.type}
+              </Text>
             </View>
 
             <View style={styles.reminderDetailSection}>
               <Text style={styles.reminderDetailLabel}>Due Date</Text>
-              <Text style={[
-                styles.reminderDetailValue,
-                selectedReminder.isOverdue && styles.overdueText
-              ]}>
+              <Text
+                style={[
+                  styles.reminderDetailValue,
+                  selectedReminder.isOverdue && styles.overdueText,
+                ]}
+              >
                 {formatDate(selectedReminder.date)}
                 {selectedReminder.isOverdue && ' (Overdue)'}
               </Text>
@@ -1316,7 +1699,9 @@ export default function HomeScreen() {
 
             <View style={styles.reminderDetailSection}>
               <Text style={styles.reminderDetailLabel}>Frequency</Text>
-              <Text style={styles.reminderDetailValue}>Every {selectedReminder.frequency}</Text>
+              <Text style={styles.reminderDetailValue}>
+                Every {selectedReminder.frequency}
+              </Text>
             </View>
 
             <View style={styles.reminderDetailSection}>
@@ -1333,54 +1718,68 @@ export default function HomeScreen() {
             {selectedReminder.notes && (
               <View style={styles.reminderDetailSection}>
                 <Text style={styles.reminderDetailLabel}>Notes</Text>
-                <Text style={styles.reminderDetailValue}>{selectedReminder.notes}</Text>
+                <Text style={styles.reminderDetailValue}>
+                  {selectedReminder.notes}
+                </Text>
               </View>
             )}
 
             <View style={styles.reminderActionButtons}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.reminderConnectButton}
                 onPress={() => connectNow(selectedReminder)}
               >
-                <Text style={styles.reminderConnectButtonText}>Connect Now</Text>
+                <Text style={styles.reminderConnectButtonText}>
+                  Connect Now
+                </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.reminderPrimaryButton}
                 onPress={() => markAsDone(selectedReminder.id)}
               >
                 <CheckCircle size={20} color="#10B981" />
-                <Text style={styles.reminderPrimaryButtonText}>Mark as Done</Text>
+                <Text style={styles.reminderPrimaryButtonText}>
+                  Mark as Done
+                </Text>
               </TouchableOpacity>
 
               <View style={styles.reminderEditDeleteButtons}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.reminderEditButton}
                   onPress={() => handleEditReminder(selectedReminder)}
                 >
-                  <Text style={styles.reminderEditButtonText}>Edit Reminder</Text>
+                  <Text style={styles.reminderEditButtonText}>
+                    Edit Reminder
+                  </Text>
                 </TouchableOpacity>
-                
-                <TouchableOpacity 
+
+                <TouchableOpacity
                   style={styles.reminderDeleteButton}
                   onPress={() => handleDeleteReminder(selectedReminder.id)}
                 >
-                  <Text style={styles.reminderDeleteButtonText}>Delete Reminder</Text>
+                  <Text style={styles.reminderDeleteButtonText}>
+                    Delete Reminder
+                  </Text>
                 </TouchableOpacity>
               </View>
 
               <View style={styles.reminderSnoozeButtons}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.reminderSnoozeButton}
                   onPress={() => snoozeReminder(selectedReminder.id, 1)}
                 >
-                  <Text style={styles.reminderSnoozeButtonText}>Snooze 1 day</Text>
+                  <Text style={styles.reminderSnoozeButtonText}>
+                    Snooze 1 day
+                  </Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.reminderSnoozeButton}
                   onPress={() => snoozeReminder(selectedReminder.id, 7)}
                 >
-                  <Text style={styles.reminderSnoozeButtonText}>Snooze 1 week</Text>
+                  <Text style={styles.reminderSnoozeButtonText}>
+                    Snooze 1 week
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1395,41 +1794,51 @@ export default function HomeScreen() {
     if (!selectedReminder) return null;
 
     // Find the relationship data - try exact match first, then case-insensitive
-    let relationship = relationships.find(rel => 
-      rel.contactName === selectedReminder.contactName
+    let relationship = relationships.find(
+      (rel) => rel.contactName === selectedReminder.contactName
     );
-    
+
     // If not found, try case-insensitive match
     if (!relationship) {
-      relationship = relationships.find(rel => 
-        rel.contactName.toLowerCase().trim() === selectedReminder.contactName.toLowerCase().trim()
+      relationship = relationships.find(
+        (rel) =>
+          rel.contactName.toLowerCase().trim() ===
+          selectedReminder.contactName.toLowerCase().trim()
       );
     }
 
     // Get contact data from relationship document, fallback to device contacts
-    const relationshipPhone = relationship?.contactData?.phoneNumbers?.[0]?.number;
+    const relationshipPhone =
+      relationship?.contactData?.phoneNumbers?.[0]?.number;
     const relationshipEmail = relationship?.contactData?.emails?.[0]?.email;
-    
-    const deviceContact = deviceContacts.find(contact => 
-      contact.name === selectedReminder.contactName
+
+    const deviceContact = deviceContacts.find(
+      (contact) => contact.name === selectedReminder.contactName
     );
 
-    const hasPhone = relationshipPhone || (deviceContact?.phoneNumbers && deviceContact.phoneNumbers.length > 0);
-    const hasEmail = relationshipEmail || (deviceContact?.emails && deviceContact.emails.length > 0);
-    const phoneNumber = relationshipPhone || (deviceContact?.phoneNumbers?.[0]?.number || '');
-    const email = relationshipEmail || (deviceContact?.emails?.[0]?.email || '');
+    const hasPhone =
+      relationshipPhone ||
+      (deviceContact?.phoneNumbers && deviceContact.phoneNumbers.length > 0);
+    const hasEmail =
+      relationshipEmail ||
+      (deviceContact?.emails && deviceContact.emails.length > 0);
+    const phoneNumber =
+      relationshipPhone || deviceContact?.phoneNumbers?.[0]?.number || '';
+    const email = relationshipEmail || deviceContact?.emails?.[0]?.email || '';
 
     return (
       <Modal visible={showContactActions} animationType="slide" transparent>
         <View style={styles.contactActionsOverlay}>
           <View style={styles.contactActionsContainer}>
             <View style={styles.contactActionsHeader}>
-              <Text style={styles.contactActionsTitle}>Get in touch with {selectedReminder.contactName}</Text>
+              <Text style={styles.contactActionsTitle}>
+                Get in touch with {selectedReminder.contactName}
+              </Text>
               <TouchableOpacity onPress={() => setShowContactActions(false)}>
                 <X size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
-            
+
             {/* Contact Information Display */}
             <View style={styles.contactInfoDisplay}>
               {hasPhone && (
@@ -1446,125 +1855,163 @@ export default function HomeScreen() {
               )}
               {!hasPhone && !hasEmail && (
                 <View style={styles.noContactInfo}>
-                  <Text style={styles.noContactInfoText}>No contact information available</Text>
+                  <Text style={styles.noContactInfoText}>
+                    No contact information available
+                  </Text>
                   <Text style={styles.noContactInfoSubtext}>
-                    {relationship ? 
-                      'Add contact details in your relationship or device contacts' : 
-                      'Add contact details in your device contacts'
-                    }
+                    {relationship
+                      ? 'Add contact details in your relationship or device contacts'
+                      : 'Add contact details in your device contacts'}
                   </Text>
                 </View>
               )}
             </View>
-            
+
             <View style={styles.contactActionsList}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[
                   styles.contactActionItem,
-                  !hasPhone && styles.contactActionItemDisabled
-                ]} 
+                  !hasPhone && styles.contactActionItemDisabled,
+                ]}
                 onPress={handleCall}
                 disabled={!hasPhone}
               >
-                <View style={[
-                  styles.contactActionIcon,
-                  !hasPhone && styles.contactActionIconDisabled
-                ]}>
-                  <Phone size={24} color={hasPhone ? "#10B981" : "#9CA3AF"} />
+                <View
+                  style={[
+                    styles.contactActionIcon,
+                    !hasPhone && styles.contactActionIconDisabled,
+                  ]}
+                >
+                  <Phone size={24} color={hasPhone ? '#10B981' : '#9CA3AF'} />
                 </View>
                 <View style={styles.contactActionContent}>
-                  <Text style={[
-                    styles.contactActionTitle,
-                    !hasPhone && styles.contactActionTitleDisabled
-                  ]}>Call</Text>
-                  <Text style={[
-                    styles.contactActionSubtitle,
-                    !hasPhone && styles.contactActionSubtitleDisabled
-                  ]}>
+                  <Text
+                    style={[
+                      styles.contactActionTitle,
+                      !hasPhone && styles.contactActionTitleDisabled,
+                    ]}
+                  >
+                    Call
+                  </Text>
+                  <Text
+                    style={[
+                      styles.contactActionSubtitle,
+                      !hasPhone && styles.contactActionSubtitleDisabled,
+                    ]}
+                  >
                     {hasPhone ? phoneNumber : 'Phone number not available'}
                   </Text>
                 </View>
               </TouchableOpacity>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[
                   styles.contactActionItem,
-                  !hasPhone && styles.contactActionItemDisabled
-                ]} 
+                  !hasPhone && styles.contactActionItemDisabled,
+                ]}
                 onPress={handleMessage}
                 disabled={!hasPhone}
               >
-                <View style={[
-                  styles.contactActionIcon,
-                  !hasPhone && styles.contactActionIconDisabled
-                ]}>
-                  <MessageCircle size={24} color={hasPhone ? "#3B82F6" : "#9CA3AF"} />
+                <View
+                  style={[
+                    styles.contactActionIcon,
+                    !hasPhone && styles.contactActionIconDisabled,
+                  ]}
+                >
+                  <MessageCircle
+                    size={24}
+                    color={hasPhone ? '#3B82F6' : '#9CA3AF'}
+                  />
                 </View>
                 <View style={styles.contactActionContent}>
-                  <Text style={[
-                    styles.contactActionTitle,
-                    !hasPhone && styles.contactActionTitleDisabled
-                  ]}>Message</Text>
-                  <Text style={[
-                    styles.contactActionSubtitle,
-                    !hasPhone && styles.contactActionSubtitleDisabled
-                  ]}>
+                  <Text
+                    style={[
+                      styles.contactActionTitle,
+                      !hasPhone && styles.contactActionTitleDisabled,
+                    ]}
+                  >
+                    Message
+                  </Text>
+                  <Text
+                    style={[
+                      styles.contactActionSubtitle,
+                      !hasPhone && styles.contactActionSubtitleDisabled,
+                    ]}
+                  >
                     {hasPhone ? 'Send SMS' : 'Phone number not available'}
                   </Text>
                 </View>
               </TouchableOpacity>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[
                   styles.contactActionItem,
-                  !hasPhone && styles.contactActionItemDisabled
-                ]} 
+                  !hasPhone && styles.contactActionItemDisabled,
+                ]}
                 onPress={handleWhatsApp}
                 disabled={!hasPhone}
               >
-                <View style={[
-                  styles.contactActionIcon,
-                  !hasPhone && styles.contactActionIconDisabled
-                ]}>
+                <View
+                  style={[
+                    styles.contactActionIcon,
+                    !hasPhone && styles.contactActionIconDisabled,
+                  ]}
+                >
                   <Text style={styles.whatsappIcon}>📱</Text>
                 </View>
                 <View style={styles.contactActionContent}>
-                  <Text style={[
-                    styles.contactActionTitle,
-                    !hasPhone && styles.contactActionTitleDisabled
-                  ]}>WhatsApp</Text>
-                  <Text style={[
-                    styles.contactActionSubtitle,
-                    !hasPhone && styles.contactActionSubtitleDisabled
-                  ]}>
-                    {hasPhone ? 'Send WhatsApp message' : 'Phone number not available'}
+                  <Text
+                    style={[
+                      styles.contactActionTitle,
+                      !hasPhone && styles.contactActionTitleDisabled,
+                    ]}
+                  >
+                    WhatsApp
+                  </Text>
+                  <Text
+                    style={[
+                      styles.contactActionSubtitle,
+                      !hasPhone && styles.contactActionSubtitleDisabled,
+                    ]}
+                  >
+                    {hasPhone
+                      ? 'Send WhatsApp message'
+                      : 'Phone number not available'}
                   </Text>
                 </View>
               </TouchableOpacity>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[
                   styles.contactActionItem,
-                  !hasEmail && styles.contactActionItemDisabled
-                ]} 
+                  !hasEmail && styles.contactActionItemDisabled,
+                ]}
                 onPress={handleEmail}
                 disabled={!hasEmail}
               >
-                <View style={[
-                  styles.contactActionIcon,
-                  !hasEmail && styles.contactActionIconDisabled
-                ]}>
-                  <Mail size={24} color={hasEmail ? "#EF4444" : "#9CA3AF"} />
+                <View
+                  style={[
+                    styles.contactActionIcon,
+                    !hasEmail && styles.contactActionIconDisabled,
+                  ]}
+                >
+                  <Mail size={24} color={hasEmail ? '#EF4444' : '#9CA3AF'} />
                 </View>
                 <View style={styles.contactActionContent}>
-                  <Text style={[
-                    styles.contactActionTitle,
-                    !hasEmail && styles.contactActionTitleDisabled
-                  ]}>Email</Text>
-                  <Text style={[
-                    styles.contactActionSubtitle,
-                    !hasEmail && styles.contactActionSubtitleDisabled
-                  ]}>
+                  <Text
+                    style={[
+                      styles.contactActionTitle,
+                      !hasEmail && styles.contactActionTitleDisabled,
+                    ]}
+                  >
+                    Email
+                  </Text>
+                  <Text
+                    style={[
+                      styles.contactActionSubtitle,
+                      !hasEmail && styles.contactActionSubtitleDisabled,
+                    ]}
+                  >
                     {hasEmail ? email : 'Email address not available'}
                   </Text>
                 </View>
@@ -1598,7 +2045,7 @@ export default function HomeScreen() {
                 <X size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
-            
+
             <ScrollView style={styles.editReminderContent}>
               <View style={styles.editReminderForm}>
                 <Text style={styles.editReminderFormLabel}>Contact</Text>
@@ -1608,28 +2055,33 @@ export default function HomeScreen() {
                     {editingReminder?.contactName}
                   </Text>
                 </View>
-                
+
                 <Text style={styles.editReminderFormLabel}>Type</Text>
                 <View style={styles.editReminderTypeSelector}>
-                  {['follow_up', 'meeting', 'call', 'birthday', 'other'].map((type) => (
+                  {Object.values(ReminderTypes).map((type) => (
                     <TouchableOpacity
                       key={type}
                       style={[
                         styles.editReminderTypeOption,
-                        editReminderType === type && styles.editReminderTypeOptionSelected
-                      ]}
-                      onPress={() => setEditReminderType(type)}
-                    >
-                      <Text style={[
-                        styles.editReminderTypeOptionText,
-                        editReminderType === type && styles.editReminderTypeOptionTextSelected
-                      ]}>
-                        {type.replace('_', ' ').toUpperCase()}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                          editReminderType === type &&
+                            styles.editReminderTypeOptionSelected,
+                        ]}
+                        onPress={() => setEditReminderType(type)}
+                      >
+                        <Text
+                          style={[
+                            styles.editReminderTypeOptionText,
+                            editReminderType === type &&
+                              styles.editReminderTypeOptionTextSelected,
+                          ]}
+                        >
+                         {getReminderTypeDisplayName(type)}
+                        </Text>
+                      </TouchableOpacity>
+                    )
+                  )}
                 </View>
-                
+
                 <Text style={styles.editReminderFormLabel}>Frequency</Text>
                 <View style={styles.editReminderFrequencySelector}>
                   {frequencyOptions.map((option) => (
@@ -1637,20 +2089,28 @@ export default function HomeScreen() {
                       key={option.key}
                       style={[
                         styles.editReminderFrequencyOption,
-                        editReminderFrequency === option.key && styles.editReminderFrequencyOptionSelected
+                        editReminderFrequency === option.key &&
+                          styles.editReminderFrequencyOptionSelected,
                       ]}
-                      onPress={() => setEditReminderFrequency(option.key as ReminderFrequency)}
+                      onPress={() =>
+                        setEditReminderFrequency(
+                          option.key as ReminderFrequency
+                        )
+                      }
                     >
-                      <Text style={[
-                        styles.editReminderFrequencyOptionText,
-                        editReminderFrequency === option.key && styles.editReminderFrequencyOptionTextSelected
-                      ]}>
+                      <Text
+                        style={[
+                          styles.editReminderFrequencyOptionText,
+                          editReminderFrequency === option.key &&
+                            styles.editReminderFrequencyOptionTextSelected,
+                        ]}
+                      >
                         {option.label}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
-                
+
                 <Text style={styles.editReminderFormLabel}>Date *</Text>
                 {Platform.OS === 'web' ? (
                   <View style={styles.webDateTimeInput}>
@@ -1659,7 +2119,10 @@ export default function HomeScreen() {
                       value={editReminderDate.toISOString().slice(0, 10)}
                       onChange={(e) => {
                         const selectedDate = new Date(e.target.value);
-                        selectedDate.setHours(editReminderTime.getHours(), editReminderTime.getMinutes());
+                        selectedDate.setHours(
+                          editReminderTime.getHours(),
+                          editReminderTime.getMinutes()
+                        );
                         setEditReminderDate(selectedDate);
                       }}
                       min={new Date().toISOString().slice(0, 10)}
@@ -1676,7 +2139,7 @@ export default function HomeScreen() {
                     />
                   </View>
                 ) : (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.editReminderDateTimeButton}
                     onPress={() => setShowEditDatePicker(true)}
                   >
@@ -1686,7 +2149,7 @@ export default function HomeScreen() {
                     </Text>
                   </TouchableOpacity>
                 )}
-                
+
                 <Text style={styles.editReminderFormLabel}>Time *</Text>
                 {Platform.OS === 'web' ? (
                   <View style={styles.webDateTimeInput}>
@@ -1694,7 +2157,9 @@ export default function HomeScreen() {
                       type="time"
                       value={editReminderTime.toTimeString().slice(0, 5)}
                       onChange={(e) => {
-                        const [hours, minutes] = e.target.value.split(':').map(Number);
+                        const [hours, minutes] = e.target.value
+                          .split(':')
+                          .map(Number);
                         const newTime = new Date(editReminderTime);
                         newTime.setHours(hours, minutes);
                         setEditReminderTime(newTime);
@@ -1712,21 +2177,24 @@ export default function HomeScreen() {
                     />
                   </View>
                 ) : (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.editReminderDateTimeButton}
                     onPress={() => setShowEditTimePicker(true)}
                   >
                     <Clock size={20} color="#6B7280" />
                     <Text style={styles.editReminderDateTimeButtonText}>
-                      {editReminderTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {editReminderTime.toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
                     </Text>
                   </TouchableOpacity>
                 )}
-                
+
                 <Text style={styles.editReminderHelperText}>
                   Please select a future date and time for your reminder
                 </Text>
-                
+
                 <Text style={styles.editReminderFormLabel}>Note *</Text>
                 <TextInput
                   style={styles.editReminderNoteInput}
@@ -1740,26 +2208,30 @@ export default function HomeScreen() {
                 />
               </View>
             </ScrollView>
-            
+
             <View style={styles.editReminderActions}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.editReminderCancelButton}
                 onPress={() => setShowEditReminderModal(false)}
               >
                 <Text style={styles.editReminderCancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[
                   styles.editReminderUpdateButton,
-                  (!editReminderNote.trim()) && styles.editReminderUpdateButtonDisabled
+                  !editReminderNote.trim() &&
+                    styles.editReminderUpdateButtonDisabled,
                 ]}
                 onPress={handleUpdateReminder}
                 disabled={!editReminderNote.trim()}
               >
-                <Text style={[
-                  styles.editReminderUpdateButtonText,
-                  (!editReminderNote.trim()) && styles.editReminderUpdateButtonTextDisabled
-                ]}>
+                <Text
+                  style={[
+                    styles.editReminderUpdateButtonText,
+                    !editReminderNote.trim() &&
+                      styles.editReminderUpdateButtonTextDisabled,
+                  ]}
+                >
                   Update Reminder
                 </Text>
               </TouchableOpacity>
@@ -1782,17 +2254,24 @@ export default function HomeScreen() {
   }
 
   return (
-      <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={styles.container}>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
           <View style={styles.headerContent}>
             <View>
-              <Text style={styles.title} >
-                Welcome Back{userProfile?.name ? `, ${userProfile.name.split(' ')[0]}` : ''}
+              <Text style={styles.title}>
+                Welcome Back
+                {userProfile?.name ? `, ${userProfile.name.split(' ')[0]}` : ''}
               </Text>
               <Text style={styles.subtitle}>Manage your connections</Text>
             </View>
-            <TouchableOpacity style={styles.logoutButton} onPress={handleSignOut}>
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={handleSignOut}
+            >
               <LogOut size={20} color="#6B7280" />
             </TouchableOpacity>
           </View>
@@ -1800,26 +2279,60 @@ export default function HomeScreen() {
 
         {/* Stats Cards */}
         <View style={styles.statsContainer}>
-          <TouchableOpacity 
-            style={[styles.statCard, isLoadingRealTimeStats && !hasLoadedInitialStats && styles.statCardLoading]} 
-            onPress={() => router.push('/(tabs)/reminders')}
-            disabled={isLoadingRealTimeStats && !hasLoadedInitialStats}
+          <TouchableOpacity
+            style={[
+              styles.statCard,
+              isLoadingRealTimeStats &&
+                !hasLoadedInitialStats &&
+                styles.statCardLoading,
+            ]}
+            onPress={() => {
+              if (
+                !isNavigating &&
+                (!isLoadingRealTimeStats || hasLoadedInitialStats)
+              ) {
+                handleDebouncedNavigation('/(tabs)/reminders');
+              }
+            }}
+            disabled={
+              (isLoadingRealTimeStats && !hasLoadedInitialStats) || isNavigating
+            }
+            activeOpacity={0.7}
           >
             <Bell size={24} color="#3B82F6" />
             <Text style={styles.statNumber}>
-              {isLoadingRealTimeStats && !hasLoadedInitialStats ? '...' : realTimeStats.totalReminders}
+              {isLoadingRealTimeStats && !hasLoadedInitialStats
+                ? '...'
+                : realTimeStats.totalReminders}
             </Text>
             <Text style={styles.statLabel}>Reminders</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.statCard, isLoadingRealTimeStats && !hasLoadedInitialStats && styles.statCardLoading]}
-            onPress={() => router.push('/(tabs)/relationships')}
-            disabled={isLoadingRealTimeStats && !hasLoadedInitialStats}
+
+          <TouchableOpacity
+            style={[
+              styles.statCard,
+              isLoadingRealTimeStats &&
+                !hasLoadedInitialStats &&
+                styles.statCardLoading,
+            ]}
+            onPress={() => {
+              if (
+                !isNavigating &&
+                (!isLoadingRealTimeStats || hasLoadedInitialStats)
+              ) {
+                handleDebouncedNavigation('/(tabs)/relationships');
+              }
+            }}
+            disabled={
+              (isLoadingRealTimeStats && !hasLoadedInitialStats) || isNavigating
+            }
+            activeOpacity={0.7}
           >
             <Users size={24} color="#10B981" />
             <Text style={styles.statNumber}>
-              {isLoadingRealTimeStats && !hasLoadedInitialStats ? '...' : realTimeStats.totalRelationships}
+              {isLoadingRealTimeStats && !hasLoadedInitialStats
+                ? '...'
+                : realTimeStats.totalRelationships}
             </Text>
             <Text style={styles.statLabel}>Relationships</Text>
           </TouchableOpacity>
@@ -1830,48 +2343,80 @@ export default function HomeScreen() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Reminders</Text>
             <TouchableOpacity
-              style={styles.viewAllButton}
-              onPress={() => router.push('/(tabs)/reminders')}
+              style={[styles.viewAllButton]}
+              onPress={() => {
+                if (!isNavigating) {
+                  handleDebouncedNavigation('/(tabs)/reminders');
+                }
+              }}
+              disabled={isNavigating}
             >
               <Text style={styles.viewAllText}>View All</Text>
             </TouchableOpacity>
           </View>
-          
+
           {/* Reminder Tabs */}
           <View style={styles.reminderTabsContainer}>
             <View style={styles.reminderTabs}>
               {[
-                { key: 'missed', label: 'Missed', count: reminderCounts.missed || 0 },
-                { key: 'thisWeek', label: 'This week', count: reminderCounts.thisWeek || 0 },
-                { key: 'upcoming', label: 'Upcoming', count: reminderCounts.upcoming || 0 },
+                {
+                  key: 'missed',
+                  label: 'Missed',
+                  count: reminderCounts.missed || 0,
+                },
+                {
+                  key: 'thisWeek',
+                  label: 'This week',
+                  count: reminderCounts.thisWeek || 0,
+                },
+                {
+                  key: 'upcoming',
+                  label: 'Upcoming',
+                  count: reminderCounts.upcoming || 0,
+                },
               ].map((tab) => (
                 <TouchableOpacity
                   key={tab.key}
                   style={styles.reminderTab}
-                  onPress={() => setActiveReminderTab(tab.key as 'missed' | 'thisWeek' | 'upcoming')}
+                  onPress={() =>
+                    setActiveReminderTab(
+                      tab.key as 'missed' | 'thisWeek' | 'upcoming'
+                    )
+                  }
                 >
                   <View style={styles.reminderTabContent}>
-                    <Text style={[
-                      styles.reminderTabText,
-                      activeReminderTab === tab.key && styles.activeReminderTabText
-                    ]}>
+                    <Text
+                      style={[
+                        styles.reminderTabText,
+                        activeReminderTab === tab.key &&
+                          styles.activeReminderTabText,
+                      ]}
+                    >
                       {tab.label}
                     </Text>
                     {tab.count > 0 && (
-                      <View style={[
-                        styles.reminderTabCount,
-                        activeReminderTab === tab.key && styles.activeReminderTabCount
-                      ]}>
-                        <Text style={[
-                          styles.reminderTabCountText,
-                          activeReminderTab === tab.key && styles.activeReminderTabCountText
-                        ]}>
+                      <View
+                        style={[
+                          styles.reminderTabCount,
+                          activeReminderTab === tab.key &&
+                            styles.activeReminderTabCount,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.reminderTabCountText,
+                            activeReminderTab === tab.key &&
+                              styles.activeReminderTabCountText,
+                          ]}
+                        >
                           {isLoadingReminders ? '...' : tab.count}
                         </Text>
                       </View>
                     )}
                   </View>
-                  {activeReminderTab === tab.key && <View style={styles.reminderTabUnderline} />}
+                  {activeReminderTab === tab.key && (
+                    <View style={styles.reminderTabUnderline} />
+                  )}
                 </TouchableOpacity>
               ))}
             </View>
@@ -1884,134 +2429,164 @@ export default function HomeScreen() {
               <View style={styles.reminderLoadingContainer}>
                 <Text style={styles.loadingText}>Loading reminders...</Text>
               </View>
-            ) : (() => {
-              const getCurrentReminders = () => {
-                switch (activeReminderTab) {
-                  case 'missed':
-                    return missedReminders;
-                  case 'thisWeek':
-                    return thisWeekReminders;
-                  case 'upcoming':
-                    return upcomingReminders;
-                  default:
-                    return [];
+            ) : (
+              (() => {
+                const getCurrentReminders = () => {
+                  switch (activeReminderTab) {
+                    case 'missed':
+                      return missedReminders;
+                    case 'thisWeek':
+                      return thisWeekReminders;
+                    case 'upcoming':
+                      return upcomingReminders;
+                    default:
+                      return [];
+                  }
+                };
+
+                const currentReminders = getCurrentReminders();
+                const displayReminders = currentReminders.slice(0, 6);
+
+                if (displayReminders.length === 0) {
+                  return (
+                    <View style={styles.emptyReminderContainer}>
+                      <Text style={styles.emptyReminderText}>
+                        {activeReminderTab === 'missed'
+                          ? 'All caught up!'
+                          : activeReminderTab === 'thisWeek'
+                          ? 'No reminders this week'
+                          : 'No upcoming reminders'}
+                      </Text>
+                    </View>
+                  );
                 }
-              };
 
-              const currentReminders = getCurrentReminders();
-              const displayReminders = currentReminders.slice(0, 6);
-
-              if (displayReminders.length === 0) {
                 return (
-                  <View style={styles.emptyReminderContainer}>
-                    <Text style={styles.emptyReminderText}>
-                      {activeReminderTab === 'missed' 
-                        ? 'All caught up!' 
-                        : activeReminderTab === 'thisWeek'
-                        ? 'No reminders this week'
-                        : 'No upcoming reminders'
-                      }
-                    </Text>
+                  <View style={styles.reminderList}>
+                    {displayReminders.map((reminder) => (
+                      <TouchableOpacity
+                        key={reminder.id}
+                        style={styles.reminderCard}
+                        onPress={() => handleReminderPress(reminder)}
+                      >
+                        <View style={styles.reminderHeader}>
+                          <View style={styles.reminderInfo}>
+                            <Text style={styles.contactName}>
+                              {reminder.contactName}
+                            </Text>
+                            <Text style={styles.reminderType}>
+                              {reminder.type}
+                            </Text>
+                          </View>
+                          <View style={styles.reminderStatus}>
+                            {reminder.isOverdue ? (
+                              <AlertCircle size={20} color="#EF4444" />
+                            ) : (
+                              <Calendar size={16} color="#6B7280" />
+                            )}
+                            <Text
+                              style={[
+                                styles.dateText,
+                                reminder.isOverdue && styles.overdueText,
+                              ]}
+                            >
+                              {formatDate(reminder.date)}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.reminderFooter}>
+                          <Text style={styles.frequency}>
+                            Every {reminder.frequency}
+                          </Text>
+                          <View style={styles.tags}>
+                            {reminder.tags
+                              .slice(0, 2)
+                              .map((tag: string, index: number) => (
+                                <View key={index} style={styles.tag}>
+                                  <Text style={styles.tagText}>{tag}</Text>
+                                </View>
+                              ))}
+                            {reminder.tags.length > 2 && (
+                              <View style={styles.tag}>
+                                <Text style={styles.tagText}>
+                                  +{reminder.tags.length - 2}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                        </View>
+
+                        {reminder.notes && (
+                          <Text style={styles.notes} numberOfLines={1}>
+                            {reminder.notes}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    ))}
                   </View>
                 );
-              }
-
-              return (
-                <View style={styles.reminderList}>
-                  {displayReminders.map((reminder) => (
-                    <TouchableOpacity 
-                      key={reminder.id} 
-                      style={styles.reminderCard}
-                      onPress={() => handleReminderPress(reminder)}
-                    >
-                      <View style={styles.reminderHeader}>
-                        <View style={styles.reminderInfo}>
-                          <Text style={styles.contactName}>{reminder.contactName}</Text>
-                          <Text style={styles.reminderType}>{reminder.type}</Text>
-                        </View>
-                        <View style={styles.reminderStatus}>
-                          {reminder.isOverdue ? (
-                            <AlertCircle size={20} color="#EF4444" />
-                          ) : (
-                            <Calendar size={16} color="#6B7280" />
-                          )}
-                          <Text style={[
-                            styles.dateText,
-                            reminder.isOverdue && styles.overdueText
-                          ]}>
-                            {formatDate(reminder.date)}
-                          </Text>
-                        </View>
-                      </View>
-                      
-                      <View style={styles.reminderFooter}>
-                        <Text style={styles.frequency}>Every {reminder.frequency}</Text>
-                        <View style={styles.tags}>
-                          {reminder.tags.slice(0, 2).map((tag: string, index: number) => (
-                            <View key={index} style={styles.tag}>
-                              <Text style={styles.tagText}>{tag}</Text>
-                            </View>
-                          ))}
-                          {reminder.tags.length > 2 && (
-                            <View style={styles.tag}>
-                              <Text style={styles.tagText}>+{reminder.tags.length - 2}</Text>
-                            </View>
-                          )}
-                        </View>
-                      </View>
-
-                      {reminder.notes && (
-                        <Text style={styles.notes} numberOfLines={1}>{reminder.notes}</Text>
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              );
-            })()}
+              })()
+            )}
           </View>
         </View>
 
         {/* Relationships Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              Add Relationships
-            </Text>
+            <Text style={styles.sectionTitle}>Add Relationships</Text>
             <View>
-            <TouchableOpacity
-              onPress={() => router.push('/(tabs)/relationships')}
-              style={styles.viewAllButton}
-            >
-              <Text style={styles.viewAllText}>View all</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  if (!isNavigating) {
+                    handleDebouncedNavigation('/(tabs)/relationships');
+                  }
+                }}
+                style={[styles.viewAllButton]}
+                disabled={isNavigating}
+              >
+                <Text style={styles.viewAllText}>View all</Text>
+              </TouchableOpacity>
             </View>
           </View>
-          
+
           <View style={styles.relationshipsContainer}>
             {(() => {
               // Platform-specific data and loading states
               const isWeb = Platform.OS === 'web';
-              const isLoading = isWeb ? isLoadingRelationships : isLoadingDeviceContacts;
+              const isLoading = isWeb
+                ? isLoadingRelationships
+                : isLoadingDeviceContacts;
               const data = isWeb ? relationships : deviceContacts;
-              const emptyText = isWeb ? 'No relationships yet' : 'No device contacts found';
-              const emptySubtext = isWeb ? 'Start by adding your first contact' : 'Grant permission to access contacts';
-              
+              const emptyText = isWeb
+                ? 'No relationships yet'
+                : 'No device contacts found';
+              const emptySubtext = isWeb
+                ? 'Start by adding your first contact'
+                : 'Grant permission to access contacts';
+
               if (isLoading) {
                 return (
                   <View style={styles.relationshipsLoadingContainer}>
                     <Text style={styles.loadingText}>
-                      {isWeb ? 'Loading relationships...' : 'Loading device contacts...'}
+                      {isWeb
+                        ? 'Loading relationships...'
+                        : 'Loading device contacts...'}
                     </Text>
                   </View>
                 );
               }
-              
+
               if (data.length === 0) {
                 return (
                   <View style={styles.emptyRelationshipsContainer}>
-                    <Text style={styles.emptyRelationshipsText}>{emptyText}</Text>
-                    <Text style={styles.emptyRelationshipsSubtext}>{emptySubtext}</Text>
-                    <TouchableOpacity 
+                    <Text style={styles.emptyRelationshipsText}>
+                      {emptyText}
+                    </Text>
+                    <Text style={styles.emptyRelationshipsSubtext}>
+                      {emptySubtext}
+                    </Text>
+                    <TouchableOpacity
                       style={styles.addRelationshipButton}
                       onPress={() => {
                         if (isWeb) {
@@ -2022,20 +2597,22 @@ export default function HomeScreen() {
                       }}
                     >
                       <Plus size={20} color="#ffffff" />
-                      <Text style={styles.addRelationshipButtonText}>Add Contact</Text>
+                      <Text style={styles.addRelationshipButtonText}>
+                        Add Contact
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 );
               }
-              
+
               return (
-                <ScrollView 
-                  horizontal 
+                <ScrollView
+                  horizontal
                   showsHorizontalScrollIndicator={false}
                   style={styles.relationshipsScrollView}
                 >
                   <View style={styles.relationshipsList}>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={styles.addRelationshipFirstCard}
                       onPress={() => {
                         if (isWeb) {
@@ -2052,17 +2629,19 @@ export default function HomeScreen() {
                         {isWeb ? 'Add relationship' : 'Add contact'}
                       </Text>
                       <Text style={styles.addRelationshipFirstSubtext}>
-                        {isWeb ? 'Start building connections' : 'Create new relationship'}
+                        {isWeb
+                          ? 'Start building connections'
+                          : 'Create new relationship'}
                       </Text>
                     </TouchableOpacity>
-                    
+
                     {data.map((item, index) => {
                       if (isWeb) {
                         // Web: Show relationships
                         const relationship = item as Relationship;
                         return (
-                          <TouchableOpacity 
-                            key={relationship.id} 
+                          <TouchableOpacity
+                            key={relationship.id}
                             style={styles.relationshipCard}
                             onPress={() => {
                               setSelectedRelationshipForInfo(relationship);
@@ -2077,16 +2656,21 @@ export default function HomeScreen() {
                                 <X size={16} color="#6B7280" />
                               </TouchableOpacity>
                             </View> */}
-                            
+
                             <View style={styles.relationshipAvatar}>
                               <Text style={styles.relationshipAvatarText}>
-                                {relationship.contactName.charAt(0).toUpperCase()}
+                                {relationship.contactName
+                                  .charAt(0)
+                                  .toUpperCase()}
                               </Text>
                             </View>
-                            
-                            <Text style={styles.relationshipName}>{relationship.contactName}</Text>
+
+                            <Text style={styles.relationshipName}>
+                              {relationship.contactName}
+                            </Text>
                             <Text style={styles.relationshipCompany}>
-                              {relationship.contactData?.company || 'No company info'}
+                              {relationship.contactData?.company ||
+                                'No company info'}
                             </Text>
                           </TouchableOpacity>
                         );
@@ -2094,45 +2678,53 @@ export default function HomeScreen() {
                         // Mobile: Show device contacts
                         const contact = item as Contacts.Contact;
                         const contactName = contact.name || 'Unknown';
-                        const existingRelationship = relationships.find(rel => 
-                          rel.contactName.toLowerCase() === contactName.toLowerCase()
+                        const existingRelationship = relationships.find(
+                          (rel) =>
+                            rel.contactName.toLowerCase() ===
+                            contactName.toLowerCase()
                         );
-                        
+
                         return (
-                          <TouchableOpacity 
-                            key={(contact as any).id || `device_${index}`} 
+                          <TouchableOpacity
+                            key={(contact as any).id || `device_${index}`}
                             style={[
                               styles.relationshipCard,
-                              existingRelationship && styles.relationshipCardExisting
+                              existingRelationship &&
+                                styles.relationshipCardExisting,
                             ]}
-                            onPress={() => handleDeviceContactPress(contact, index)}
+                            onPress={() =>
+                              handleDeviceContactPress(contact, index)
+                            }
                           >
                             <View style={styles.relationshipCardHeader}>
                               {existingRelationship && (
-                                <View style={styles.relationshipExistsIndicator}>
+                                <View
+                                  style={styles.relationshipExistsIndicator}
+                                >
                                   <CheckCircle size={16} color="#10B981" />
                                 </View>
                               )}
                             </View>
-                            
+
                             <View style={styles.relationshipAvatar}>
                               <Text style={styles.relationshipAvatarText}>
                                 {contactName.charAt(0).toUpperCase()}
                               </Text>
                             </View>
-                            
-                            <Text style={styles.relationshipName}>{contactName}</Text>
+
+                            <Text style={styles.relationshipName}>
+                              {contactName}
+                            </Text>
                             <Text style={styles.relationshipCompany}>
-                              {existingRelationship 
-                                ? 'Relationship exists' 
-                                : contact.phoneNumbers?.[0]?.number || 'No phone info'
-                              }
+                              {existingRelationship
+                                ? 'Relationship exists'
+                                : contact.phoneNumbers?.[0]?.number ||
+                                  'No phone info'}
                             </Text>
                           </TouchableOpacity>
                         );
                       }
                     })}
-                    
                   </View>
                 </ScrollView>
               );
@@ -2143,103 +2735,128 @@ export default function HomeScreen() {
         {/* Recent Activity */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Activity</Text>
+            <Text style={styles.sectionTitle}>Recent Activity</Text>
           </View>
-          
+
           <View style={styles.activityList}>
-            {getRecentActivities().slice(0, 6).map((activity) => {
-              const getActivityIcon = () => {
-                switch (activity.type) {
-                  case 'note':
-                    return <FileText size={20} color="#3B82F6" />;
-                  case 'interaction':
-                    // Check the specific interaction type for more accurate icons
-                    switch (activity.interactionType) {
-                      case 'call':
-                        return <Phone size={20} color="#10B981" />;
-                      case 'email':
-                        return <Mail size={20} color="#10B981" />;
-                      case 'text':
-                        return <MessageCircle size={20} color="#10B981" />;
-                      case 'inPerson':
-                        return <User size={20} color="#10B981" />;
-                      default:
-                        return <Phone size={20} color="#10B981" />; // fallback to phone
-                    }
-                  case 'reminder':
-                    return activity.isCompleted ? 
-                      <CheckCircle size={20} color="#059669" /> : 
-                      <Calendar size={20} color="#F59E0B" />;
-                  default:
-                    return <StickyNote size={20} color="#6B7280" />;
-                }
-              };
+            {getRecentActivities()
+              .slice(0, 6)
+              .map((activity) => {
+                const getActivityIcon = () => {
+                  switch (activity.type) {
+                    case 'note':
+                      return <FileText size={20} color="#3B82F6" />;
+                    case 'interaction':
+                      // Check the specific interaction type for more accurate icons
+                      switch (activity.interactionType) {
+                        case 'call':
+                          return <Phone size={20} color="#10B981" />;
+                        case 'email':
+                          return <Mail size={20} color="#10B981" />;
+                        case 'text':
+                          return <MessageCircle size={20} color="#10B981" />;
+                        case 'inPerson':
+                          return <User size={20} color="#10B981" />;
+                        default:
+                          return <Phone size={20} color="#10B981" />; // fallback to phone
+                      }
+                    case 'reminder':
+                      return activity.isCompleted ? (
+                        <CheckCircle size={20} color="#059669" />
+                      ) : (
+                        <Calendar size={20} color="#F59E0B" />
+                      );
+                    default:
+                      return <StickyNote size={20} color="#6B7280" />;
+                  }
+                };
 
-              const getActivityIconBg = () => {
-                switch (activity.type) {
-                  case 'note':
-                    return '#EBF8FF';
-                  case 'interaction':
-                    return '#ECFDF5';
-                  case 'reminder':
-                    return activity.isCompleted ? '#ECFDF5' : '#FFFBEB';
-                  default:
-                    return '#F3F4F6';
-                }
-              };
+                const getActivityIconBg = () => {
+                  switch (activity.type) {
+                    case 'note':
+                      return '#EBF8FF';
+                    case 'interaction':
+                      return '#ECFDF5';
+                    case 'reminder':
+                      return activity.isCompleted ? '#ECFDF5' : '#FFFBEB';
+                    default:
+                      return '#F3F4F6';
+                  }
+                };
 
-              return (
-                <TouchableOpacity 
-                  key={activity.id} 
-                  style={styles.activityItem}
-                  onPress={() => {
-                    if(activity.type !== "reminder"){
-                      handleEditActivity(activity)
-                    }
-                  }}
-                  onLongPress={() => handleDeleteActivity(activity)}
-                  delayLongPress={500}
-                >
-                  <View style={[styles.activityIcon, { backgroundColor: getActivityIconBg() }]}>
-                    {getActivityIcon()}
-                  </View>
-                  <View style={styles.activityContent}>
-                    <Text style={styles.activityTitle}>
-                      {activity.type === 'note' ? `Note about ${(activity as any).contactName || 'Contact'}` : 
-                       activity.type === 'interaction' ? `${activity.interactionType} with ${activity.contactName}` :
-                       activity.type === 'reminder' ? `Reminder for ${activity.contactName}` : `Activity with ${(activity as any).contactName || 'Contact'}`}
-                    </Text>
-                    <Text style={styles.activityDescription}>{activity.description}</Text>
-                    <Text style={styles.activityDate}>
-                      {(() => {
-                        // Safely handle different timestamp formats
-                        let date: Date;
-                        if (!activity.createdAt) {
-                          date = new Date();
-                        } else if (activity.createdAt instanceof Date) {
-                          date = activity.createdAt;
-                        } else if (activity.createdAt && typeof activity.createdAt === 'object' && 'seconds' in activity.createdAt) {
-                          // Firebase Timestamp object
-                          date = new Date(activity.createdAt.seconds * 1000);
-                        } else if (typeof activity.createdAt === 'string') {
-                          date = new Date(activity.createdAt);
-                        } else if (typeof activity.createdAt === 'number') {
-                          date = new Date(activity.createdAt);
-                        } else {
-                          date = new Date(); // Fallback
-                        }
-                        return date.toLocaleDateString();
-                      })()}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-            
+                return (
+                  <TouchableOpacity
+                    key={activity.id}
+                    style={styles.activityItem}
+                    onPress={() => {
+                      if (activity.type !== 'reminder') {
+                        handleEditActivity(activity);
+                      }
+                    }}
+                    onLongPress={() => handleDeleteActivity(activity)}
+                    delayLongPress={500}
+                  >
+                    <View
+                      style={[
+                        styles.activityIcon,
+                        { backgroundColor: getActivityIconBg() },
+                      ]}
+                    >
+                      {getActivityIcon()}
+                    </View>
+                    <View style={styles.activityContent}>
+                      <Text style={styles.activityTitle}>
+                        {activity.type === 'note'
+                          ? `Note about ${
+                              (activity as any).contactName || 'Contact'
+                            }`
+                          : activity.type === 'interaction'
+                          ? `${activity.interactionType} with ${activity.contactName}`
+                          : activity.type === 'reminder'
+                          ? `Reminder for ${activity.contactName}`
+                          : `Activity with ${
+                              (activity as any).contactName || 'Contact'
+                            }`}
+                      </Text>
+                      <Text style={styles.activityDescription}>
+                        {activity.description}
+                      </Text>
+                      <Text style={styles.activityDate}>
+                        {(() => {
+                          // Safely handle different timestamp formats
+                          let date: Date;
+                          if (!activity.createdAt) {
+                            date = new Date();
+                          } else if (activity.createdAt instanceof Date) {
+                            date = activity.createdAt;
+                          } else if (
+                            activity.createdAt &&
+                            typeof activity.createdAt === 'object' &&
+                            'seconds' in activity.createdAt
+                          ) {
+                            // Firebase Timestamp object
+                            date = new Date(activity.createdAt.seconds * 1000);
+                          } else if (typeof activity.createdAt === 'string') {
+                            date = new Date(activity.createdAt);
+                          } else if (typeof activity.createdAt === 'number') {
+                            date = new Date(activity.createdAt);
+                          } else {
+                            date = new Date(); // Fallback
+                          }
+                          return date.toLocaleDateString();
+                        })()}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+
             {getRecentActivities().length === 0 && (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyStateText}>No recent activity</Text>
-                <Text style={styles.emptyStateSubtext}>Start by adding relationships or setting reminders</Text>
+                <Text style={styles.emptyStateSubtext}>
+                  Start by adding relationships or setting reminders
+                </Text>
               </View>
             )}
           </View>
@@ -2248,16 +2865,13 @@ export default function HomeScreen() {
 
       {/* Floating Action Button */}
       <View style={styles.bottomInput}>
-              <TouchableOpacity style={styles.inputMenuButton}>
-                <Text style={styles.inputMenuText}>☰</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.inputField}
-                onPress={handleAddActivity}
-              >
-                <Text style={styles.inputFieldPlaceholder}>Anything to note?</Text>
-              </TouchableOpacity>
-            </View>
+        <TouchableOpacity style={styles.inputMenuButton} onPress={handleAddActivity}>
+          <Text style={styles.inputMenuText}>☰</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.inputField} onPress={handleAddActivity}>
+          <Text style={styles.inputFieldPlaceholder}>Anything to note?</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Edit Activity Modal */}
       <EditActivityModal
@@ -2280,15 +2894,22 @@ export default function HomeScreen() {
               <Trash2 size={48} color="#EF4444" />
               <Text style={styles.deleteModalTitle}>Delete Activity</Text>
               <Text style={styles.deleteModalText}>
-                Are you sure you want to delete "{selectedActivity?.title}"? This action cannot be undone.
+                Are you sure you want to delete "{selectedActivity?.title}"?
+                This action cannot be undone.
               </Text>
             </View>
-            
+
             <View style={styles.deleteModalFooter}>
-              <TouchableOpacity style={styles.cancelButton} onPress={handleCancelDelete}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={handleCancelDelete}
+              >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.deleteButton} onPress={handleConfirmDelete}>
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={handleConfirmDelete}
+              >
                 <Trash2 size={20} color="#ffffff" />
                 <Text style={styles.deleteButtonText}>Delete</Text>
               </TouchableOpacity>
@@ -2316,9 +2937,12 @@ export default function HomeScreen() {
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Select Contact</Text>
             <View style={styles.headerActions}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.createNewButton}
-                onPress={() => setShowNewContactModal(true)}
+                onPress={() => {
+                  setShowContactList(false);
+                  setShowNewContactModal(true);
+                }}
               >
                 <Plus size={20} color="#ffffff" />
                 <Text style={styles.createNewButtonText}>New</Text>
@@ -2328,7 +2952,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
           </View>
-          
+
           <View style={styles.searchContainer}>
             <Search size={20} color="#6B7280" />
             <TextInput
@@ -2339,15 +2963,16 @@ export default function HomeScreen() {
               placeholderTextColor="#9CA3AF"
             />
           </View>
-          
+
           {!isLoadingDeviceContacts && deviceContacts.length > 0 && (
             <View style={styles.contactCountHeader}>
               <Text style={styles.contactCountText}>
-                {filteredDeviceContacts.length} of {deviceContacts.length} contacts
+                {filteredDeviceContacts.length} of {deviceContacts.length}{' '}
+                contacts
               </Text>
             </View>
           )}
-          
+
           {isLoadingDeviceContacts ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyTitle}>Loading device contacts...</Text>
@@ -2356,34 +2981,65 @@ export default function HomeScreen() {
             <FlatList
               data={filteredDeviceContacts}
               renderItem={renderDeviceContact}
-              keyExtractor={(item, index) => (item as any).id || `device_${index}`}
+              keyExtractor={(item, index) =>
+                (item as any).id || `device_${index}`
+              }
               style={styles.contactList}
               showsVerticalScrollIndicator={false}
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={10}
+              windowSize={10}
+              initialNumToRender={10}
+              getItemLayout={(data, index) => ({
+                length: 80, // Fixed item height - adjust based on your actual item height
+                offset: 80 * index,
+                index,
+              })}
+              updateCellsBatchingPeriod={50}
+              onEndReached={loadMoreContacts}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={
+                isLoadingMoreContacts ? (
+                  <View style={styles.loadingFooter}>
+                    <Text style={styles.loadingFooterText}>
+                      Loading more contacts...
+                    </Text>
+                  </View>
+                ) : null
+              }
             />
           ) : (
             <View style={styles.emptyState}>
               <Text style={styles.emptyTitle}>
-                {contactSearchQuery ? 'No device contacts found' : 'No device contacts available'}
+                {contactSearchQuery
+                  ? 'No device contacts found'
+                  : 'No device contacts available'}
               </Text>
               <Text style={styles.emptySubtitle}>
-                {contactSearchQuery 
+                {contactSearchQuery
                   ? `No device contacts match "${contactSearchQuery}"`
-                  : 'Allow contact access to see your device contacts here'
-                }
+                  : 'Allow contact access to see your device contacts here'}
               </Text>
               <Text style={styles.emptySubtitle}>
-                Debug: deviceContacts={deviceContacts.length}, filtered={filteredDeviceContacts.length}, hasPermission={hasContactPermission.toString()}, isLoading={isLoadingDeviceContacts.toString()}
+                Debug: deviceContacts={deviceContacts.length}, filtered=
+                {filteredDeviceContacts.length}, hasPermission=
+                {hasContactPermission.toString()}, isLoading=
+                {isLoadingDeviceContacts.toString()}
               </Text>
               {!hasContactPermission && (
-                <TouchableOpacity style={styles.permissionButton} onPress={requestContactsPermission}>
-                  <Text style={styles.permissionButtonText}>Grant Permission</Text>
+                <TouchableOpacity
+                  style={styles.permissionButton}
+                  onPress={requestContactsPermission}
+                >
+                  <Text style={styles.permissionButtonText}>
+                    Grant Permission
+                  </Text>
                 </TouchableOpacity>
               )}
             </View>
           )}
         </SafeAreaView>
       </Modal>
-
 
       {/* New Contact Modal */}
       <Modal
@@ -2398,22 +3054,30 @@ export default function HomeScreen() {
         <SafeAreaView style={styles.newContactModal}>
           <View style={styles.newContactModalHeader}>
             <Text style={styles.newContactModalTitle}>Create New Contact</Text>
-            <TouchableOpacity onPress={() => {
-              setShowNewContactModal(false);
-              resetNewContactForm();
-            }}>
+            <TouchableOpacity
+              onPress={() => {
+                setShowNewContactModal(false);
+                resetNewContactForm();
+              }}
+            >
               <X size={24} color="#6B7280" />
             </TouchableOpacity>
           </View>
-          
-          <ScrollView style={styles.newContactModalContent} showsVerticalScrollIndicator={false}>
+
+          <ScrollView
+            style={styles.newContactModalContent}
+            showsVerticalScrollIndicator={false}
+          >
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Contact Information</Text>
-              
+
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Name *</Text>
                 <TextInput
-                  style={[styles.input, contactValidationErrors.contactName && styles.inputError]}
+                  style={[
+                    styles.input,
+                    contactValidationErrors.contactName && styles.inputError,
+                  ]}
                   value={newContactName}
                   onChangeText={(text) => {
                     setNewContactName(text);
@@ -2423,14 +3087,19 @@ export default function HomeScreen() {
                   placeholderTextColor="#9CA3AF"
                 />
                 {contactValidationErrors.contactName && (
-                  <Text style={styles.errorText}>{contactValidationErrors.contactName}</Text>
+                  <Text style={styles.errorText}>
+                    {contactValidationErrors.contactName}
+                  </Text>
                 )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Phone Number</Text>
                 <TextInput
-                  style={[styles.input, contactValidationErrors.contactPhone && styles.inputError]}
+                  style={[
+                    styles.input,
+                    contactValidationErrors.contactPhone && styles.inputError,
+                  ]}
                   value={newContactPhone}
                   onChangeText={(text) => {
                     setNewContactPhone(text);
@@ -2441,14 +3110,19 @@ export default function HomeScreen() {
                   keyboardType="phone-pad"
                 />
                 {contactValidationErrors.contactPhone && (
-                  <Text style={styles.errorText}>{contactValidationErrors.contactPhone}</Text>
+                  <Text style={styles.errorText}>
+                    {contactValidationErrors.contactPhone}
+                  </Text>
                 )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Email</Text>
                 <TextInput
-                  style={[styles.input, contactValidationErrors.contactEmail && styles.inputError]}
+                  style={[
+                    styles.input,
+                    contactValidationErrors.contactEmail && styles.inputError,
+                  ]}
                   value={newContactEmail}
                   onChangeText={(text) => {
                     setNewContactEmail(text);
@@ -2460,14 +3134,19 @@ export default function HomeScreen() {
                   autoCapitalize="none"
                 />
                 {contactValidationErrors.contactEmail && (
-                  <Text style={styles.errorText}>{contactValidationErrors.contactEmail}</Text>
+                  <Text style={styles.errorText}>
+                    {contactValidationErrors.contactEmail}
+                  </Text>
                 )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Company</Text>
                 <TextInput
-                  style={[styles.input, contactValidationErrors.contactCompany && styles.inputError]}
+                  style={[
+                    styles.input,
+                    contactValidationErrors.contactCompany && styles.inputError,
+                  ]}
                   value={newContactCompany}
                   onChangeText={(text) => {
                     setNewContactCompany(text);
@@ -2477,14 +3156,20 @@ export default function HomeScreen() {
                   placeholderTextColor="#9CA3AF"
                 />
                 {contactValidationErrors.contactCompany && (
-                  <Text style={styles.errorText}>{contactValidationErrors.contactCompany}</Text>
+                  <Text style={styles.errorText}>
+                    {contactValidationErrors.contactCompany}
+                  </Text>
                 )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Job Title</Text>
                 <TextInput
-                  style={[styles.input, contactValidationErrors.contactJobTitle && styles.inputError]}
+                  style={[
+                    styles.input,
+                    contactValidationErrors.contactJobTitle &&
+                      styles.inputError,
+                  ]}
                   value={newContactJobTitle}
                   onChangeText={(text) => {
                     setNewContactJobTitle(text);
@@ -2494,14 +3179,19 @@ export default function HomeScreen() {
                   placeholderTextColor="#9CA3AF"
                 />
                 {contactValidationErrors.contactJobTitle && (
-                  <Text style={styles.errorText}>{contactValidationErrors.contactJobTitle}</Text>
+                  <Text style={styles.errorText}>
+                    {contactValidationErrors.contactJobTitle}
+                  </Text>
                 )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Website</Text>
                 <TextInput
-                  style={[styles.input, contactValidationErrors.contactWebsite && styles.inputError]}
+                  style={[
+                    styles.input,
+                    contactValidationErrors.contactWebsite && styles.inputError,
+                  ]}
                   value={newContactWebsite}
                   onChangeText={(text) => {
                     setNewContactWebsite(text);
@@ -2513,14 +3203,20 @@ export default function HomeScreen() {
                   autoCapitalize="none"
                 />
                 {contactValidationErrors.contactWebsite && (
-                  <Text style={styles.errorText}>{contactValidationErrors.contactWebsite}</Text>
+                  <Text style={styles.errorText}>
+                    {contactValidationErrors.contactWebsite}
+                  </Text>
                 )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>LinkedIn</Text>
                 <TextInput
-                  style={[styles.input, contactValidationErrors.contactLinkedin && styles.inputError]}
+                  style={[
+                    styles.input,
+                    contactValidationErrors.contactLinkedin &&
+                      styles.inputError,
+                  ]}
                   value={newContactLinkedin}
                   onChangeText={(text) => {
                     setNewContactLinkedin(text);
@@ -2532,14 +3228,19 @@ export default function HomeScreen() {
                   autoCapitalize="none"
                 />
                 {contactValidationErrors.contactLinkedin && (
-                  <Text style={styles.errorText}>{contactValidationErrors.contactLinkedin}</Text>
+                  <Text style={styles.errorText}>
+                    {contactValidationErrors.contactLinkedin}
+                  </Text>
                 )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>X (Twitter)</Text>
                 <TextInput
-                  style={[styles.input, contactValidationErrors.contactTwitter && styles.inputError]}
+                  style={[
+                    styles.input,
+                    contactValidationErrors.contactTwitter && styles.inputError,
+                  ]}
                   value={newContactTwitter}
                   onChangeText={(text) => {
                     setNewContactTwitter(text);
@@ -2550,14 +3251,20 @@ export default function HomeScreen() {
                   autoCapitalize="none"
                 />
                 {contactValidationErrors.contactTwitter && (
-                  <Text style={styles.errorText}>{contactValidationErrors.contactTwitter}</Text>
+                  <Text style={styles.errorText}>
+                    {contactValidationErrors.contactTwitter}
+                  </Text>
                 )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Instagram</Text>
                 <TextInput
-                  style={[styles.input, contactValidationErrors.contactInstagram && styles.inputError]}
+                  style={[
+                    styles.input,
+                    contactValidationErrors.contactInstagram &&
+                      styles.inputError,
+                  ]}
                   value={newContactInstagram}
                   onChangeText={(text) => {
                     setNewContactInstagram(text);
@@ -2568,14 +3275,20 @@ export default function HomeScreen() {
                   autoCapitalize="none"
                 />
                 {contactValidationErrors.contactInstagram && (
-                  <Text style={styles.errorText}>{contactValidationErrors.contactInstagram}</Text>
+                  <Text style={styles.errorText}>
+                    {contactValidationErrors.contactInstagram}
+                  </Text>
                 )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Facebook</Text>
                 <TextInput
-                  style={[styles.input, contactValidationErrors.contactFacebook && styles.inputError]}
+                  style={[
+                    styles.input,
+                    contactValidationErrors.contactFacebook &&
+                      styles.inputError,
+                  ]}
                   value={newContactFacebook}
                   onChangeText={(text) => {
                     setNewContactFacebook(text);
@@ -2587,14 +3300,19 @@ export default function HomeScreen() {
                   autoCapitalize="none"
                 />
                 {contactValidationErrors.contactFacebook && (
-                  <Text style={styles.errorText}>{contactValidationErrors.contactFacebook}</Text>
+                  <Text style={styles.errorText}>
+                    {contactValidationErrors.contactFacebook}
+                  </Text>
                 )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Address</Text>
                 <TextInput
-                  style={[styles.input, contactValidationErrors.contactAddress && styles.inputError]}
+                  style={[
+                    styles.input,
+                    contactValidationErrors.contactAddress && styles.inputError,
+                  ]}
                   value={newContactAddress}
                   onChangeText={(text) => {
                     setNewContactAddress(text);
@@ -2606,14 +3324,20 @@ export default function HomeScreen() {
                   numberOfLines={2}
                 />
                 {contactValidationErrors.contactAddress && (
-                  <Text style={styles.errorText}>{contactValidationErrors.contactAddress}</Text>
+                  <Text style={styles.errorText}>
+                    {contactValidationErrors.contactAddress}
+                  </Text>
                 )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Birthday</Text>
                 <TextInput
-                  style={[styles.input, contactValidationErrors.contactBirthday && styles.inputError]}
+                  style={[
+                    styles.input,
+                    contactValidationErrors.contactBirthday &&
+                      styles.inputError,
+                  ]}
                   value={newContactBirthday}
                   onChangeText={(text) => {
                     setNewContactBirthday(text);
@@ -2623,14 +3347,20 @@ export default function HomeScreen() {
                   placeholderTextColor="#9CA3AF"
                 />
                 {contactValidationErrors.contactBirthday && (
-                  <Text style={styles.errorText}>{contactValidationErrors.contactBirthday}</Text>
+                  <Text style={styles.errorText}>
+                    {contactValidationErrors.contactBirthday}
+                  </Text>
                 )}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Notes</Text>
                 <TextInput
-                  style={[styles.input, styles.textArea, contactValidationErrors.contactNotes && styles.inputError]}
+                  style={[
+                    styles.input,
+                    styles.textArea,
+                    contactValidationErrors.contactNotes && styles.inputError,
+                  ]}
                   value={newContactNotes}
                   onChangeText={(text) => {
                     setNewContactNotes(text);
@@ -2643,17 +3373,24 @@ export default function HomeScreen() {
                   textAlignVertical="top"
                 />
                 {contactValidationErrors.contactNotes && (
-                  <Text style={styles.errorText}>{contactValidationErrors.contactNotes}</Text>
+                  <Text style={styles.errorText}>
+                    {contactValidationErrors.contactNotes}
+                  </Text>
                 )}
               </View>
 
-              <TouchableOpacity 
-                style={[styles.saveButton, !newContactName.trim() && styles.saveButtonDisabled]}
+              <TouchableOpacity
+                style={[
+                  styles.saveButton,
+                  !newContactName.trim() && styles.saveButtonDisabled,
+                ]}
                 onPress={handleSaveNewContact}
                 disabled={!newContactName.trim() || isSaving}
               >
                 <Text style={styles.saveButtonText}>
-                  {isSaving ? 'Creating...' : 'Create Contact & Add Relationship'}
+                  {isSaving
+                    ? 'Creating...'
+                    : 'Create Contact & Add Relationship'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -2675,7 +3412,12 @@ export default function HomeScreen() {
           setShowAddRelationshipModal(false);
           setSelectedContact(null);
           setEditingRelationship(null);
-          Alert.alert('Success', editingRelationship ? 'Relationship updated successfully' : 'Relationship created successfully');
+          Alert.alert(
+            'Success',
+            editingRelationship
+              ? 'Relationship updated successfully'
+              : 'Relationship created successfully'
+          );
         }}
       />
 
@@ -2739,10 +3481,8 @@ export default function HomeScreen() {
 
       {/* Contact Actions Modal */}
       {renderContactActionsModal()}
-
-      </SafeAreaView>
+    </SafeAreaView>
   );
-
 }
 
 const styles = StyleSheet.create({
@@ -2808,6 +3548,10 @@ const styles = StyleSheet.create({
   },
   statCardLoading: {
     opacity: 0.7,
+  },
+  statCardDisabled: {
+    opacity: 0.5,
+    transform: [{ scale: 0.98 }],
   },
   statNumber: {
     fontSize: 32,
@@ -3012,15 +3756,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    flex:1,
-    paddingLeft: 16
+    flex: 1,
+    paddingLeft: 16,
   },
   viewAllButton: {
     backgroundColor: '#3B82F6',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
-    marginRight: 16
+    marginRight: 16,
+  },
+  viewAllButtonDisabled: {
+    opacity: 0.5,
   },
   viewAllText: {
     color: '#ffffff',
@@ -3457,7 +4204,7 @@ const styles = StyleSheet.create({
   },
   webDateTimeInput: {
     // Container for web datetime inputs
-    marginRight: 10
+    marginRight: 10,
   },
   editReminderHelperText: {
     fontSize: 12,
@@ -3530,7 +4277,7 @@ const styles = StyleSheet.create({
   relationshipsList: {
     flexDirection: 'row',
     gap: 12,
-    paddingVertical:8
+    paddingVertical: 8,
   },
   relationshipCard: {
     backgroundColor: '#ffffff',
@@ -4239,5 +4986,15 @@ const styles = StyleSheet.create({
   },
   contactActionSubtitleDisabled: {
     color: '#9CA3AF',
+  },
+  // Loading Footer Styles
+  loadingFooter: {
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingFooterText: {
+    fontSize: 14,
+    color: '#6B7280',
   },
 });

@@ -328,13 +328,8 @@ export default function RelationshipInfoModal({
 
   const handleShareRelationship = async () => {
     if (!relationship) return;
-    
-    const shareText = `Contact: ${relationship.contactName}\n` +
-      `Last Contact: ${new Date(relationship.lastContactDate).toLocaleDateString()}\n` +
-      `Last Contact Method: ${relationship.lastContactMethod}\n` +
-      `Next Reminder: ${relationship.nextReminderDate ? new Date(relationship.nextReminderDate).toLocaleDateString() : 'No reminder set'}\n` +
-      `Tags: ${relationship.tags?.join(', ') || 'No tags'}\n` +
-      `Notes: ${relationship.notes || 'No notes'}`;
+
+    const shareText = `Name: ${relationship.contactName}\n` + `Phone: ${relationship.contactData?.phoneNumbers?.[0]?.number || 'N/A'}\n` + `Email: ${relationship.contactData?.emails?.[0]?.email || 'N/A'}\n`;
 
     try {
       if (Platform.OS === 'web') {

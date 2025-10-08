@@ -11,10 +11,11 @@ import {
 import { Search, X } from 'lucide-react-native';
 import { useContacts } from '../firebase/hooks/useContacts';
 import { useRelationships } from '../firebase/hooks/useRelationships';
+import { Contact } from '../firebase/types';
 import * as Contacts from 'expo-contacts';
 
 interface ContactSearchInputProps {
-  onContactSelect: (contact: { id: string; name: string }) => void;
+  onContactSelect: (contact: Contact) => void;
   placeholder?: string;
   style?: any;
   error?: string;
@@ -45,7 +46,7 @@ export default function ContactSearchInput({
   // Local state for search functionality
   const [searchQuery, setSearchQuery] = useState(value);
   const [showSearchResults, setShowSearchResults] = useState(false);
-  const [filteredContacts, setFilteredContacts] = useState<Array<{id: string; name: string}>>([]);
+  const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   
   // Device contacts state (for mobile)
@@ -71,7 +72,18 @@ export default function ContactSearchInput({
       if (status === 'granted') {
         setHasContactPermission(true);
         const { data } = await Contacts.getContactsAsync({
-          fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers, Contacts.Fields.Emails],
+          fields: [
+            Contacts.Fields.Name, 
+            Contacts.Fields.PhoneNumbers, 
+            Contacts.Fields.Emails,
+            Contacts.Fields.Addresses,
+            Contacts.Fields.Birthday,
+            Contacts.Fields.Company,
+            Contacts.Fields.JobTitle,
+            Contacts.Fields.Note,
+            Contacts.Fields.UrlAddresses,
+            Contacts.Fields.SocialProfiles
+          ],
         });
         setDeviceContacts(data);
       } else {
@@ -89,7 +101,7 @@ export default function ContactSearchInput({
     
     if (query.trim()) {
       setIsSearching(true);
-      let filtered: Array<{id: string; name: string}> = [];
+      let filtered: Contact[] = [];
       
       try {
         if (Platform.OS === 'web') {
@@ -100,21 +112,111 @@ export default function ContactSearchInput({
             )
             .map(rel => ({
               id: rel.contactId,
-              name: rel.contactName
+              name: rel.contactName,
+              phoneNumbers: rel.contactData?.phoneNumbers || [],
+              emails: rel.contactData?.emails || [],
+              website: rel.contactData?.website,
+              linkedin: rel.contactData?.linkedin,
+              twitter: rel.contactData?.twitter,
+              instagram: rel.contactData?.instagram,
+              facebook: rel.contactData?.facebook,
+              company: rel.contactData?.company,
+              jobTitle: rel.contactData?.jobTitle,
+              address: rel.contactData?.address,
+              birthday: rel.contactData?.birthday,
+              notes: rel.contactData?.notes,
             }))
             .slice(0, maxResults);
         } else {
-          // Mobile: Use device contacts
-          filtered = deviceContacts
+          // Mobile: Search device contacts with comprehensive data mapping
+          const deviceContactResults = deviceContacts
             .filter(contact => 
               contact.name?.toLowerCase().includes(query.toLowerCase()) ||
               contact.phoneNumbers?.[0]?.number?.includes(query) ||
               contact.emails?.[0]?.email?.toLowerCase().includes(query.toLowerCase())
             )
-            .map((contact, index) => ({
-              id: (contact as any).id || `device_${Date.now()}_${index}`,
-              name: contact.name || 'Unknown'
-            }))
+            .map((contact, index): Contact => {
+              // Extract social profiles
+              const socialProfiles = contact.socialProfiles || [];
+              const linkedin = socialProfiles.find(p => p.service?.toLowerCase() === 'linkedin')?.url;
+              const twitter = socialProfiles.find(p => p.service?.toLowerCase() === 'twitter')?.url;
+              const facebook = socialProfiles.find(p => p.service?.toLowerCase() === 'facebook')?.url;
+              const instagram = socialProfiles.find(p => p.service?.toLowerCase() === 'instagram')?.url;
+
+              // Extract website from URLs
+              const websites = contact.urlAddresses || [];
+              const website = websites.find(url => url.url)?.url;
+
+              // Extract and format address
+              const addresses = contact.addresses || [];
+              const primaryAddress = addresses[0];
+              const formattedAddress = primaryAddress ? 
+                [
+                  primaryAddress.street,
+                  primaryAddress.city,
+                  primaryAddress.region,
+                  primaryAddress.postalCode,
+                  primaryAddress.country
+                ].filter(Boolean).join(', ') : undefined;
+
+              // Format birthday
+              const birthday = contact.birthday ? 
+                new Date(contact.birthday.year || 2000, 
+                        (contact.birthday.month || 1) - 1, 
+                        contact.birthday.day || 1).toISOString().split('T')[0] : undefined;
+
+              return {
+                id: (contact as any).id || `device_${Date.now()}_${index}`,
+                name: contact.name || 'Unknown',
+                phoneNumbers: (contact.phoneNumbers || []).map(pn => ({
+                  number: pn.number || '',
+                  label: pn.label || 'mobile'
+                })),
+                emails: (contact.emails || []).map(em => ({
+                  email: em.email || '',
+                  label: em.label || 'work'
+                })),
+                company: contact.company,
+                jobTitle: contact.jobTitle,
+                website,
+                linkedin,
+                twitter,
+                instagram,
+                facebook,
+                address: formattedAddress,
+                birthday,
+                notes: contact.note,
+              };
+            });
+
+          // Also include existing relationships for completeness
+          const relationshipResults = relationships
+            .filter(rel => 
+              rel.contactName.toLowerCase().includes(query.toLowerCase())
+            )
+            .map(rel => ({
+              id: rel.contactId,
+              name: rel.contactName,
+              phoneNumbers: rel.contactData?.phoneNumbers || [],
+              emails: rel.contactData?.emails || [],
+              website: rel.contactData?.website,
+              linkedin: rel.contactData?.linkedin,
+              twitter: rel.contactData?.twitter,
+              instagram: rel.contactData?.instagram,
+              facebook: rel.contactData?.facebook,
+              company: rel.contactData?.company,
+              jobTitle: rel.contactData?.jobTitle,
+              address: rel.contactData?.address,
+              birthday: rel.contactData?.birthday,
+              notes: rel.contactData?.notes,
+            }));
+
+          // Combine results, remove duplicates based on name, and prioritize device contacts
+          const combinedResults = [...deviceContactResults, ...relationshipResults];
+          filtered = combinedResults
+            .filter((item, index, arr) => 
+              arr.findIndex(other => other.name.toLowerCase() === item.name.toLowerCase()) === index
+            )
             .slice(0, maxResults);
         }
         
@@ -132,7 +234,8 @@ export default function ContactSearchInput({
     }
   }, [relationships, deviceContacts, maxResults, onChangeText]);
 
-  const handleContactSelect = useCallback((contact: { id: string; name: string }) => {
+  const handleContactSelect = useCallback((contact: Contact) => {
+    console.log('Selected contact:', contact);   
     onContactSelect(contact);
     setSearchQuery(contact.name);
     onChangeText?.(contact.name);
@@ -224,7 +327,7 @@ export default function ContactSearchInput({
               <Text style={styles.noResultsText}>
                 {Platform.OS === 'web' 
                   ? `No contacts found (Total relationships: ${relationships.length})`
-                  : `No contacts found (Device contacts: ${deviceContacts.length})`
+                  : `No contacts found (Device contacts: ${deviceContacts.length}, Relationships: ${relationships.length})`
                 }
               </Text>
               {onCreateNewContact && (

@@ -12,6 +12,8 @@ import {
   Platform,
   FlatList,
   SafeAreaView,
+  KeyboardAvoidingView,
+  ActivityIndicator,
 } from 'react-native';
 import * as Contacts from 'expo-contacts';
 import WebCompatibleDateTimePicker from './WebCompatibleDateTimePicker';
@@ -21,6 +23,8 @@ import { useActivity } from '../firebase/hooks/useActivity';
 import { useRelationships } from '../firebase/hooks/useRelationships';
 import { useContacts } from '../firebase/hooks/useContacts';
 import { useAuth } from '../firebase/hooks/useAuth';
+import { Contact } from '../firebase/types';
+import { ReminderTypes, getReminderTypeDisplayName } from '../constants/ReminderTypes';
 import RemindersService from '../firebase/services/RemindersService';
 
 interface AddActivityModalProps {
@@ -88,28 +92,36 @@ export default function AddActivityModal({
         return existingRelationship;
       }
       
-      // Create new relationship
-      
-      // If we have device contact data, use it to populate the relationship
+      // Create new relationship with comprehensive contact data
       const contactData = deviceContact ? {
         phoneNumbers: deviceContact.phoneNumbers?.map(phone => ({
           number: phone.number || '',
-          label: phone.label
+          label: phone.label || ''
         })) || [],
         emails: deviceContact.emails?.map(email => ({
           email: email.email || '',
-          label: email.label
+          label: email.label || ''
         })) || [],
-        website: '',
-        linkedin: '',
-        twitter: '',
-        instagram: '',
-        facebook: '',
-        company: '',
-        jobTitle: '',
-        address: '',
-        birthday: '',
-        notes: '',
+        // Extract website from URL addresses
+        website: deviceContact.urlAddresses?.find(url => 
+          url.url && !url.url.includes('linkedin') && !url.url.includes('twitter') && !url.url.includes('facebook') && !url.url.includes('instagram')
+        )?.url || '',
+        // Extract social profiles
+        linkedin: deviceContact.urlAddresses?.find(url => url.url?.includes('linkedin'))?.url || 
+                 deviceContact.socialProfiles?.find(profile => profile.service?.toLowerCase() === 'linkedin')?.url || '',
+        twitter: deviceContact.urlAddresses?.find(url => url.url?.includes('twitter'))?.url ||
+                deviceContact.socialProfiles?.find(profile => profile.service?.toLowerCase() === 'twitter')?.url || '',
+        instagram: deviceContact.urlAddresses?.find(url => url.url?.includes('instagram'))?.url ||
+                  deviceContact.socialProfiles?.find(profile => profile.service?.toLowerCase() === 'instagram')?.url || '',
+        facebook: deviceContact.urlAddresses?.find(url => url.url?.includes('facebook'))?.url ||
+                 deviceContact.socialProfiles?.find(profile => profile.service?.toLowerCase() === 'facebook')?.url || '',
+        company: deviceContact.company || '',
+        jobTitle: deviceContact.jobTitle || '',
+        address: deviceContact.addresses?.[0] ? 
+          `${deviceContact.addresses[0].street || ''} ${deviceContact.addresses[0].city || ''} ${deviceContact.addresses[0].region || ''} ${deviceContact.addresses[0].postalCode || ''}`.trim() : '',
+        birthday: deviceContact.birthday ? 
+          `${(deviceContact.birthday.month || 1).toString().padStart(2, '0')}/${(deviceContact.birthday.day || 1).toString().padStart(2, '0')}/${deviceContact.birthday.year || new Date().getFullYear()}` : '',
+        notes: deviceContact.note || '',
       } : {
         phoneNumbers: [],
         emails: [],
@@ -168,6 +180,9 @@ export default function AddActivityModal({
   const [isLoadingDeviceContacts, setIsLoadingDeviceContacts] = useState(false);
   const [hasContactPermission, setHasContactPermission] = useState(false);
 
+  // Activity creation loading state
+  const [isCreatingActivity, setIsCreatingActivity] = useState(false);
+
   // Animation states for tabs
   const tabAnimations = useRef({
     note: new Animated.Value(1),
@@ -210,7 +225,7 @@ export default function AddActivityModal({
     const now = new Date();
     return new Date(now.getTime() + 30 * 60 * 1000); // Current time + 30 minutes
   });
-  const [activityReminderType, setActivityReminderType] = useState('follow_up');
+  const [activityReminderType, setActivityReminderType] = useState(ReminderTypes.FollowUp);
   const [activityReminderFrequency, setActivityReminderFrequency] = useState<
     | 'once'
     | 'daily'
@@ -290,7 +305,7 @@ export default function AddActivityModal({
             ? new Date(editingActivity.reminderDate)
             : new Date()
         );
-        setActivityReminderType(editingActivity.reminderType || 'follow_up');
+        setActivityReminderType(editingActivity.reminderType || ReminderTypes.FollowUp);
         setActivityReminderFrequency(editingActivity.frequency || 'month');
         setActivityReminderNotes(editingActivity.description || '');
       }
@@ -320,7 +335,7 @@ export default function AddActivityModal({
       const now = new Date();
       return new Date(now.getTime() + 30 * 60 * 1000); // Current time + 30 minutes
     });
-    setActivityReminderType('follow_up');
+    setActivityReminderType(ReminderTypes.FollowUp);
     setActivityReminderFrequency('month');
     setActivityReminderNotes('');
     setValidationErrors({});
@@ -345,8 +360,10 @@ export default function AddActivityModal({
     setContactValidationErrors({});
   };
 
-  const handleContactSelect = async (contact: { id: string; name: string }) => {
+  const handleContactSelect = async (contact: Contact) => {
     // Find the relationship that matches the selected contact
+    
+    
     let relationship = relationships.find(rel => 
       rel.contactId === contact.id || rel.contactName === contact.name
     );
@@ -365,7 +382,7 @@ export default function AddActivityModal({
           return;
         }
 
-        // Create a new relationship for this contact
+        // Create a new relationship for this contact with all available data
         const newRelationship = {
           contactId: contact.id,
           contactName: contact.name,
@@ -377,20 +394,23 @@ export default function AddActivityModal({
           notes: '',
           familyInfo: { kids: '', siblings: '', spouse: '' },
           contactData: {
-            phoneNumbers: [],
-            emails: [],
-            website: '',
-            linkedin: '',
-            twitter: '',
-            instagram: '',
-            facebook: '',
-            company: '',
-            jobTitle: '',
-            address: '',
-            birthday: '',
-            notes: '',
+            phoneNumbers: contact.phoneNumbers || [],
+            emails: contact.emails || [],
+            website: contact.website || '',
+            linkedin: contact.linkedin || '',
+            twitter: contact.twitter || '',
+            instagram: contact.instagram || '',
+            facebook: contact.facebook || '',
+            company: contact.company || '',
+            jobTitle: contact.jobTitle || '',
+            address: contact.address || '',
+            birthday: contact.birthday || '',
+            notes: contact.notes || '',
           },
         };
+
+        
+        
 
         // Create the relationship in the database
         const createdRelationship = await createRelationship(newRelationship);
@@ -1116,52 +1136,64 @@ export default function AddActivityModal({
       return;
     }
 
-    // Ensure relationship exists for manually entered contact names
-    if (!isContactProvided && currentContactName.trim()) {
-      try {
-        await ensureRelationshipExists(currentContactName.trim());
-      } catch (error) {
-        console.error('❌ Error ensuring relationship for manual entry:', error);
-        // Continue with activity creation even if relationship creation fails
-      }
-    }
+    setIsCreatingActivity(true);
 
-    if (editingActivity) {
-      // Handle editing existing activities
-      if (activeActivityTab === 'reminder') {
-        await updateReminderActivity();
+    try {
+      // Ensure relationship exists for manually entered contact names
+      if (!isContactProvided && currentContactName.trim()) {
+        try {
+          await ensureRelationshipExists(currentContactName.trim());
+        } catch (error) {
+          console.error('❌ Error ensuring relationship for manual entry:', error);
+          // Continue with activity creation even if relationship creation fails
+        }
+      }
+
+      if (editingActivity) {
+        // Handle editing existing activities
+        if (activeActivityTab === 'reminder') {
+          await updateReminderActivity();
+        } else {
+          // For notes and interactions, use the existing update logic
+          const updates =
+            activeActivityTab === 'note'
+              ? { /* title: noteTitle.trim(), */ /* title: '', */ description: noteContent.trim() }
+              : {
+                  // title: `${interactionType} with ${currentContactName}`,
+                  // title: '', // Default empty title
+                  description: interactionNotes.trim(),
+                  interactionType,
+                  date: interactionDate.toISOString(),
+                  duration: interactionDuration
+                    ? parseInt(interactionDuration)
+                    : 0,
+                  location: interactionLocation.trim(),
+                };
+
+          await updateActivity(editingActivity.id, updates);
+          Alert.alert('Success', 'Activity updated successfully!');
+          onClose();
+          resetActivityForm();
+          onActivityUpdated?.();
+        }
       } else {
-        // For notes and interactions, use the existing update logic
-        const updates =
-          activeActivityTab === 'note'
-            ? { /* title: noteTitle.trim(), */ /* title: '', */ description: noteContent.trim() }
-            : {
-                // title: `${interactionType} with ${currentContactName}`,
-                // title: '', // Default empty title
-                description: interactionNotes.trim(),
-                interactionType,
-                date: interactionDate.toISOString(),
-                duration: interactionDuration
-                  ? parseInt(interactionDuration)
-                  : 0,
-                location: interactionLocation.trim(),
-              };
-
-        await updateActivity(editingActivity.id, updates);
-        Alert.alert('Success', 'Activity updated successfully!');
-        onClose();
-        resetActivityForm();
-        onActivityUpdated?.();
+        // Handle creating new activities
+        if (activeActivityTab === 'note') {
+          await createNoteActivity();
+        } else if (activeActivityTab === 'interaction') {
+          await createInteractionActivity();
+        } else if (activeActivityTab === 'reminder') {
+          await createReminderActivity();
+        }
       }
-    } else {
-      // Handle creating new activities
-      if (activeActivityTab === 'note') {
-        await createNoteActivity();
-      } else if (activeActivityTab === 'interaction') {
-        await createInteractionActivity();
-      } else if (activeActivityTab === 'reminder') {
-        await createReminderActivity();
-      }
+    } catch (error) {
+      console.error('Error creating/updating activity:', error);
+      Alert.alert(
+        'Error',
+        'Failed to save activity. Please try again.'
+      );
+    } finally {
+      setIsCreatingActivity(false);
     }
   };
 
@@ -1221,7 +1253,7 @@ export default function AddActivityModal({
             id: rel.contactId,
             name: rel.contactName
           }))
-          .slice(0, 5);
+          .slice(0, 5); // Limit to 5 results
       } else {
         // Mobile: Use device contacts
         filtered = deviceContacts
@@ -1232,7 +1264,7 @@ export default function AddActivityModal({
             id: (contact as any).id || `device_${Date.now()}_${index}`,
             name: contact.name || 'Unknown'
           }))
-          .slice(0, 5);
+          .slice(0, 5); // Limit to 5 results
       }
       
       setFilteredContacts(filtered);
@@ -1330,7 +1362,7 @@ export default function AddActivityModal({
               </Text>
 
               {activeActivityTab === 'note' && (
-                <View>
+                <View style={{ marginBottom: isContactProvided ? 0 : 76 }}>
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Contact *</Text>
                     {isContactProvided ? (
@@ -1742,13 +1774,7 @@ export default function AddActivityModal({
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Type</Text>
                     <View style={styles.reminderTypeButtons}>
-                      {[
-                        'follow_up',
-                        'meeting',
-                        'call',
-                        'birthday',
-                        'other',
-                      ].map((type) => (
+                      {Object.values(ReminderTypes).map((type) => (
                         <TouchableOpacity
                           key={type}
                           style={[
@@ -1765,7 +1791,7 @@ export default function AddActivityModal({
                                 styles.activeReminderTypeButtonText,
                             ]}
                           >
-                            {type.replace('_', ' ')}
+                            {getReminderTypeDisplayName(type)}
                           </Text>
                         </TouchableOpacity>
                       ))}
@@ -1922,11 +1948,24 @@ export default function AddActivityModal({
           </View>
           <TouchableOpacity
               onPress={handleCreateActivity}
-              style={styles.addActivitySaveButton}
+              style={[
+                styles.addActivitySaveButton,
+                isCreatingActivity && styles.addActivitySaveButtonDisabled
+              ]}
+              disabled={isCreatingActivity}
             >
-              <Text style={styles.addActivitySaveButtonText}>
-                {editingActivity ? 'Update' : 'Create'}
-              </Text>
+              {isCreatingActivity ? (
+                <View style={styles.saveButtonLoadingContainer}>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <Text style={[styles.addActivitySaveButtonText, { marginLeft: 8 }]}>
+                    {editingActivity ? 'Updating...' : 'Creating...'}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.addActivitySaveButtonText}>
+                  {editingActivity ? 'Update' : 'Create'}
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -2289,6 +2328,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
+  addActivitySaveButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+    opacity: 0.7,
+  },
+  saveButtonLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   // Activity Type Tabs
   activityTypeTabs: {
     flexDirection: 'row',
@@ -2455,7 +2503,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
   },
   frequencyButton: {
     paddingHorizontal: 10,
@@ -2581,7 +2629,7 @@ const styles = StyleSheet.create({
   },
   contactSearchInput: {
     flex: 1,
-    marginLeft: 12,
+    // marginLeft: 12,
     fontSize: 16,
     color: '#111827',
   },

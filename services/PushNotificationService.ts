@@ -29,6 +29,9 @@ export async function registerForPushNotificationsAsync() {
   return token;
 }
 
+// Store the last registered token to prevent duplicate registrations
+let lastRegisteredToken: string | null = null;
+
 export async function addUserFCMToken() {
   try {
     // Only run on mobile platforms
@@ -50,8 +53,15 @@ export async function addUserFCMToken() {
       return;
     }
 
+    // Check if this token was already registered in this session
+    if (lastRegisteredToken === token) {
+      console.log('FCM token already registered in this session, skipping...');
+      return;
+    }
+
     // Add the FCM token to user's token list in Firestore
     await UsersService.addFCMToken(currentUser.uid, token);
+    lastRegisteredToken = token;
     console.log('FCM token added successfully for user:', currentUser.uid);
   } catch (error) {
     console.error('Error adding FCM token:', error);
@@ -97,6 +107,8 @@ export async function clearUserFCMTokens() {
 
     // Clear all FCM tokens for the user
     await UsersService.clearFCMTokens(currentUser.uid);
+    // Reset the stored token to allow re-registration on next login
+    lastRegisteredToken = null;
     console.log('All FCM tokens cleared successfully for user:', currentUser.uid);
   } catch (error) {
     console.error('Error clearing FCM tokens:', error);

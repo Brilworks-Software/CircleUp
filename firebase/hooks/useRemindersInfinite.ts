@@ -29,18 +29,31 @@ export const useRemindersInfinite = (
 
     setIsRealtimeConnected(true);
     
-    // Set up real-time listener
+    // Set up real-time listener with debounced invalidation
+    let invalidateTimeout: any;
+    const debouncedInvalidate = () => {
+      clearTimeout(invalidateTimeout);
+      invalidateTimeout = setTimeout(() => {
+        // Invalidate and refetch queries when real-time data changes
+        queryClient.invalidateQueries({ queryKey: ['reminders'] });
+        queryClient.invalidateQueries({ queryKey: ['tabCounts'] });
+      }, 500); // 500ms debounce to prevent excessive invalidations
+    };
+    
     const unsubscribe = remindersService.onRemindersSnapshot(currentUser.uid, (reminders) => {
       console.log('🔄 Real-time reminder update received:', reminders.length, 'reminders');
-      setRealtimeReminders(reminders);
       
-      // Invalidate and refetch queries when real-time data changes
-      queryClient.invalidateQueries({ queryKey: ['reminders'] });
-      queryClient.invalidateQueries({ queryKey: ['tabCounts'] });
+      // Only update if the data actually changed
+      const prevLength = realtimeReminders.length;
+      if (reminders.length !== prevLength || JSON.stringify(reminders) !== JSON.stringify(realtimeReminders)) {
+        setRealtimeReminders(reminders);
+        debouncedInvalidate();
+      }
     });
 
     // Cleanup listener on unmount or user change
     return () => {
+      clearTimeout(invalidateTimeout);
       unsubscribe();
       setIsRealtimeConnected(false);
     };

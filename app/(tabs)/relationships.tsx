@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -129,7 +129,6 @@ export default function RelationshipsScreen() {
   
   // Device contacts state
   const [deviceContacts, setDeviceContacts] = useState<Contacts.Contact[]>([]);
-  const [filteredDeviceContacts, setFilteredDeviceContacts] = useState<Contacts.Contact[]>([]);
   const [isLoadingDeviceContacts, setIsLoadingDeviceContacts] = useState(false);
   const [hasPermission, setHasPermission] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -266,12 +265,15 @@ export default function RelationshipsScreen() {
     ...Object.values(Tags).map(tag => ({ key: tag, label: tag }))
   ];
   
-  // Filter relationships based on selected tag
-  const filteredRelationships = selectedTagFilter === 'all' 
-    ? relationships 
-    : relationships.filter(relationship => 
-        relationship.tags && relationship.tags.includes(selectedTagFilter)
-      );
+  // Filter relationships based on selected tag - Memoized for performance
+  const filteredRelationships = useMemo(() => {
+    if (selectedTagFilter === 'all') {
+      return relationships;
+    }
+    return relationships.filter(relationship => 
+      relationship.tags && relationship.tags.includes(selectedTagFilter)
+    );
+  }, [relationships, selectedTagFilter]);
   
   const lastContactOptions = [
     { key: 'today', label: 'Today' },
@@ -313,10 +315,6 @@ export default function RelationshipsScreen() {
     { key: '6months', label: 'Every 6 months' },
     { key: 'never', label: "Don't remind me" },
   ];
-
-  useEffect(() => {
-    filterDeviceContacts(contactSearchQuery);
-  }, [contactSearchQuery, deviceContacts]);
 
   useEffect(() => {
     checkPermission();
@@ -379,7 +377,6 @@ export default function RelationshipsScreen() {
         // For web, we can't load device contacts using Web Contacts API
         // The Web Contacts API is read-only and doesn't provide a way to list contacts
         setDeviceContacts([]);
-        setFilteredDeviceContacts([]);
       } else {
         const { data } = await Contacts.getContactsAsync({
           fields: [
@@ -398,7 +395,6 @@ export default function RelationshipsScreen() {
         // Filter out contacts without names
         const validContacts = data.filter(contact => contact.name && contact.name.trim() !== '');
         setDeviceContacts(validContacts);
-        setFilteredDeviceContacts(validContacts);
       }
     } catch (error) {
       console.error('Error loading device contacts:', error);
@@ -408,32 +404,50 @@ export default function RelationshipsScreen() {
     }
   };
 
-  const filterDeviceContacts = (query: string) => {
-    if (!query.trim()) {
-      setFilteredDeviceContacts(deviceContacts);
-      return;
+  // Memoize device contacts filtering for performance
+  const filteredDeviceContactsMemo = useMemo(() => {
+    if (!contactSearchQuery.trim()) {
+      return deviceContacts;
     }
     
-    const filtered = deviceContacts.filter(contact =>
-      contact.name?.toLowerCase().includes(query.toLowerCase()) ||
+    return deviceContacts.filter(contact =>
+      contact.name?.toLowerCase().includes(contactSearchQuery.toLowerCase()) ||
       contact.phoneNumbers?.some(phone => 
-        phone.number?.includes(query)
+        phone.number?.includes(contactSearchQuery)
       ) ||
       contact.emails?.some(email => 
-        email.email?.toLowerCase().includes(query.toLowerCase())
+        email.email?.toLowerCase().includes(contactSearchQuery.toLowerCase())
       )
     );
-    setFilteredDeviceContacts(filtered);
-  };
+  }, [deviceContacts, contactSearchQuery]);
+
+  // Optimize device contact filtering with debouncing
+  const debouncedSearchQuery = useRef('');
+  const searchTimeoutRef = useRef<number | null>(null);
+
+  const handleSearchQueryChange = useCallback((query: string) => {
+    setContactSearchQuery(query);
+    
+    // Clear existing timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    // Set new timeout for debounced search
+    searchTimeoutRef.current = setTimeout(() => {
+      debouncedSearchQuery.current = query;
+    }, 300);
+  }, []);
+
+  // Add keyExtractor functions for better performance
+  const relationshipKeyExtractor = useCallback((item: Relationship) => item.id, []);
+  const contactKeyExtractor = useCallback((item: Contacts.Contact, index: number) => 
+    (item as any).id || `device_${index}`, []);
 
   const handleDeviceContactSelect = async (deviceContact: Contacts.Contact) => {
-    if (!currentUser) {
-      const alertMessage = Platform.OS === 'web'
-        ? 'Please log in to add relationships. Make sure you have a stable internet connection.'
-        : 'Please log in to add relationships';
-      showAlert('Authentication Required', alertMessage);
-      return;
-    }
+    console.log("CurrentUser:", currentUser);
+    
+   
 
     try {
       // Convert device contact to our Contact format
@@ -795,12 +809,9 @@ export default function RelationshipsScreen() {
     if (!selectedRelationship) return;
     
     const shareText = `Contact: ${selectedRelationship.contactName}\n` +
-      `Last Contact: ${new Date(selectedRelationship.lastContactDate).toLocaleDateString()}\n` +
-      `Last Contact Method: ${selectedRelationship.lastContactMethod}\n` +
-      `Next Reminder: ${selectedRelationship.nextReminderDate ? new Date(selectedRelationship.nextReminderDate).toLocaleDateString() : 'No reminder set'}\n` +
-      `Tags: ${selectedRelationship.tags.join(', ') || 'No tags'}\n` +
-      `Notes: ${selectedRelationship.notes || 'No notes'}`;
-    
+      `Phone: ${selectedRelationship.contactData?.phoneNumbers?.[0]?.number || 'N/A'}\n` +
+      `Email: ${selectedRelationship.contactData?.emails?.[0]?.email || 'N/A'}\n`;
+
     try {
       // For React Native, we'll use the Share API
       const { Share } = require('react-native');
@@ -1816,8 +1827,8 @@ export default function RelationshipsScreen() {
     }
   };
 
-  // Get activities for the selected relationship
-  const getContactActivities = () => {
+  // Get activities for the selected relationship - Memoized for performance
+  const contactActivities = useMemo(() => {
     if (!selectedRelationship) return [];
     
     // Filter activities that are related to this contact
@@ -1840,18 +1851,13 @@ export default function RelationshipsScreen() {
       return false;
     });
 
-
     // Apply type filter
     if (activityFilter === 'all') {
       return contactActivities;
     }
     
-    const filteredActivities = contactActivities.filter(activity => {
-      return activity.type === activityFilter;
-    });
-    
-    return filteredActivities;
-  };
+    return contactActivities.filter(activity => activity.type === activityFilter);
+  }, [selectedRelationship, activities, activityFilter]);
 
   // Handle editing functions
   const openEditNoteModal = () => {
@@ -2261,7 +2267,6 @@ export default function RelationshipsScreen() {
           onPress={() => {
             // Determine if dropdown should open above or below
             // If there are no activities, we're likely at the bottom, so open above
-            const contactActivities = getContactActivities();
             const shouldOpenAbove = contactActivities.length === 0;
             setDropdownPosition(shouldOpenAbove ? 'above' : 'below');
             const newState = !showActivityDropdown;
@@ -2320,8 +2325,8 @@ export default function RelationshipsScreen() {
     );
   };
 
-  // Render activity card based on type
-  const renderActivityCard = (activity: any) => {
+  // Render activity card based on type - Memoized for performance
+  const renderActivityCard = useCallback((activity: any) => {
     const getActivityIcon = () => {
       switch (activity.type) {
         case 'note':
@@ -2418,13 +2423,14 @@ export default function RelationshipsScreen() {
         </View>
       </TouchableOpacity>
     );
-  };
+  }, []);
 
-  const renderRelationship = ({ item }: { item: Relationship }) => (
+  const renderRelationship = useCallback(({ item }: { item: Relationship }) => (
     <TouchableOpacity 
       style={styles.relationshipCard}
       onPress={() => showRelationshipDetails(item)}
       onLongPress={() => handleDeleteRelationship(item.id, item.contactName)}
+      activeOpacity={0.7}
     >
       <View style={styles.relationshipHeader}>
         <Text style={styles.contactName}>{item.contactName}</Text>
@@ -2433,7 +2439,7 @@ export default function RelationshipsScreen() {
       
       <View style={styles.tags}>
         {item.tags.slice(0, 3).map((tag, index) => (
-          <View key={index} style={styles.tag}>
+          <View key={`${tag}-${index}`} style={styles.tag}>
             <Text style={styles.tagText}>{tag}</Text>
           </View>
         ))}
@@ -2476,12 +2482,13 @@ export default function RelationshipsScreen() {
         <Text style={styles.notes} numberOfLines={2}>{item.notes}</Text>
       )}
     </TouchableOpacity>
-  );
+  ), []);
 
-  const renderDeviceContact = ({ item }: { item: Contacts.Contact }) => (
+  const renderDeviceContact = useCallback(({ item }: { item: Contacts.Contact }) => (
     <TouchableOpacity 
       style={styles.contactItem} 
       onPress={() => handleDeviceContactSelect(item)}
+      activeOpacity={0.7}
     >
       <View style={styles.contactItemContent}>
         <Text style={styles.contactItemName}>{item.name}</Text>
@@ -2497,7 +2504,7 @@ export default function RelationshipsScreen() {
         <ChevronRight size={16} color="#10B981" />
       </View>
     </TouchableOpacity>
-  );
+  ), []);
 
   // Debug logging
 
@@ -2580,9 +2587,15 @@ export default function RelationshipsScreen() {
           <FlatList
             data={filteredRelationships}
             renderItem={renderRelationship}
-            keyExtractor={(item) => item.id}
+            keyExtractor={relationshipKeyExtractor}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContainer}
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={10}
+            updateCellsBatchingPeriod={50}
+            initialNumToRender={10}
+            windowSize={21}
+            getItemLayout={undefined} // Let FlatList handle layout
           />
         ) : isLoadingRelationships ? (
           <View style={styles.loadingState}>
@@ -2611,7 +2624,10 @@ export default function RelationshipsScreen() {
             <View style={styles.headerActions}>
               <TouchableOpacity 
                 style={styles.createNewButton}
-                onPress={() => setShowNewContactModal(true)}
+                onPress={() => {
+                  setShowContactList(false);
+                  setShowNewContactModal(true);
+                }}
               >
                 <Plus size={20} color="#ffffff" />
                 <Text style={styles.createNewButtonText}>New</Text>
@@ -2627,7 +2643,7 @@ export default function RelationshipsScreen() {
             <TextInput
               style={styles.searchInput}
               value={contactSearchQuery}
-              onChangeText={setContactSearchQuery}
+              onChangeText={handleSearchQueryChange}
               placeholder="Search device contacts..."
               placeholderTextColor="#9CA3AF"
             />
@@ -2637,13 +2653,18 @@ export default function RelationshipsScreen() {
             <View style={styles.emptyState}>
               <Text style={styles.emptyTitle}>Loading device contacts...</Text>
             </View>
-          ) : filteredDeviceContacts.length > 0 ? (
+          ) : filteredDeviceContactsMemo.length > 0 ? (
             <FlatList
-              data={filteredDeviceContacts}
+              data={filteredDeviceContactsMemo}
               renderItem={renderDeviceContact}
-              keyExtractor={(item, index) => (item as any).id || `device_${index}`}
+              keyExtractor={contactKeyExtractor}
               style={styles.contactList}
               showsVerticalScrollIndicator={false}
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={10}
+              updateCellsBatchingPeriod={50}
+              initialNumToRender={15}
+              windowSize={21}
             />
           ) : (
             <View style={styles.emptyState}>
@@ -3033,7 +3054,7 @@ export default function RelationshipsScreen() {
               showsVerticalScrollIndicator={true}
               bounces={true}
               contentContainerStyle={styles.detailScrollContent}
-              
+              removeClippedSubviews={true}
             >
               {/* General Note Card */}
               <TouchableOpacity style={styles.noteCard} onPress={openEditNoteModal}>
@@ -3073,9 +3094,25 @@ export default function RelationshipsScreen() {
                   {renderActivityDropdown()}
                 </View>
                 
-                {/* Activity Cards */}
-                {getContactActivities().length > 0 ? (
-                  getContactActivities().map(activity => renderActivityCard(activity))
+                {/* Activity Cards - Use map for small lists, FlatList for large */}
+                {contactActivities.length > 0 ? (
+                  contactActivities.length <= 20 ? (
+                    // Use map for small lists for better performance
+                    contactActivities.map((activity: any) => renderActivityCard(activity))
+                  ) : (
+                    // Use FlatList for large lists with performance optimizations
+                    <FlatList
+                      data={contactActivities}
+                      renderItem={({ item }) => renderActivityCard(item)}
+                      keyExtractor={(item) => item.id}
+                      removeClippedSubviews={true}
+                      maxToRenderPerBatch={5}
+                      updateCellsBatchingPeriod={50}
+                      initialNumToRender={10}
+                      windowSize={10}
+                      nestedScrollEnabled={true}
+                    />
+                  )
                 ) : (
                   <View style={styles.noActivityCard}>
                     <Text style={styles.noActivityText}>
@@ -5405,6 +5442,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#3B82F6',
+    marginBottom: 12,
   },
   activeFilterText: {
     fontSize: 14,

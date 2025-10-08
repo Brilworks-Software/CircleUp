@@ -19,6 +19,7 @@ import {
   Unsubscribe,
 } from 'firebase/firestore';
 import { db } from '../config';
+import { ReminderTypes } from '../../constants/ReminderTypes';
 import type { 
   Activity, 
   CreateActivityData, 
@@ -117,7 +118,7 @@ class ActivityService {
             contactId: activityData.contactId || '',
             contactName: activityData.contactName || '',
             reminderDate: activityData.reminderDate || new Date().toISOString(),
-            reminderType: activityData.reminderType || 'follow_up',
+            reminderType: activityData.reminderType || ReminderTypes.FollowUp,
             frequency: activityData.frequency || 'month',
             reminderId: activityData.reminderId || '', // Store reference to reminder document
             isCompleted: activityData.isCompleted !== undefined ? activityData.isCompleted : false,
