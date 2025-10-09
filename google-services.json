@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:540064305831:android:28ce9d59abe79b52c80182",
+        "android_client_info": {
+          "package_name": "com.brilworks.circleUp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBpmR20DaOa2Plt8qvnfQiVaa8aRYR96ds"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:540064305831:android:f36747f410e2175ec80182",
         "android_client_info": {
           "package_name": "com.circleUp.app"

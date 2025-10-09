@@ -12,7 +12,7 @@ export default {
     newArchEnabled: true,
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.circleUp.app",
+      bundleIdentifier: "com.brilworks.circleUp",
       config: {
         usesNonExemptEncryption: false
       },
@@ -44,7 +44,7 @@ export default {
       typedRoutes: true
     },
     android: {
-      package: "com.circleUp.app",
+      package: "com.brilworks.circleUp",
       googleServicesFile: "./google-services.json"
     },
     extra: {
