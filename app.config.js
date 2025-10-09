@@ -16,7 +16,10 @@ export default {
       config: {
         usesNonExemptEncryption: false
       },
-      googleServicesFile: "./GoogleService-Info.plist"
+      googleServicesFile: "./GoogleService-Info.plist",
+      infoPlist: {
+        NSContactsUsageDescription: "This app uses your contacts to help you connect with friends."
+      }
     },
     web: {
       bundler: "metro",
