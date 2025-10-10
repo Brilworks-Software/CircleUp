@@ -17,6 +17,7 @@ import { X, Calendar, Clock, Phone, Mail, MessageCircle, User } from 'lucide-rea
 import { useRelationships } from '../firebase/hooks/useRelationships';
 import { useAuth } from '../firebase/hooks/useAuth';
 import { Tags } from '../constants/Tags';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Contact, Relationship, LastContactOption, ContactMethod, ReminderFrequency } from '../firebase/types';
 
 interface CreateEditRelationshipModalProps {
@@ -615,8 +616,13 @@ export default function CreateEditRelationshipModal({
 
   return (
     <>
-      <Modal visible={visible} animationType="slide">
-        <View style={styles.modalContainer}>
+      <Modal 
+        visible={visible} 
+        animationType="slide"
+        presentationStyle="pageSheet"
+        statusBarTranslucent={false}
+      >
+        <SafeAreaView style={styles.modalContainer} edges={['top', 'left', 'right']}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>
               {relationship ? 'Edit Relationship' : 'Create Relationship'}
@@ -1072,7 +1078,7 @@ export default function CreateEditRelationshipModal({
               </Text>
             </TouchableOpacity>
           </ScrollView>
-        </View>
+        </SafeAreaView>
       </Modal>
     </>
   );

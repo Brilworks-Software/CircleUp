@@ -193,6 +193,86 @@ export default function RelationshipsScreen() {
   
   // Activity creation modal states
   const [showAddActivityModal, setShowAddActivityModal] = useState(false);
+  
+  // Helper function to close all modals except the one being opened
+  const closeAllModalsExcept = (exceptionModal?: string) => {
+    if (exceptionModal !== 'relationshipDetail') setShowRelationshipDetail(false);
+    if (exceptionModal !== 'detailActions') setShowDetailActions(false);
+    if (exceptionModal !== 'contactActions') setShowContactActions(false);
+    if (exceptionModal !== 'moreActions') setShowMoreActions(false);
+    if (exceptionModal !== 'addReminder') setShowAddReminderModal(false);
+    if (exceptionModal !== 'addActivity') setShowAddActivityModal(false);
+    if (exceptionModal !== 'editActivity') setShowEditActivityModal(false);
+    if (exceptionModal !== 'editNote') setShowEditNoteModal(false);
+    if (exceptionModal !== 'editFamilyInfo') setShowEditFamilyInfoModal(false);
+    if (exceptionModal !== 'tagFilters') setShowTagFilters(false);
+    if (exceptionModal !== 'frequency') setShowFrequencyModal(false);
+  };
+
+  // Helper function to close all modals except relationship detail and the one being opened
+  const closeAllModalsExceptRelationshipDetail = (exceptionModal?: string) => {
+    if (exceptionModal !== 'detailActions') setShowDetailActions(false);
+    if (exceptionModal !== 'contactActions') setShowContactActions(false);
+    if (exceptionModal !== 'moreActions') setShowMoreActions(false);
+    if (exceptionModal !== 'addReminder') setShowAddReminderModal(false);
+    if (exceptionModal !== 'addActivity') setShowAddActivityModal(false);
+    if (exceptionModal !== 'editActivity') setShowEditActivityModal(false);
+    if (exceptionModal !== 'editNote') setShowEditNoteModal(false);
+    if (exceptionModal !== 'editFamilyInfo') setShowEditFamilyInfoModal(false);
+    if (exceptionModal !== 'tagFilters') setShowTagFilters(false);
+    if (exceptionModal !== 'frequency') setShowFrequencyModal(false);
+  };
+
+  // Modal opening wrapper functions
+  const openDetailActions = () => {
+    closeAllModalsExcept('detailActions');
+    setShowRelationshipDetail(false); // Close relationship detail modal first
+    setShowDetailActions(true);
+  };
+
+  const openContactActions = () => {
+    closeAllModalsExcept('contactActions');
+    setShowRelationshipDetail(false); // Close relationship detail modal first
+    setShowContactActions(true);
+  };
+
+  const openMoreActions = () => {
+    closeAllModalsExcept('moreActions');
+    setShowRelationshipDetail(false); // Close relationship detail modal first
+    setShowMoreActions(true);
+  };
+
+  const openTagFilters = () => {
+    closeAllModalsExcept('tagFilters');
+    setShowTagFilters(true);
+  };
+
+  // Function to open relationship detail modal (for cancel actions)
+  const openRelationshipDetailModal = () => {
+    closeAllModalsExcept('relationshipDetail');
+    setShowRelationshipDetail(true);
+  };
+
+  // Wrapper functions for closing action modals with relationship detail modal reopening
+  const closeDetailActions = () => {
+    setShowDetailActions(false);
+    openRelationshipDetailModal();
+  };
+
+  const closeContactActions = () => {
+    setShowContactActions(false);
+    openRelationshipDetailModal();
+  };
+
+  const closeMoreActions = () => {
+    setShowMoreActions(false);
+    openRelationshipDetailModal();
+  };
+
+  const closeAddReminderModal = () => {
+    setShowAddReminderModal(false);
+    openRelationshipDetailModal();
+  };
   const [activeActivityTab, setActiveActivityTab] = useState<'note' | 'interaction' | 'reminder'>('note');
   
   // Animation states for tabs
@@ -382,13 +462,7 @@ export default function RelationshipsScreen() {
           fields: [
             Contacts.Fields.Name,
             Contacts.Fields.PhoneNumbers,
-            Contacts.Fields.Emails,
-            Contacts.Fields.Image,
-            Contacts.Fields.Company,
-            Contacts.Fields.JobTitle,
-            Contacts.Fields.Addresses,
-            Contacts.Fields.Birthday,
-            Contacts.Fields.Note,
+            Contacts.Fields.Emails
           ],
         });
         
@@ -544,6 +618,7 @@ export default function RelationshipsScreen() {
   };
 
   const showRelationshipDetails = (relationship: Relationship) => {
+    // Don't close other modals when opening relationship detail modal
     setSelectedRelationship(relationship);
     setActivityFilter('all'); // Reset filter when opening relationship details
     setShowRelationshipDetail(true);
@@ -897,7 +972,8 @@ export default function RelationshipsScreen() {
   };
 
   const handleAddReminder = () => {
-    setShowDetailActions(false);
+    closeAllModalsExcept('addReminder');
+    setShowRelationshipDetail(false); // Close relationship detail modal first
     setShowAddReminderModal(true);
     // Reset form with default values - set date to tomorrow and time to 9 AM
     const tomorrow = new Date();
@@ -1861,6 +1937,8 @@ export default function RelationshipsScreen() {
 
   // Handle editing functions
   const openEditNoteModal = () => {
+    closeAllModalsExcept('editNote');
+    setShowRelationshipDetail(false); // Close relationship detail modal first
     setEditedNote(selectedRelationship?.notes || '');
     setShowEditNoteModal(true);
   };
@@ -1869,6 +1947,8 @@ export default function RelationshipsScreen() {
     setEditedNote('');
     setNoteValidationErrors({});
     setShowEditNoteModal(false);
+    // Reopen relationship detail modal after closing edit note modal
+    openRelationshipDetailModal();
   };
 
   const saveNote = async () => {
@@ -1896,6 +1976,8 @@ export default function RelationshipsScreen() {
   };
 
   const openEditFamilyInfoModal = () => {
+    closeAllModalsExcept('editFamilyInfo');
+    setShowRelationshipDetail(false); // Close relationship detail modal first
     setEditedFamilyInfo(selectedRelationship?.familyInfo || { kids: '', siblings: '', spouse: '' });
     setShowEditFamilyInfoModal(true);
   };
@@ -1904,6 +1986,8 @@ export default function RelationshipsScreen() {
     setEditedFamilyInfo({ kids: '', siblings: '', spouse: '' });
     setFamilyInfoValidationErrors({});
     setShowEditFamilyInfoModal(false);
+    // Reopen relationship detail modal after closing edit family info modal
+    openRelationshipDetailModal();
   };
 
   const saveFamilyInfo = async () => {
@@ -1932,6 +2016,16 @@ export default function RelationshipsScreen() {
 
   // Activity creation functions
   const openAddActivityModal = () => {
+    closeAllModalsExcept('addActivity');
+    setShowAddActivityModal(true);
+    setActiveActivityTab('note');
+    resetActivityForm();
+  };
+
+  // Function to open add activity modal from within relationship detail modal
+  const openAddActivityModalFromDetail = () => {
+    closeAllModalsExcept('addActivity');
+    setShowRelationshipDetail(false); // Close relationship detail modal first
     setShowAddActivityModal(true);
     setActiveActivityTab('note');
     resetActivityForm();
@@ -1957,9 +2051,20 @@ export default function RelationshipsScreen() {
   const closeAddActivityModal = () => {
     setShowAddActivityModal(false);
     resetActivityForm();
+    // Reopen relationship detail modal after closing add activity modal
+    openRelationshipDetailModal();
   };
 
   const openEditActivityModal = (activity: any) => {
+    closeAllModalsExcept('editActivity');
+    setSelectedActivity(activity);
+    setShowEditActivityModal(true);
+  };
+
+  // Function to open edit activity modal from within relationship detail modal
+  const openEditActivityModalFromDetail = (activity: any) => {
+    closeAllModalsExcept('editActivity');
+    setShowRelationshipDetail(false); // Close relationship detail modal first
     setSelectedActivity(activity);
     setShowEditActivityModal(true);
   };
@@ -1967,6 +2072,8 @@ export default function RelationshipsScreen() {
   const closeEditActivityModal = () => {
     setShowEditActivityModal(false);
     setSelectedActivity(null);
+    // Reopen relationship detail modal after closing edit activity modal
+    openRelationshipDetailModal();
   };
 
 
@@ -2326,7 +2433,7 @@ export default function RelationshipsScreen() {
   };
 
   // Render activity card based on type - Memoized for performance
-  const renderActivityCard = useCallback((activity: any) => {
+  const renderActivityCard = useCallback((activity: any, fromDetailModal: boolean = false) => {
     const getActivityIcon = () => {
       switch (activity.type) {
         case 'note':
@@ -2398,7 +2505,11 @@ export default function RelationshipsScreen() {
         style={styles.activityCard}
         onPress={() => {
           if(activity.type !== "reminder"){
-            openEditActivityModal(activity)
+            if (fromDetailModal) {
+              openEditActivityModalFromDetail(activity);
+            } else {
+              openEditActivityModal(activity);
+            }
           }
         }}
         onLongPress={() => {
@@ -2550,7 +2661,7 @@ export default function RelationshipsScreen() {
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TouchableOpacity 
             style={[styles.filterButton, selectedTagFilter !== 'all' && styles.activeFilterButton]} 
-            onPress={() => setShowTagFilters(true)}
+            onPress={openTagFilters}
           >
             <Filter size={20} color={selectedTagFilter !== 'all' ? '#ffffff' : '#6B7280'} />
           </TouchableOpacity>
@@ -2617,8 +2728,13 @@ export default function RelationshipsScreen() {
       </View>
 
       {/* Contact Selection Modal */}
-      <Modal visible={showContactList} animationType="slide">
-        <SafeAreaView style={styles.modalContainer}>
+      <Modal 
+        visible={showContactList} 
+        animationType="slide"
+        presentationStyle="pageSheet"
+        statusBarTranslucent={false}
+      >
+        <SafeAreaView style={styles.modalContainer} edges={['top', 'left', 'right']}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Select Contact</Text>
             <View style={styles.headerActions}>
@@ -2688,8 +2804,13 @@ export default function RelationshipsScreen() {
       </Modal>
 
       {/* Create New Contact Modal */}
-      <Modal visible={showNewContactModal} animationType="slide">
-        <SafeAreaView style={styles.modalContainer}>
+      <Modal 
+        visible={showNewContactModal} 
+        animationType="slide"
+        presentationStyle="pageSheet"
+        statusBarTranslucent={false}
+      >
+        <SafeAreaView style={styles.modalContainer} edges={['top', 'left', 'right']}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Create New Contact</Text>
             <TouchableOpacity onPress={() => {
@@ -2982,15 +3103,21 @@ export default function RelationshipsScreen() {
       />
 
       {/* Relationship Detail Modal */}
-      <Modal visible={showRelationshipDetail} animationType="slide">
+      <Modal 
+        visible={showRelationshipDetail} 
+        animationType="slide"
+        presentationStyle="pageSheet"
+        statusBarTranslucent={false}
+      >
         <SafeAreaView 
           style={styles.detailModalContainer}
+          edges={['top', 'left', 'right']}
         >
           <View style={styles.detailHeader}>
             <TouchableOpacity onPress={() => setShowRelationshipDetail(false)}>
               <X size={24} color="#ffffff" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowDetailActions(true)}>
+            <TouchableOpacity onPress={openDetailActions}>
               <Text style={styles.detailHeaderText}>⋯</Text>
             </TouchableOpacity>
           </View>
@@ -3027,13 +3154,13 @@ export default function RelationshipsScreen() {
               <View style={styles.actionButtons}>
                 <TouchableOpacity 
                   style={styles.getInTouchButton}
-                  onPress={() => setShowContactActions(true)}
+                  onPress={openContactActions}
                 >
                   <Text style={styles.getInTouchText}>Get in touch</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
                   style={styles.moreButton}
-                  onPress={() => setShowMoreActions(true)}
+                  onPress={openMoreActions}
                 >
                   <Text style={styles.moreButtonText}>⋯</Text>
                 </TouchableOpacity>
@@ -3098,12 +3225,12 @@ export default function RelationshipsScreen() {
                 {contactActivities.length > 0 ? (
                   contactActivities.length <= 20 ? (
                     // Use map for small lists for better performance
-                    contactActivities.map((activity: any) => renderActivityCard(activity))
+                    contactActivities.map((activity: any) => renderActivityCard(activity, true))
                   ) : (
                     // Use FlatList for large lists with performance optimizations
                     <FlatList
                       data={contactActivities}
-                      renderItem={({ item }) => renderActivityCard(item)}
+                      renderItem={({ item }) => renderActivityCard(item, true)}
                       keyExtractor={(item) => item.id}
                       removeClippedSubviews={true}
                       maxToRenderPerBatch={5}
@@ -3125,12 +3252,12 @@ export default function RelationshipsScreen() {
             
             {/* Bottom Input */}
             <View style={styles.bottomInput}>
-              <TouchableOpacity style={styles.inputMenuButton} onPress={openAddActivityModal}>
+              <TouchableOpacity style={styles.inputMenuButton} onPress={openAddActivityModalFromDetail}>
                 <Text style={styles.inputMenuText}>☰</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.inputField}
-                onPress={openAddActivityModal}
+                onPress={openAddActivityModalFromDetail}
               >
                 <Text style={styles.inputFieldPlaceholder}>Anything to note?</Text>
               </TouchableOpacity>
@@ -3182,7 +3309,7 @@ export default function RelationshipsScreen() {
           <View style={styles.contactActionsContainer}>
             <View style={styles.contactActionsHeader}>
               <Text style={styles.contactActionsTitle}>Get in touch with {selectedRelationship?.contactName}</Text>
-              <TouchableOpacity onPress={() => setShowContactActions(false)}>
+              <TouchableOpacity onPress={closeContactActions}>
                 <X size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
@@ -3238,7 +3365,7 @@ export default function RelationshipsScreen() {
           <View style={styles.moreActionsContainer}>
             <View style={styles.moreActionsHeader}>
               <Text style={styles.moreActionsTitle}>Find {selectedRelationship?.contactName}</Text>
-              <TouchableOpacity onPress={() => setShowMoreActions(false)}>
+              <TouchableOpacity onPress={closeMoreActions}>
                 <X size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
@@ -3294,7 +3421,7 @@ export default function RelationshipsScreen() {
           <View style={styles.detailActionsContainer}>
             <View style={styles.detailActionsHeader}>
               <Text style={styles.detailActionsTitle}>Relationship Actions</Text>
-              <TouchableOpacity onPress={() => setShowDetailActions(false)}>
+              <TouchableOpacity onPress={closeDetailActions}>
                 <X size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
@@ -3346,7 +3473,7 @@ export default function RelationshipsScreen() {
           <View style={styles.addReminderContainer}>
             <View style={styles.addReminderHeader}>
               <Text style={styles.addReminderTitle}>Add Reminder</Text>
-              <TouchableOpacity onPress={() => setShowAddReminderModal(false)}>
+              <TouchableOpacity onPress={closeAddReminderModal}>
                 <X size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
@@ -3444,7 +3571,7 @@ export default function RelationshipsScreen() {
             <View style={styles.addReminderActions}>
               <TouchableOpacity 
                 style={styles.cancelButton}
-                onPress={() => setShowAddReminderModal(false)}
+                onPress={closeAddReminderModal}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>

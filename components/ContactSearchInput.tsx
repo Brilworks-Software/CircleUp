@@ -76,13 +76,6 @@ export default function ContactSearchInput({
             Contacts.Fields.Name, 
             Contacts.Fields.PhoneNumbers, 
             Contacts.Fields.Emails,
-            Contacts.Fields.Addresses,
-            Contacts.Fields.Birthday,
-            Contacts.Fields.Company,
-            Contacts.Fields.JobTitle,
-            Contacts.Fields.Note,
-            Contacts.Fields.UrlAddresses,
-            Contacts.Fields.SocialProfiles
           ],
         });
         setDeviceContacts(data);
@@ -289,7 +282,9 @@ export default function ContactSearchInput({
           autoCorrect={false}
           autoCapitalize="none"
           focusable={false}
-          
+          keyboardType="default"
+          returnKeyType="search"
+          blurOnSubmit={false}
         />
         {searchQuery.length > 0 && !disabled && (
           <TouchableOpacity onPress={handleClearSearch} style={styles.clearButton}>
@@ -299,7 +294,7 @@ export default function ContactSearchInput({
       </View>
 
       {showSearchResults && (
-        <View style={[styles.searchResults, {position: (Platform.OS === 'android') ? "absolute" : "sticky"}]}>
+        <View style={[styles.searchResults, {position: (Platform.OS !== 'web') ? "absolute" : "sticky"}]}>
           {isSearching ? (
             <View style={styles.loadingContainer}>
               <Text style={styles.loadingText}>Searching...</Text>
@@ -398,14 +393,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
     borderRadius: 8,
-    marginTop: 4,
+    marginTop: Platform.OS === 'ios' ? 2 : 4,
     maxHeight: 230,
     zIndex: 9999,
-    elevation: 10,
-    shadowColor: '#000',
+    elevation: Platform.OS === 'android' ? 10 : 0,
+    shadowColor: Platform.OS === 'ios' ? '#000' : 'transparent',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
+    shadowOpacity: Platform.OS === 'ios' ? 0.15 : 0,
+    shadowRadius: Platform.OS === 'ios' ? 8 : 0,
   },
   searchResultItem: {
     padding: 12,

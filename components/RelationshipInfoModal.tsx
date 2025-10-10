@@ -439,8 +439,13 @@ export default function RelationshipInfoModal({
 
   return (
     <>
-      <Modal visible={visible} animationType="slide">
-        <SafeAreaView style={styles.detailModalContainer}>
+      <Modal 
+        visible={visible} 
+        animationType="slide"
+        presentationStyle="pageSheet"
+        statusBarTranslucent={false}
+      >
+        <SafeAreaView style={styles.detailModalContainer} edges={['top', 'left', 'right']}>
           <View style={styles.detailHeader}>
             <TouchableOpacity onPress={onClose}>
               <X size={24} color="#ffffff" />
