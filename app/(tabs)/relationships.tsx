@@ -677,6 +677,7 @@ export default function RelationshipsScreen() {
         if (supported) {
           await Linking.openURL(url);
           setShowContactActions(false);
+          setShowRelationshipDetail(true);
         } else {
           showAlert('Error', 'Phone app is not available');
         }
@@ -713,6 +714,7 @@ export default function RelationshipsScreen() {
         if (supported) {
           await Linking.openURL(url);
           setShowContactActions(false);
+          setShowRelationshipDetail(true);
         } else {
           showAlert('Error', 'SMS app is not available');
         }
@@ -754,6 +756,7 @@ export default function RelationshipsScreen() {
         if (supported) {
           await Linking.openURL(url);
           setShowContactActions(false);
+          setShowRelationshipDetail(true);
         } else {
           showAlert('Error', Platform.OS === 'web' ? 'Unable to open WhatsApp Web' : 'WhatsApp is not installed');
         }
@@ -790,6 +793,7 @@ export default function RelationshipsScreen() {
         if (supported) {
           await Linking.openURL(url);
           setShowContactActions(false);
+          setShowRelationshipDetail(true);
         } else {
           showAlert('Error', 'Email app is not available');
         }
@@ -811,6 +815,7 @@ export default function RelationshipsScreen() {
     try {
       await Linking.openURL(url);
       setShowMoreActions(false);
+      setShowRelationshipDetail(true);
     } catch (error) {
       console.error('Error opening X search:', error);
       showAlert('Error', 'Unable to open X. Please check if you have a browser installed.');
@@ -827,6 +832,7 @@ export default function RelationshipsScreen() {
       // Try to open the URL directly
       await Linking.openURL(url);
       setShowMoreActions(false);
+      setShowRelationshipDetail(true);
     } catch (error) {
       console.error('Error opening LinkedIn search:', error);
       // If direct opening fails, try with a simpler LinkedIn URL
@@ -850,6 +856,7 @@ export default function RelationshipsScreen() {
     try {
       await Linking.openURL(url);
       setShowMoreActions(false);
+      setShowRelationshipDetail(true);
     } catch (error) {
       console.error('Error opening Google search:', error);
       showAlert('Error', 'Unable to open Google. Please check if you have a browser installed.');
@@ -865,6 +872,7 @@ export default function RelationshipsScreen() {
     try {
       await Linking.openURL(url);
       setShowMoreActions(false);
+      setShowRelationshipDetail(true);
     } catch (error) {
       console.error('Error opening Facebook search:', error);
       showAlert('Error', 'Unable to open Facebook. Please check if you have a browser installed.');
@@ -895,6 +903,7 @@ export default function RelationshipsScreen() {
         title: `Contact: ${selectedRelationship.contactName}`,
       });
       setShowDetailActions(false);
+      setShowRelationshipDetail(true);
     } catch (error) {
       console.error('Error sharing relationship:', error);
       showAlert('Error', 'Failed to share contact information');
@@ -3092,11 +3101,18 @@ export default function RelationshipsScreen() {
         visible={showEditModal}
         onClose={() => {
           setShowEditModal(false);
-          setRelationshipToEdit(null);
+          if(relationshipToEdit){
+            setShowRelationshipDetail(true);
+          }
+          setRelationshipToEdit(null); 
         }}
         relationship={relationshipToEdit} // existing relationship means edit mode
         onRelationshipSaved={(updatedRelationship) => {
           setShowEditModal(false);
+          if(relationshipToEdit){
+            setShowRelationshipDetail(true);
+            setSelectedRelationship(updatedRelationship);
+          }
           setRelationshipToEdit(null);
           showAlert('Success', 'Relationship updated successfully!');
         }}
