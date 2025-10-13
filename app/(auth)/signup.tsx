@@ -38,10 +38,28 @@ export default function SignupScreen() {
   };
 
   const validatePhone = (phone: string): boolean => {
-    if (!phone) return true; // Phone is optional
-    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
-    const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
+    if (!phone.trim()) return false; // Phone is now required
+    // More comprehensive phone validation
+    const phoneRegex = /^[\+]?[1-9][\d]{7,14}$/;
+    const cleanPhone = phone.replace(/[\s\-\(\)\.]/g, '');
     return phoneRegex.test(cleanPhone);
+  };
+
+  const formatPhoneNumber = (phone: string): string => {
+    // Remove all non-numeric characters
+    const cleaned = phone.replace(/\D/g, '');
+    
+    // Format as (XXX) XXX-XXXX for US numbers
+    if (cleaned.length <= 3) {
+      return cleaned;
+    } else if (cleaned.length <= 6) {
+      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3)}`;
+    } else if (cleaned.length <= 10) {
+      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+    } else {
+      // For international numbers, just add + prefix
+      return `+${cleaned}`;
+    }
   };
 
   const validatePassword = (password: string): boolean => {
@@ -51,9 +69,9 @@ export default function SignupScreen() {
   };
 
   const validateAge = (age: string): boolean => {
-    if (!age) return true; // Age is optional
-    const ageNum = parseInt(age);
-    return !isNaN(ageNum) && ageNum >= 13 && ageNum <= 120;
+    if (!age.trim()) return false; // Age is now required
+    const ageNum = parseInt(age.trim());
+    return !isNaN(ageNum) && ageNum >= 13 && ageNum <= 120 && Number.isInteger(ageNum);
   };
 
   const validateForm = (): boolean => {
@@ -75,13 +93,17 @@ export default function SignupScreen() {
       errors.email = 'Please enter a valid email address';
     }
 
-    // Validate phone (optional)
-    if (formData.phone && !validatePhone(formData.phone)) {
+    // Validate phone (required)
+    if (!formData.phone.trim()) {
+      errors.phone = 'Phone number is required';
+    } else if (!validatePhone(formData.phone)) {
       errors.phone = 'Please enter a valid phone number';
     }
 
-    // Validate age (optional)
-    if (formData.age && !validateAge(formData.age)) {
+    // Validate age (required)
+    if (!formData.age.trim()) {
+      errors.age = 'Age is required';
+    } else if (!validateAge(formData.age)) {
       errors.age = 'Please enter a valid age (13-120)';
     }
 
@@ -116,8 +138,88 @@ export default function SignupScreen() {
   };
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    let processedValue = value;
+    
+    // Format phone number as user types
+    if (field === 'phone') {
+      processedValue = formatPhoneNumber(value);
+    }
+    
+    setFormData(prev => ({ ...prev, [field]: processedValue }));
     clearFieldError(field);
+  };
+
+  const handleInputBlur = (field: string) => {
+    // Real-time validation on blur
+    const errors: Record<string, string> = { ...validationErrors };
+    
+    switch (field) {
+      case 'fullName':
+        if (!formData.fullName.trim()) {
+          errors.fullName = 'Full name is required';
+        } else if (formData.fullName.trim().length < 2) {
+          errors.fullName = 'Full name must be at least 2 characters long';
+        } else if (!/^[a-zA-Z\s'-]+$/.test(formData.fullName.trim())) {
+          errors.fullName = 'Full name can only contain letters, spaces, hyphens, and apostrophes';
+        } else {
+          delete errors.fullName;
+        }
+        break;
+        
+      case 'email':
+        if (!formData.email.trim()) {
+          errors.email = 'Email is required';
+        } else if (!validateEmail(formData.email.trim())) {
+          errors.email = 'Please enter a valid email address';
+        } else {
+          delete errors.email;
+        }
+        break;
+        
+      case 'phone':
+        if (!formData.phone.trim()) {
+          errors.phone = 'Phone number is required';
+        } else if (!validatePhone(formData.phone)) {
+          errors.phone = 'Please enter a valid phone number';
+        } else {
+          delete errors.phone;
+        }
+        break;
+        
+      case 'age':
+        if (!formData.age.trim()) {
+          errors.age = 'Age is required';
+        } else if (!validateAge(formData.age)) {
+          errors.age = 'Please enter a valid age (13-120)';
+        } else {
+          delete errors.age;
+        }
+        break;
+        
+      case 'password':
+        if (!formData.password) {
+          errors.password = 'Password is required';
+        } else if (formData.password.length < 8) {
+          errors.password = 'Password must be at least 8 characters long';
+        } else if (!validatePassword(formData.password)) {
+          errors.password = 'Password must contain at least 8 characters, 1 uppercase letter, 1 lowercase letter, and 1 number';
+        } else {
+          delete errors.password;
+        }
+        break;
+        
+      case 'confirmPassword':
+        if (!formData.confirmPassword) {
+          errors.confirmPassword = 'Please confirm your password';
+        } else if (formData.password !== formData.confirmPassword) {
+          errors.confirmPassword = 'Passwords do not match';
+        } else {
+          delete errors.confirmPassword;
+        }
+        break;
+    }
+    
+    setValidationErrors(errors);
   };
 
   const handleSignup = async () => {
@@ -169,13 +271,14 @@ export default function SignupScreen() {
 
           <View style={styles.form}>
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Full Name</Text>
+              <Text style={styles.label}>Full Name *</Text>
               <View style={styles.inputWrapper}>
                 <User size={20} color="#6B7280" style={styles.inputIcon} />
                 <TextInput
                   style={[styles.input, validationErrors.fullName && styles.inputError]}
                   value={formData.fullName}
                   onChangeText={(value) => handleInputChange('fullName', value)}
+                  onBlur={() => handleInputBlur('fullName')}
                   placeholder="Enter your full name"
                   placeholderTextColor="#9CA3AF"
                   autoCapitalize="words"
@@ -187,13 +290,14 @@ export default function SignupScreen() {
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Email</Text>
+              <Text style={styles.label}>Email *</Text>
               <View style={styles.inputWrapper}>
                 <Mail size={20} color="#6B7280" style={styles.inputIcon} />
                 <TextInput
                   style={[styles.input, validationErrors.email && styles.inputError]}
                   value={formData.email}
                   onChangeText={(value) => handleInputChange('email', value)}
+                  onBlur={() => handleInputBlur('email')}
                   placeholder="Enter your email"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="email-address"
@@ -207,13 +311,14 @@ export default function SignupScreen() {
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Phone Number</Text>
+              <Text style={styles.label}>Phone Number *</Text>
               <View style={styles.inputWrapper}>
                 <Phone size={20} color="#6B7280" style={styles.inputIcon} />
                 <TextInput
                   style={[styles.input, validationErrors.phone && styles.inputError]}
                   value={formData.phone}
                   onChangeText={(value) => handleInputChange('phone', value)}
+                  onBlur={() => handleInputBlur('phone')}
                   placeholder="Enter your phone number"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="phone-pad"
@@ -225,13 +330,14 @@ export default function SignupScreen() {
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Age</Text>
+              <Text style={styles.label}>Age *</Text>
               <View style={styles.inputWrapper}>
                 <User size={20} color="#6B7280" style={styles.inputIcon} />
                 <TextInput
                   style={[styles.input, validationErrors.age && styles.inputError]}
                   value={formData.age}
                   onChangeText={(value) => handleInputChange('age', value)}
+                  onBlur={() => handleInputBlur('age')}
                   placeholder="Enter your age"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="numeric"
@@ -291,13 +397,14 @@ export default function SignupScreen() {
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Password</Text>
+              <Text style={styles.label}>Password *</Text>
               <View style={styles.inputWrapper}>
                 <Lock size={20} color="#6B7280" style={styles.inputIcon} />
                 <TextInput
                   style={[styles.input, validationErrors.password && styles.inputError]}
                   value={formData.password}
                   onChangeText={(value) => handleInputChange('password', value)}
+                  onBlur={() => handleInputBlur('password')}
                   placeholder="Create a password"
                   placeholderTextColor="#9CA3AF"
                   secureTextEntry={!showPassword}
@@ -321,13 +428,14 @@ export default function SignupScreen() {
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Confirm Password</Text>
+              <Text style={styles.label}>Confirm Password *</Text>
               <View style={styles.inputWrapper}>
                 <Lock size={20} color="#6B7280" style={styles.inputIcon} />
                 <TextInput
                   style={[styles.input, validationErrors.confirmPassword && styles.inputError]}
                   value={formData.confirmPassword}
                   onChangeText={(value) => handleInputChange('confirmPassword', value)}
+                  onBlur={() => handleInputBlur('confirmPassword')}
                   placeholder="Confirm your password"
                   placeholderTextColor="#9CA3AF"
                   secureTextEntry={!showConfirmPassword}
