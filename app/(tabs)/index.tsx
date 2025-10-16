@@ -104,7 +104,7 @@ const showAlert = (title: string, message: string, buttons?: any[]) => {
 };
 
 export default function HomeScreen() {
-  const { currentUser, signOut } = useAuth();
+  const { currentUser, signOut, deleteAccount, isDeletingAccount, reauthenticate } = useAuth();
   const { data: userProfile, isLoading: isLoadingProfile } = useUser(
     currentUser?.uid || ''
   );
@@ -185,7 +185,7 @@ export default function HomeScreen() {
 
   // Navigation state to prevent multiple taps
   const [isNavigating, setIsNavigating] = useState(false);
-  const navigationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const navigationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Modal states
   const [editActivityModalVisible, setEditActivityModalVisible] =
@@ -197,6 +197,12 @@ export default function HomeScreen() {
   // Relationships modal states
   const [showAddRelationshipModal, setShowAddRelationshipModal] =
     useState(false);
+
+  // Delete account modal states
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [showReauthModal, setShowReauthModal] = useState(false);
+  const [password, setPassword] = useState('');
+  const [isReauthLoading, setIsReauthLoading] = useState(false);
   const [showContactList, setShowContactList] = useState(false);
   const [showNewContactModal, setShowNewContactModal] = useState(false);
   const [showRelationshipInfoModal, setShowRelationshipInfoModal] =
@@ -413,6 +419,76 @@ export default function HomeScreen() {
     ]);
   };
 
+  const handleDeleteAccount = () => {
+    showAlert(
+      'Delete Account',
+      'Are you sure you want to permanently delete your account? This action cannot be undone and will remove all your data, relationships, and reminders.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: () => {
+            // Show second confirmation
+            showAlert(
+              'Final Confirmation',
+              'This will permanently delete your account and all data. Are you absolutely sure?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'I Understand, Delete',
+                  style: 'destructive',
+                  onPress: () => {
+                    // Always require re-authentication for security
+                    setShowReauthModal(true);
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  };
+
+  const handleReauthAndDelete = async () => {
+    if (!password.trim()) {
+      showAlert('Error', 'Please enter your password.');
+      return;
+    }
+
+    try {
+      setIsReauthLoading(true);
+      await reauthenticate(password);
+      await deleteAccount();
+      
+      // Small delay to ensure account deletion completes, then navigate to auth screen
+      setTimeout(() => {
+        router.replace('/(auth)/login');
+      }, 500);
+    } catch (error: any) {
+      console.error('Error during re-authentication and deletion:', error);
+      
+      // Handle specific error cases
+      if (error.message?.includes('wrong-password') || error.code === 'auth/wrong-password') {
+        showAlert('Error', 'Incorrect password. Please try again.');
+      } else if (error.message?.includes('invalid-credential') || error.code === 'auth/invalid-credential') {
+        showAlert('Error', 'Invalid password. Please check your password and try again.');
+      } else {
+        showAlert('Error', 'Failed to delete account. Please check your password and try again.');
+      }
+    } finally {
+      setIsReauthLoading(false);
+      setShowReauthModal(false);
+      setPassword('');
+    }
+  };
+
+  const handleCancelReauth = () => {
+    setShowReauthModal(false);
+    setPassword('');
+  };
+
   const requestContactsPermission = async () => {
     try {
       if (Platform.OS === 'web') {
@@ -426,14 +502,8 @@ export default function HomeScreen() {
         setHasContactPermission(true);
         await loadDeviceContacts();
       } else {
-        showAlert(
-          'Permission Required',
-          'This app needs access to your contacts to provide full functionality.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => {} },
-          ]
-        );
+        // Permission denied - don't show any dialog asking user to reconsider
+        // The app will work without contact access
       }
     } catch (error) {
       console.error('Error requesting contacts permission:', error);
@@ -1023,10 +1093,7 @@ export default function HomeScreen() {
       // Check permission first
       const { status } = await Contacts.requestPermissionsAsync();
       if (status !== 'granted') {
-        showAlert(
-          'Permission Required',
-          'Cannot save contact to device without contacts permission'
-        );
+        // Permission denied - contact will be saved to app database only
         return null;
       }
 
@@ -2310,12 +2377,20 @@ export default function HomeScreen() {
               </Text>
               <Text style={styles.subtitle}>Manage your connections</Text>
             </View>
-            <TouchableOpacity
-              style={styles.logoutButton}
-              onPress={handleSignOut}
-            >
-              <LogOut size={20} color="#6B7280" />
-            </TouchableOpacity>
+            <View style={styles.headerButtons}>
+              <TouchableOpacity
+                style={styles.headerButton}
+                onPress={handleDeleteAccount}
+              >
+                <Trash2 size={20} color="#EF4444" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.headerButton}
+                onPress={handleSignOut}
+              >
+                <LogOut size={20} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -2605,7 +2680,7 @@ export default function HomeScreen() {
                 : 'No device contacts found';
               const emptySubtext = isWeb
                 ? 'Start by adding your first contact'
-                : 'Grant permission to access contacts';
+                : 'We use your contacts to sync your friends between our mobile and web apps. Your contacts will be securely uploaded to our server only with your consent.';
 
               if (isLoading) {
                 return (
@@ -3054,7 +3129,7 @@ export default function HomeScreen() {
               <Text style={styles.emptySubtitle}>
                 {contactSearchQuery
                   ? `No device contacts match "${contactSearchQuery}"`
-                  : 'Allow contact access to see your device contacts here'}
+                  : 'We use your contacts to sync your friends between our mobile and web apps. Your contacts will be securely uploaded to our server only with your consent.'}
               </Text>
               <Text style={styles.emptySubtitle}>
                 Debug: deviceContacts={deviceContacts.length}, filtered=
@@ -3068,7 +3143,7 @@ export default function HomeScreen() {
                   onPress={requestContactsPermission}
                 >
                   <Text style={styles.permissionButtonText}>
-                    Grant Permission
+                    Access Contacts
                   </Text>
                 </TouchableOpacity>
               )}
@@ -3517,6 +3592,53 @@ export default function HomeScreen() {
 
       {/* Contact Actions Modal */}
       {renderContactActionsModal()}
+
+      {/* Re-authentication Modal */}
+      <Modal
+        visible={showReauthModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCancelReauth}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.reauthModalContent}>
+            <Text style={styles.reauthModalTitle}>Security Verification Required</Text>
+            <Text style={styles.reauthModalMessage}>
+              For your security, please enter your current password to confirm account deletion. This ensures only you can delete your account.
+            </Text>
+            
+            <TextInput
+              style={styles.passwordInput}
+              placeholder="Enter your password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={true}
+              autoFocus={true}
+              editable={!isReauthLoading}
+            />
+            
+            <View style={styles.reauthModalButtons}>
+              <TouchableOpacity
+                style={[styles.reauthModalButton, styles.reauthCancelButton]}
+                onPress={handleCancelReauth}
+                disabled={isReauthLoading}
+              >
+                <Text style={styles.reauthCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.reauthModalButton, styles.reauthDeleteButton]}
+                onPress={handleReauthAndDelete}
+                disabled={isReauthLoading || !password.trim()}
+              >
+                <Text style={styles.reauthDeleteButtonText}>
+                  {isReauthLoading ? 'Deleting...' : 'Delete Account'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -3547,7 +3669,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
-  logoutButton: {
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  headerButton: {
     padding: 12,
     borderRadius: 8,
     backgroundColor: '#F3F4F6',
@@ -5073,5 +5199,70 @@ const styles = StyleSheet.create({
   loadingFooterText: {
     fontSize: 14,
     color: '#6B7280',
+  },
+  // Re-auth modal specific styles
+  reauthModalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  reauthModalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  reauthModalMessage: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 20,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  passwordInput: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    marginBottom: 24,
+    backgroundColor: '#F9FAFB',
+  },
+  reauthModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  reauthModalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  reauthCancelButton: {
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  reauthDeleteButton: {
+    backgroundColor: '#EF4444',
+  },
+  reauthCancelButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  reauthDeleteButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#ffffff',
   },
 });

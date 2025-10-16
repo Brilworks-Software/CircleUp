@@ -245,8 +245,13 @@ class ActivityService {
         throw new Error('Activity not found or access denied');
       }
 
-      const updateData = {
-        ...updates,
+      // Filter out undefined values to prevent Firebase errors
+      const filteredUpdates = Object.fromEntries(
+        Object.entries(updates).filter(([_, value]) => value !== undefined)
+      );
+
+      const updateData: any = {
+        ...filteredUpdates,
         updatedAt: serverTimestamp(),
       };
 
@@ -293,6 +298,25 @@ class ActivityService {
     } catch (error) {
       console.error('Error archiving activity:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Clear all activities for a user
+   */
+  async clearAllActivities(userId: string): Promise<boolean> {
+    try {
+      const activities = await this.getActivities(userId);
+      const deletePromises = activities.map(activity => {
+        const activityRef = doc(db, this.COLLECTION_NAME, activity.id);
+        return deleteDoc(activityRef);
+      });
+
+      await Promise.all(deletePromises);
+      return true;
+    } catch (error) {
+      console.error('Error clearing all activities:', error);
+      return false;
     }
   }
 

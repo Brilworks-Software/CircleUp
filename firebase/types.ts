@@ -7,6 +7,8 @@ export interface User {
   name: string;
   email: string;
   phone?: string;
+  age?: number;
+  gender?: 'male' | 'female' | 'other';
   photoUrl?: string;
   fcmToken?: string[]; // Array of FCM tokens for push notifications
   createdAt: any;

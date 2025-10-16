@@ -38,7 +38,7 @@ export default function SignupScreen() {
   };
 
   const validatePhone = (phone: string): boolean => {
-    if (!phone.trim()) return false; // Phone is now required
+    if (!phone.trim()) return true; // Phone is now optional
     // More comprehensive phone validation
     const phoneRegex = /^[\+]?[1-9][\d]{7,14}$/;
     const cleanPhone = phone.replace(/[\s\-\(\)\.]/g, '');
@@ -69,7 +69,7 @@ export default function SignupScreen() {
   };
 
   const validateAge = (age: string): boolean => {
-    if (!age.trim()) return false; // Age is now required
+    if (!age.trim()) return true; // Age is now optional
     const ageNum = parseInt(age.trim());
     return !isNaN(ageNum) && ageNum >= 13 && ageNum <= 120 && Number.isInteger(ageNum);
   };
@@ -93,17 +93,13 @@ export default function SignupScreen() {
       errors.email = 'Please enter a valid email address';
     }
 
-    // Validate phone (required)
-    if (!formData.phone.trim()) {
-      errors.phone = 'Phone number is required';
-    } else if (!validatePhone(formData.phone)) {
+    // Validate phone (optional)
+    if (formData.phone.trim() && !validatePhone(formData.phone)) {
       errors.phone = 'Please enter a valid phone number';
     }
 
-    // Validate age (required)
-    if (!formData.age.trim()) {
-      errors.age = 'Age is required';
-    } else if (!validateAge(formData.age)) {
+    // Validate age (optional)
+    if (formData.age.trim() && !validateAge(formData.age)) {
       errors.age = 'Please enter a valid age (13-120)';
     }
 
@@ -177,9 +173,7 @@ export default function SignupScreen() {
         break;
         
       case 'phone':
-        if (!formData.phone.trim()) {
-          errors.phone = 'Phone number is required';
-        } else if (!validatePhone(formData.phone)) {
+        if (formData.phone.trim() && !validatePhone(formData.phone)) {
           errors.phone = 'Please enter a valid phone number';
         } else {
           delete errors.phone;
@@ -187,9 +181,7 @@ export default function SignupScreen() {
         break;
         
       case 'age':
-        if (!formData.age.trim()) {
-          errors.age = 'Age is required';
-        } else if (!validateAge(formData.age)) {
+        if (formData.age.trim() && !validateAge(formData.age)) {
           errors.age = 'Please enter a valid age (13-120)';
         } else {
           delete errors.age;
@@ -311,7 +303,7 @@ export default function SignupScreen() {
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Phone Number *</Text>
+              <Text style={styles.label}>Phone Number</Text>
               <View style={styles.inputWrapper}>
                 <Phone size={20} color="#6B7280" style={styles.inputIcon} />
                 <TextInput
@@ -330,7 +322,7 @@ export default function SignupScreen() {
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Age *</Text>
+              <Text style={styles.label}>Age</Text>
               <View style={styles.inputWrapper}>
                 <User size={20} color="#6B7280" style={styles.inputIcon} />
                 <TextInput

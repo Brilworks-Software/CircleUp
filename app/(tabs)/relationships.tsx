@@ -443,7 +443,7 @@ export default function RelationshipsScreen() {
       }
     } catch (error) {
       console.error('Error requesting contacts permission:', error);
-      showAlert('Error', 'Failed to request contacts permission');
+      // Don't show error alert for permission request failures
     }
   };
 
@@ -609,7 +609,7 @@ export default function RelationshipsScreen() {
       return
     }
     if (!hasPermission) {
-      showAlert('No Permission', 'Please allow contact access to add relationships.');
+      // Permission not granted - user can still add relationships manually
       return;
     }
 
@@ -1604,14 +1604,8 @@ export default function RelationshipsScreen() {
       const { status } = await Contacts.requestPermissionsAsync();
       setHasPermission(status === 'granted');
       if (status !== 'granted') {
-        showAlert(
-          'Permission Required',
-          'Contact access is needed to add contacts to your device. You can still create the relationship without device contact access.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Continue Anyway', onPress: () => proceedWithContactCreation() }
-          ]
-        );
+        // Permission denied - proceed with contact creation without device contact access
+        await proceedWithContactCreation();
         return;
       }
     }
@@ -2799,12 +2793,12 @@ export default function RelationshipsScreen() {
               <Text style={styles.emptySubtitle}>
                 {contactSearchQuery 
                   ? `No device contacts match "${contactSearchQuery}"`
-                  : 'Allow contact access to see your device contacts here'
+                  : 'We use your contacts to sync your friends between our mobile and web apps. Your contacts will be securely uploaded to our server only with your consent.'
                 }
               </Text>
               {!hasPermission && (
                 <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-                  <Text style={styles.permissionButtonText}>Grant Permission</Text>
+                  <Text style={styles.permissionButtonText}>Access Contacts</Text>
                 </TouchableOpacity>
               )}
             </View>

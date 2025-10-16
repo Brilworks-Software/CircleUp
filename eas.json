@@ -15,7 +15,8 @@
         "FIREBASE_MESSAGING_SENDER_ID": "540064305831",
         "FIREBASE_APP_ID": "1:540064305831:android:28ce9d59abe79b52c80182",
         "FIREBASE_DATABASE_URL": "https://circleup-63110-default-rtdb.firebaseio.com"
-      }
+      },
+      "channel": "development"
     },
     "preview": {
       "distribution": "internal",
@@ -27,7 +28,8 @@
         "FIREBASE_MESSAGING_SENDER_ID": "540064305831",
         "FIREBASE_APP_ID": "1:540064305831:android:28ce9d59abe79b52c80182",
         "FIREBASE_DATABASE_URL": "https://circleup-63110-default-rtdb.firebaseio.com"
-      }
+      },
+      "channel": "preview"
     },
     "production": {
       "autoIncrement": true,
@@ -40,15 +42,16 @@
         "FIREBASE_MESSAGING_SENDER_ID": "540064305831",
         "FIREBASE_APP_ID": "1:540064305831:android:28ce9d59abe79b52c80182",
         "FIREBASE_DATABASE_URL": "https://circleup-63110-default-rtdb.firebaseio.com"
-      }
+      },
+      "channel": "production"
     }
   },
   "submit": {
     "production": {
       "ios": {
         "appleId": "bhavik.b@brilworks.com",
-        "ascAppId": "6753784281", 
-        "appleTeamId": "K7Y5QY6LMX", 
+        "ascAppId": "6753784281",
+        "appleTeamId": "K7Y5QY6LMX",
         "bundleIdentifier": "com.brilworks.circleUp"
       }
     }

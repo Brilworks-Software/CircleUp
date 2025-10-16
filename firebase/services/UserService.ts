@@ -37,8 +37,14 @@ export default class UsersService {
     userData: CreateUserData
   ): Promise<Partial<User>> {
     const userDocRef = doc(collection(db, this.COLLECTION_NAME), userId);
+    
+    // Filter out undefined values to prevent Firebase errors
+    const filteredUserData = Object.fromEntries(
+      Object.entries(userData).filter(([_, value]) => value !== undefined)
+    );
+    
     const userProfile = {
-      ...userData,
+      ...filteredUserData,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
@@ -62,8 +68,14 @@ export default class UsersService {
    */
   static async updateUser(userId: string, data: Partial<User>): Promise<void> {
     const userDocRef = doc(collection(db, this.COLLECTION_NAME), userId);
+    
+    // Filter out undefined values to prevent Firebase errors
+    const filteredData = Object.fromEntries(
+      Object.entries(data).filter(([_, value]) => value !== undefined)
+    );
+    
     await updateDoc(userDocRef, {
-      ...data,
+      ...filteredData,
       updatedAt: serverTimestamp(),
     });
   }
