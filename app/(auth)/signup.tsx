@@ -25,7 +25,7 @@ export default function SignupScreen() {
     password: '',
     confirmPassword: '',
     age: '',
-    gender: 'male' as 'male' | 'female' | 'other',
+    gender: '' as 'male' | 'female' | 'other' | '',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -225,7 +225,7 @@ export default function SignupScreen() {
         password: formData.password,
         name: formData.fullName,
         age: formData.age ? parseInt(formData.age) : undefined,
-        gender: formData.gender,
+        gender: formData.gender || undefined,
         phone: formData.phone,
       });
       
@@ -244,7 +244,7 @@ export default function SignupScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
         style={styles.keyboardView}
       >
         <ScrollView 
@@ -343,48 +343,66 @@ export default function SignupScreen() {
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Gender</Text>
               <View style={styles.genderContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.genderButton,
-                    formData.gender === 'male' && styles.genderButtonSelected
-                  ]}
-                  onPress={() => handleInputChange('gender', 'male')}
-                >
-                  <Text style={[
-                    styles.genderButtonText,
-                    formData.gender === 'male' && styles.genderButtonTextSelected
-                  ]}>
-                    Male
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.genderButton,
-                    formData.gender === 'female' && styles.genderButtonSelected
-                  ]}
-                  onPress={() => handleInputChange('gender', 'female')}
-                >
-                  <Text style={[
-                    styles.genderButtonText,
-                    formData.gender === 'female' && styles.genderButtonTextSelected
-                  ]}>
-                    Female
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.genderButton,
-                    formData.gender === 'other' && styles.genderButtonSelected
-                  ]}
-                  onPress={() => handleInputChange('gender', 'other')}
-                >
-                  <Text style={[
-                    styles.genderButtonText,
-                    formData.gender === 'other' && styles.genderButtonTextSelected
-                  ]}>
-                    Other
-                  </Text>
-                </TouchableOpacity>
+                <View style={styles.genderRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.genderButton,
+                      formData.gender === 'male' && styles.genderButtonSelected
+                    ]}
+                    onPress={() => handleInputChange('gender', 'male')}
+                  >
+                    <Text style={[
+                      styles.genderButtonText,
+                      formData.gender === 'male' && styles.genderButtonTextSelected
+                    ]}>
+                      Male
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.genderButton,
+                      formData.gender === 'female' && styles.genderButtonSelected
+                    ]}
+                    onPress={() => handleInputChange('gender', 'female')}
+                  >
+                    <Text style={[
+                      styles.genderButtonText,
+                      formData.gender === 'female' && styles.genderButtonTextSelected
+                    ]}>
+                      Female
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.genderRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.genderButton,
+                      formData.gender === 'other' && styles.genderButtonSelected
+                    ]}
+                    onPress={() => handleInputChange('gender', 'other')}
+                  >
+                    <Text style={[
+                      styles.genderButtonText,
+                      formData.gender === 'other' && styles.genderButtonTextSelected
+                    ]}>
+                      Other
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.genderButton,
+                      formData.gender === '' && styles.genderButtonSelected
+                    ]}
+                    onPress={() => handleInputChange('gender', '')}
+                  >
+                    <Text style={[
+                      styles.genderButtonText,
+                      formData.gender === '' && styles.genderButtonTextSelected
+                    ]}>
+                      Prefer not to say
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
 
@@ -628,27 +646,33 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   genderContainer: {
+    gap: 12,
+  },
+  genderRow: {
     flexDirection: 'row',
     gap: 12,
   },
   genderButton: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#D1D5DB',
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
   },
   genderButtonSelected: {
     borderColor: '#3B82F6',
     backgroundColor: '#EFF6FF',
   },
   genderButtonText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '500',
     color: '#6B7280',
+    textAlign: 'center',
   },
   genderButtonTextSelected: {
     color: '#3B82F6',
