@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "circle-up",
+    "name": "Circle Up",
     "slug": "circle-up",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -40,7 +40,12 @@
           }
         }
       ],
-      ["expo-updates",{"username":"dineshkachhot@gmail.com"}]
+      [
+        "expo-updates",
+        {
+          "username": "dineshkachhot@gmail.com"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
@@ -49,7 +54,6 @@
       "package": "com.brilworks.circleUp",
       "googleServicesFile": "./google-services.json"
     },
-    
     "extra": {
       "router": {},
       "eas": {
