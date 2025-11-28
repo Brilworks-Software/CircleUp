@@ -64,6 +64,7 @@ export default {
       firebaseMessagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
       firebaseAppId: process.env.FIREBASE_APP_ID,
       firebaseDatabaseUrl: process.env.FIREBASE_DATABASE_URL,
+      firebaseMeasurementId: process.env.FIREBASE_MEASUREMENT_ID,
 
       eas: {
         projectId: "e192a659-fba6-49e5-b3fa-501e337889c5"

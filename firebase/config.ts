@@ -1,7 +1,10 @@
 import { FirebaseApp, getApp, getApps, initializeApp } from 'firebase/app';
 import { getAuth, initializeAuth, getReactNativePersistence, Auth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getDatabase } from 'firebase/database';
 import { getStorage } from 'firebase/storage';
+import Constants from 'expo-constants';
+import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage'; 
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -10,12 +13,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  
 // Firebase configuration from Expo Constants
 const firebaseConfig = {
-  apiKey: "AIzaSyDGBdd61kRdK_N_c7quJZxd7t4EywkGyAE",
-  authDomain: "backend-in7gy7.firebaseapp.com",
-  projectId: "backend-in7gy7",
-  storageBucket: "backend-in7gy7.firebasestorage.app",
-  messagingSenderId: "708438594834",
-  appId: "1:708438594834:web:c4528a3e617effba154fcb"
+  apiKey: Constants.expoConfig?.extra?.firebaseApiKey,
+  authDomain: Constants.expoConfig?.extra?.firebaseAuthDomain,
+  projectId: Constants.expoConfig?.extra?.firebaseProjectId,
+  storageBucket: Constants.expoConfig?.extra?.firebaseStorageBucket,
+  messagingSenderId: Constants.expoConfig?.extra?.firebaseMessagingSenderId,
+  appId: Constants.expoConfig?.extra?.firebaseAppId,
+  databaseURL: Constants.expoConfig?.extra?.firebaseDatabaseUrl,
+  measurementId: Constants.expoConfig?.extra?.firebaseMeasurementId,
 };
 
 // Initialize Firebase
