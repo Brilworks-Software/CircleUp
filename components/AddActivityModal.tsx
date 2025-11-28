@@ -11,10 +11,10 @@ import {
   Animated,
   Platform,
   FlatList,
-  SafeAreaView,
   KeyboardAvoidingView,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Contacts from 'expo-contacts';
 import WebCompatibleDateTimePicker from './WebCompatibleDateTimePicker';
 import ContactSearchInput from './ContactSearchInput';
@@ -243,6 +243,7 @@ export default function AddActivityModal({
   >({});
 
   // New contact modal states
+  const [showMainModel, setShowMainModel] = useState(true);
   const [showNewContactModal, setShowNewContactModal] = useState(false);
   const [newContactName, setNewContactName] = useState('');
   const [newContactPhone, setNewContactPhone] = useState('');
@@ -437,6 +438,7 @@ export default function AddActivityModal({
   };
 
   const handleCreateNewContact = (contactData: any) => {
+    setShowMainModel(false);
     setNewContactName(contactData.name || '');
     setShowNewContactModal(true);
   };
@@ -708,6 +710,7 @@ export default function AddActivityModal({
       setContactSearchQuery(createdRelationship.contactName);
       setContactSearchError('');
       setShowNewContactModal(false);
+      setShowMainModel(true);
       resetNewContactForm();
 
       const successMessage = deviceContactId 
@@ -1223,7 +1226,11 @@ export default function AddActivityModal({
       if (status === 'granted') {
         setHasContactPermission(true);
         const { data } = await Contacts.getContactsAsync({
-          fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers, Contacts.Fields.Emails],
+          fields: [
+            Contacts.Fields.Name,
+            Contacts.Fields.PhoneNumbers,
+            Contacts.Fields.Emails,
+          ],
         });
         setDeviceContacts(data);
       } else {
@@ -1325,13 +1332,19 @@ export default function AddActivityModal({
   // }, [handleClickOutside]);
 
   return (
-    <Modal
-      visible={visible}
+    <>
+    {visible && <Modal
+      visible={showMainModel}
       animationType="fade"
       transparent
       onRequestClose={handleClose}
     >
       <View style={styles.addActivityOverlay}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+          style={styles.keyboardAvoidingView}
+        >
         <View style={styles.addActivityContainer}>
           <View style={styles.addActivityHeader}>
             <TouchableOpacity onPress={handleClose}>
@@ -1550,6 +1563,40 @@ export default function AddActivityModal({
                           />
                         </View>
                       </View>
+                    ) : Platform.OS === 'ios' ? (
+                      <View style={styles.iosDateTimeRow}>
+                        <View style={styles.iosDateTimeGroup}>
+                          <Text style={styles.iosDateTimeLabel}>Date</Text>
+                          <View style={[
+                            styles.iosDateTimeContainer, 
+                            { flex: 1 },
+                            validationErrors.interactionDate && styles.iosDateTimeContainerError
+                          ]}>
+                            <WebCompatibleDateTimePicker
+                              value={interactionDate}
+                              mode="date"
+                              display="default"
+                              onChange={handleInteractionDateChange}
+                              maximumDate={new Date()}
+                            />
+                          </View>
+                        </View>
+                        <View style={styles.iosDateTimeGroup}>
+                          <Text style={styles.iosDateTimeLabel}>Time</Text>
+                          <View style={[
+                            styles.iosDateTimeContainer, 
+                            { flex: 1 },
+                            validationErrors.interactionDate && styles.iosDateTimeContainerError
+                          ]}>
+                            <WebCompatibleDateTimePicker
+                              value={interactionDate}
+                              mode="time"
+                              display="default"
+                              onChange={handleInteractionTimeChange}
+                            />
+                          </View>
+                        </View>
+                      </View>
                     ) : (
                       <View style={styles.dateTimeRow}>
                         <TouchableOpacity
@@ -1731,6 +1778,40 @@ export default function AddActivityModal({
                               outline: 'none',
                             }}
                           />
+                        </View>
+                      </View>
+                    ) : Platform.OS === 'ios' ? (
+                      <View style={styles.iosDateTimeRow}>
+                        <View style={styles.iosDateTimeGroup}>
+                          <Text style={styles.iosDateTimeLabel}>Date</Text>
+                          <View style={[
+                            styles.iosDateTimeContainer, 
+                            { flex: 1 },
+                            validationErrors.reminderDate && styles.iosDateTimeContainerError
+                          ]}>
+                            <WebCompatibleDateTimePicker
+                              value={activityReminderDate}
+                              mode="date"
+                              display="default"
+                              onChange={handleReminderDateChange}
+                              minimumDate={new Date()}
+                            />
+                          </View>
+                        </View>
+                        <View style={styles.iosDateTimeGroup}>
+                          <Text style={styles.iosDateTimeLabel}>Time</Text>
+                          <View style={[
+                            styles.iosDateTimeContainer, 
+                            { flex: 1 },
+                            validationErrors.reminderDate && styles.iosDateTimeContainerError
+                          ]}>
+                            <WebCompatibleDateTimePicker
+                              value={activityReminderDate}
+                              mode="time"
+                              display="default"
+                              onChange={handleReminderTimeChange}
+                            />
+                          </View>
                         </View>
                       </View>
                     ) : (
@@ -1969,10 +2050,11 @@ export default function AddActivityModal({
             </TouchableOpacity>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </View>
 
-      {/* Date Pickers for Native Platforms */}
-      {Platform.OS !== 'web' && showInteractionDatePicker && (
+      {/* Date Pickers for Android (iOS uses direct inline pickers) */}
+      {Platform.OS === 'android' && showInteractionDatePicker && (
         <WebCompatibleDateTimePicker
           value={interactionDate}
           mode="date"
@@ -1982,7 +2064,7 @@ export default function AddActivityModal({
         />
       )}
 
-      {Platform.OS !== 'web' && showInteractionTimePicker && (
+      {Platform.OS === 'android' && showInteractionTimePicker && (
         <WebCompatibleDateTimePicker
           value={interactionDate}
           mode="time"
@@ -1991,16 +2073,17 @@ export default function AddActivityModal({
         />
       )}
 
-      {Platform.OS !== 'web' && showReminderDatePicker && (
+      {Platform.OS === 'android' && showReminderDatePicker && (
         <WebCompatibleDateTimePicker
           value={activityReminderDate}
           mode="date"
           display="default"
           onChange={handleReminderDateChange}
+          minimumDate={new Date()}
         />
       )}
 
-      {Platform.OS !== 'web' && showReminderTimePicker && (
+      {Platform.OS === 'android' && showReminderTimePicker && (
         <WebCompatibleDateTimePicker
           value={activityReminderDate}
           mode="time"
@@ -2008,14 +2091,21 @@ export default function AddActivityModal({
           onChange={handleReminderTimeChange}
         />
       )}
+      </Modal>}
 
       {/* Create New Contact Modal */}
-      <Modal visible={showNewContactModal} animationType="slide">
-        <SafeAreaView style={styles.modalContainer}>
+      <Modal 
+        visible={showNewContactModal} 
+        animationType="slide"
+        presentationStyle="pageSheet"
+        statusBarTranslucent={false}
+      >
+        <SafeAreaView style={styles.modalContainer} edges={['top', 'left', 'right']}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Create New Contact</Text>
             <TouchableOpacity onPress={() => {
               setShowNewContactModal(false);
+              setShowMainModel(true);
               resetNewContactForm();
             }}>
               <X size={24} color="#6B7280" />
@@ -2273,7 +2363,7 @@ export default function AddActivityModal({
           </ScrollView>
         </SafeAreaView>
       </Modal>
-    </Modal>
+    </>
   );
 }
 
@@ -2283,7 +2373,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: Platform.OS === 'ios' ? 20 : 16,
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
   },
   addActivityContainer: {
     backgroundColor: '#ffffff',
@@ -2291,6 +2387,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxHeight: '90%',
     maxWidth: 500,
+    minHeight: 200,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -2299,7 +2396,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 20,
     elevation: 10,
-    
   },
   addActivityHeader: {
     flexDirection: 'row',
@@ -2471,6 +2567,43 @@ const styles = StyleSheet.create({
   },
   webDateTimeInput: {
     // Container for web datetime inputs
+  },
+  iosDateTimeRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  iosDateTimeGroup: {
+    flex: 1,
+  },
+  iosDateTimeLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+    marginBottom: 6,
+  },
+  iosDateTimeContainer: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minHeight: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  iosDateTimeContainerError: {
+    borderColor: '#EF4444',
+    borderWidth: 2,
+    backgroundColor: '#FEF2F2',
   },
   // Reminder Type Buttons
   reminderTypeButtons: {

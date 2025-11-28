@@ -101,14 +101,17 @@ export default function WebCompatibleDateTimePicker({
 
   // On native platforms, use the original DateTimePicker
   return (
-    <DateTimePicker
-      value={value}
-      mode={mode}
-      display={display}
-      onChange={onChange}
-      maximumDate={maximumDate}
-      minimumDate={minimumDate}
-    />
+    <View style={styles.nativePickerContainer}>
+      <DateTimePicker
+        value={value}
+        mode={mode}
+        display={display}
+        onChange={onChange}
+        maximumDate={maximumDate}
+        minimumDate={minimumDate}
+        style={styles.nativePicker}
+      />
+    </View>
   );
 }
 
@@ -116,5 +119,14 @@ const styles = StyleSheet.create({
   webDirectContainer: {
     width: '100%',
     minWidth: 150,
+  },
+  nativePickerContainer: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nativePicker: {
+    width: '100%',
+    height: Platform.OS === 'ios' ? 50 : 'auto',
   },
 });

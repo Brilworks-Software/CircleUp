@@ -43,8 +43,8 @@
     "production": {
       "ios": {
         "appleId": "bhavik.b@brilworks.com",
-        "ascAppId": "6753784281", 
-        "appleTeamId": "K7Y5QY6LMX", 
+        "ascAppId": "6753784281",
+        "appleTeamId": "K7Y5QY6LMX",
         "bundleIdentifier": "com.brilworks.circleUp"
       }
     }
