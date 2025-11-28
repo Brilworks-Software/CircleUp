@@ -42,7 +42,7 @@ const showAlert = (title: string, message: string, buttons?: any[]) => {
       window.alert(`${title}\n\n${message}`);
       return;
     }
-    
+
     // For alerts with buttons, use confirm for simple cases
     if (buttons.length === 2 && buttons[0].text === 'Cancel' && buttons[1].text === 'OK') {
       const result = window.confirm(`${title}\n\n${message}`);
@@ -51,7 +51,7 @@ const showAlert = (title: string, message: string, buttons?: any[]) => {
       }
       return;
     }
-    
+
     // For relationship exists alerts with multiple options
     if (buttons.length === 3 && buttons[1].text === 'Edit Existing' && buttons[2].text === 'Create New') {
       const result = window.confirm(`${title}\n\n${message}\n\nClick OK to edit existing relationship, or Cancel to create a new one.`);
@@ -68,7 +68,7 @@ const showAlert = (title: string, message: string, buttons?: any[]) => {
       }
       return;
     }
-    
+
     // For other complex alerts, use confirm as fallback
     const result = window.confirm(`${title}\n\n${message}\n\nClick OK to continue or Cancel to abort.`);
     if (result) {
@@ -87,18 +87,18 @@ const showAlert = (title: string, message: string, buttons?: any[]) => {
 export default function RelationshipsScreen() {
   const router = useRouter();
   const { currentUser } = useAuth();
-  
-  const { 
-    relationships, 
-    isLoading: isLoadingRelationships, 
-    createRelationship, 
+
+  const {
+    relationships,
+    isLoading: isLoadingRelationships,
+    createRelationship,
     updateRelationship,
     deleteRelationship
   } = useRelationships();
-  
+
   const { createReminder, deleteReminder } = useReminders();
   const { activities, getActivitiesByTags, getFilteredActivities, createActivity, updateActivity, deleteActivity } = useActivity();
-  
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showContactList, setShowContactList] = useState(false);
@@ -113,20 +113,20 @@ export default function RelationshipsScreen() {
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [selectedRelationship, setSelectedRelationship] = useState<Relationship | null>(null);
   const [relationshipToEdit, setRelationshipToEdit] = useState<Relationship | null>(null);
-  
+
   // Tag filtering state
   const [showTagFilters, setShowTagFilters] = useState(false);
   const [selectedTagFilter, setSelectedTagFilter] = useState<string>('all');
   const [selectedActivity, setSelectedActivity] = useState<any>(null);
   const [contactSearchQuery, setContactSearchQuery] = useState('');
-  
+
   // Reminder form state
   const [reminderNote, setReminderNote] = useState('');
   const [reminderDate, setReminderDate] = useState(new Date());
   const [reminderTime, setReminderTime] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  
+
   // Device contacts state
   const [deviceContacts, setDeviceContacts] = useState<Contacts.Contact[]>([]);
   const [isLoadingDeviceContacts, setIsLoadingDeviceContacts] = useState(false);
@@ -141,7 +141,7 @@ export default function RelationshipsScreen() {
   const [notes, setNotes] = useState('');
   const [familyInfo, setFamilyInfo] = useState({ kids: '', siblings: '', spouse: '' });
   const [customDate, setCustomDate] = useState('');
-  
+
   // Contact edit state
   const [editContactPhone, setEditContactPhone] = useState('');
   const [editContactEmail, setEditContactEmail] = useState('');
@@ -155,7 +155,7 @@ export default function RelationshipsScreen() {
   const [editContactAddress, setEditContactAddress] = useState('');
   const [editContactBirthday, setEditContactBirthday] = useState('');
   const [editContactNotes, setEditContactNotes] = useState('');
-  
+
   // New contact form state
   const [newContactName, setNewContactName] = useState('');
   const [newContactPhone, setNewContactPhone] = useState('');
@@ -170,30 +170,30 @@ export default function RelationshipsScreen() {
   const [newContactAddress, setNewContactAddress] = useState('');
   const [newContactBirthday, setNewContactBirthday] = useState('');
   const [newContactNotes, setNewContactNotes] = useState('');
-  
+
   // Validation states
   const [contactValidationErrors, setContactValidationErrors] = useState<Record<string, string>>({});
   const [noteValidationErrors, setNoteValidationErrors] = useState<Record<string, string>>({});
   const [familyInfoValidationErrors, setFamilyInfoValidationErrors] = useState<Record<string, string>>({});
-  
+
   // Activity filtering state
   const [activityFilter, setActivityFilter] = useState<'all' | 'note' | 'interaction' | 'reminder'>('all');
   const [showActivityDropdown, setShowActivityDropdown] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState<'below' | 'above'>('below');
-  
+
   // Editing states
   const [isEditingNote, setIsEditingNote] = useState(false);
   const [isEditingFamilyInfo, setIsEditingFamilyInfo] = useState(false);
   const [editedNote, setEditedNote] = useState('');
   const [editedFamilyInfo, setEditedFamilyInfo] = useState({ kids: '', siblings: '', spouse: '' });
-  
+
   // Edit modal states
   const [showEditNoteModal, setShowEditNoteModal] = useState(false);
   const [showEditFamilyInfoModal, setShowEditFamilyInfoModal] = useState(false);
-  
+
   // Activity creation modal states
   const [showAddActivityModal, setShowAddActivityModal] = useState(false);
-  
+
   // Helper function to close all modals except the one being opened
   const closeAllModalsExcept = (exceptionModal?: string) => {
     if (exceptionModal !== 'relationshipDetail') setShowRelationshipDetail(false);
@@ -274,7 +274,7 @@ export default function RelationshipsScreen() {
     openRelationshipDetailModal();
   };
   const [activeActivityTab, setActiveActivityTab] = useState<'note' | 'interaction' | 'reminder'>('note');
-  
+
   // Animation states for tabs
   const tabAnimations = useRef({
     note: new Animated.Value(1),
@@ -286,7 +286,7 @@ export default function RelationshipsScreen() {
   const handleTabSwitch = (tab: 'note' | 'interaction' | 'reminder') => {
     // Reset all animations
     Object.values(tabAnimations).forEach(anim => anim.setValue(1));
-    
+
     // Animate the selected tab
     Animated.sequence([
       Animated.timing(tabAnimations[tab], {
@@ -305,32 +305,32 @@ export default function RelationshipsScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-    
+
     setActiveActivityTab(tab);
   };
-  
+
   // Note activity states
   const [noteTitle, setNoteTitle] = useState('');
   const [noteContent, setNoteContent] = useState('');
   const [noteTags, setNoteTags] = useState<string[]>([]);
-  
+
   // Interaction activity states
   const [interactionType, setInteractionType] = useState<'call' | 'text' | 'email' | 'inPerson'>('call');
   const [interactionDate, setInteractionDate] = useState(new Date());
   const [interactionNotes, setInteractionNotes] = useState('');
   const [interactionDuration, setInteractionDuration] = useState('');
   const [interactionLocation, setInteractionLocation] = useState('');
-  
+
   // Reminder activity states
   const [activityReminderTitle, setActivityReminderTitle] = useState('');
   const [activityReminderDate, setActivityReminderDate] = useState(new Date());
   const [activityReminderType, setActivityReminderType] = useState('follow_up');
   const [activityReminderFrequency, setActivityReminderFrequency] = useState<'week' | 'month' | '3months' | '6months' | 'never'>('month');
   const [activityReminderNotes, setActivityReminderNotes] = useState('');
-  
+
   // Validation states
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
-  
+
   // Date picker states
   const [showInteractionDatePicker, setShowInteractionDatePicker] = useState(false);
   const [showInteractionTimePicker, setShowInteractionTimePicker] = useState(false);
@@ -338,23 +338,23 @@ export default function RelationshipsScreen() {
   const [showReminderTimePicker, setShowReminderTimePicker] = useState(false);
 
   const predefinedTags = Object.values(Tags);
-  
+
   // Tag filter options
   const tagFilterOptions = [
     { key: 'all', label: 'All Relationships' },
     ...Object.values(Tags).map(tag => ({ key: tag, label: tag }))
   ];
-  
+
   // Filter relationships based on selected tag - Memoized for performance
   const filteredRelationships = useMemo(() => {
     if (selectedTagFilter === 'all') {
       return relationships;
     }
-    return relationships.filter(relationship => 
+    return relationships.filter(relationship =>
       relationship.tags && relationship.tags.includes(selectedTagFilter)
     );
   }, [relationships, selectedTagFilter]);
-  
+
   const lastContactOptions = [
     { key: 'today', label: 'Today' },
     { key: 'yesterday', label: 'Yesterday' },
@@ -373,7 +373,7 @@ export default function RelationshipsScreen() {
     { key: 'call', label: 'Call' },
     { key: 'other', label: 'Other' },
   ];
-  
+
   const activityFilterOptions = [
     { key: 'all', label: 'All Activities', icon: '📋' },
     { key: 'note', label: 'Notes', icon: '📝' },
@@ -449,10 +449,10 @@ export default function RelationshipsScreen() {
 
   const loadDeviceContacts = async () => {
     if (!hasPermission) return;
-    
+
     try {
       setIsLoadingDeviceContacts(true);
-      
+
       if (Platform.OS === 'web') {
         // For web, we can't load device contacts using Web Contacts API
         // The Web Contacts API is read-only and doesn't provide a way to list contacts
@@ -465,7 +465,7 @@ export default function RelationshipsScreen() {
             Contacts.Fields.Emails
           ],
         });
-        
+
         // Filter out contacts without names
         const validContacts = data.filter(contact => contact.name && contact.name.trim() !== '');
         setDeviceContacts(validContacts);
@@ -483,13 +483,13 @@ export default function RelationshipsScreen() {
     if (!contactSearchQuery.trim()) {
       return deviceContacts;
     }
-    
+
     return deviceContacts.filter(contact =>
       contact.name?.toLowerCase().includes(contactSearchQuery.toLowerCase()) ||
-      contact.phoneNumbers?.some(phone => 
+      contact.phoneNumbers?.some(phone =>
         phone.number?.includes(contactSearchQuery)
       ) ||
-      contact.emails?.some(email => 
+      contact.emails?.some(email =>
         email.email?.toLowerCase().includes(contactSearchQuery.toLowerCase())
       )
     );
@@ -501,12 +501,12 @@ export default function RelationshipsScreen() {
 
   const handleSearchQueryChange = useCallback((query: string) => {
     setContactSearchQuery(query);
-    
+
     // Clear existing timeout
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
-    
+
     // Set new timeout for debounced search
     searchTimeoutRef.current = setTimeout(() => {
       debouncedSearchQuery.current = query;
@@ -515,13 +515,13 @@ export default function RelationshipsScreen() {
 
   // Add keyExtractor functions for better performance
   const relationshipKeyExtractor = useCallback((item: Relationship) => item.id, []);
-  const contactKeyExtractor = useCallback((item: Contacts.Contact, index: number) => 
+  const contactKeyExtractor = useCallback((item: Contacts.Contact, index: number) =>
     (item as any).id || `device_${index}`, []);
 
   const handleDeviceContactSelect = async (deviceContact: Contacts.Contact) => {
     console.log("CurrentUser:", currentUser);
-    
-   
+
+
 
     try {
       // Convert device contact to our Contact format
@@ -539,45 +539,47 @@ export default function RelationshipsScreen() {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      
+
       // Check if relationship already exists by name (since device contacts might have different IDs)
-      const existingRelationship = relationships.find(r => 
+      const existingRelationship = relationships.find(r =>
         r.contactName.toLowerCase() === newContact.name.toLowerCase()
       );
-      
+
       if (existingRelationship) {
-        const alertTitle = Platform.OS === 'web' 
-          ? 'Relationship Already Exists' 
+        const alertTitle = Platform.OS === 'web'
+          ? 'Relationship Already Exists'
           : 'Relationship Exists';
-        
+
         const alertMessage = Platform.OS === 'web'
           ? `You already have a relationship with "${newContact.name}". Would you like to edit the existing relationship or create a new one?`
           : `You already have a relationship with ${newContact.name}. Would you like to edit it?`;
-        
+
         const alertButtons = Platform.OS === 'web'
           ? [
-              { text: 'Cancel', style: 'cancel' as const },
-              { text: 'Edit Existing', onPress: () => editRelationship(existingRelationship) },
-              { text: 'Create New', onPress: () => {
+            { text: 'Cancel', style: 'cancel' as const },
+            { text: 'Edit Existing', onPress: () => editRelationship(existingRelationship) },
+            {
+              text: 'Create New', onPress: () => {
                 // Allow creating a new relationship with a different name
                 const newName = `${newContact.name} (${new Date().getFullYear()})`;
                 setSelectedContact({ ...newContact, name: newName, id: `new_${Date.now()}` });
                 setShowContactList(false);
                 setShowAddModal(true);
-              }},
-            ]
+              }
+            },
+          ]
           : [
-              { text: 'Cancel', style: 'cancel' as const },
-              { text: 'Edit', onPress: () => editRelationship(existingRelationship) },
-            ];
-        
+            { text: 'Cancel', style: 'cancel' as const },
+            { text: 'Edit', onPress: () => editRelationship(existingRelationship) },
+          ];
+
         showAlert(alertTitle, alertMessage, alertButtons);
         return;
       }
-      
+
       // Set the selected contact for the relationship form
       setSelectedContact(newContact);
-      
+
       // Populate form fields with contact data
       setEditContactPhone(deviceContact?.phoneNumbers?.[0]?.number || '');
       setEditContactEmail(deviceContact?.emails?.[0]?.email || '');
@@ -589,13 +591,13 @@ export default function RelationshipsScreen() {
       setEditContactCompany(deviceContact?.company || '');
       setEditContactJobTitle(deviceContact?.jobTitle || '');
       setEditContactAddress(deviceContact?.addresses?.[0]?.street || '');
-      setEditContactBirthday(deviceContact?.birthday ? 
+      setEditContactBirthday(deviceContact?.birthday ?
         `${deviceContact.birthday.month}/${deviceContact.birthday.day}/${deviceContact.birthday.year}` : '');
       setEditContactNotes(deviceContact?.note || '');
-      
+
       setShowContactList(false);
       setShowAddModal(true);
-      
+
     } catch (error) {
       console.error('Error selecting contact:', error);
       showAlert('Error', 'Failed to select contact');
@@ -604,7 +606,7 @@ export default function RelationshipsScreen() {
 
 
   const openAddRelationship = () => {
-    if(Platform.OS === "web"){
+    if (Platform.OS === "web") {
       setShowNewContactModal(true);
       return
     }
@@ -613,7 +615,7 @@ export default function RelationshipsScreen() {
       return;
     }
 
-    
+
     setShowContactList(true);
   };
 
@@ -655,23 +657,23 @@ export default function RelationshipsScreen() {
 
   const handleCall = async () => {
     if (!selectedRelationship) return;
-    
+
     // Try to get phone number from stored contact data first, then device contacts
     let phoneNumber = '';
-    
+
     if (selectedRelationship.contactData?.phoneNumbers && selectedRelationship.contactData.phoneNumbers.length > 0) {
       phoneNumber = selectedRelationship.contactData.phoneNumbers[0].number;
     } else {
       // Fallback to device contacts
-      const deviceContact = deviceContacts.find(contact => 
+      const deviceContact = deviceContacts.find(contact =>
         contact.name === selectedRelationship.contactName
       );
       phoneNumber = deviceContact?.phoneNumbers?.[0]?.number || '';
     }
-    
+
     if (phoneNumber) {
       const url = `tel:${phoneNumber}`;
-      
+
       try {
         const supported = await Linking.canOpenURL(url);
         if (supported) {
@@ -692,23 +694,23 @@ export default function RelationshipsScreen() {
 
   const handleMessage = async () => {
     if (!selectedRelationship) return;
-    
+
     // Try to get phone number from stored contact data first, then device contacts
     let phoneNumber = '';
-    
+
     if (selectedRelationship.contactData?.phoneNumbers && selectedRelationship.contactData.phoneNumbers.length > 0) {
       phoneNumber = selectedRelationship.contactData.phoneNumbers[0].number;
     } else {
       // Fallback to device contacts
-      const deviceContact = deviceContacts.find(contact => 
+      const deviceContact = deviceContacts.find(contact =>
         contact.name === selectedRelationship.contactName
       );
       phoneNumber = deviceContact?.phoneNumbers?.[0]?.number || '';
     }
-    
+
     if (phoneNumber) {
       const url = `sms:${phoneNumber}`;
-      
+
       try {
         const supported = await Linking.canOpenURL(url);
         if (supported) {
@@ -729,28 +731,28 @@ export default function RelationshipsScreen() {
 
   const handleWhatsApp = async () => {
     if (!selectedRelationship) return;
-    
+
     // Try to get phone number from stored contact data first, then device contacts
     let phoneNumber = '';
-    
+
     if (selectedRelationship.contactData?.phoneNumbers && selectedRelationship.contactData.phoneNumbers.length > 0) {
       phoneNumber = selectedRelationship.contactData.phoneNumbers[0].number;
     } else {
       // Fallback to device contacts
-      const deviceContact = deviceContacts.find(contact => 
+      const deviceContact = deviceContacts.find(contact =>
         contact.name === selectedRelationship.contactName
       );
       phoneNumber = deviceContact?.phoneNumbers?.[0]?.number || '';
     }
-    
+
     if (phoneNumber) {
       const cleanPhoneNumber = phoneNumber.replace(/\D/g, ''); // Remove non-digits
-      
+
       // Use different URL schemes for web vs mobile
-      const url = Platform.OS === 'web' 
+      const url = Platform.OS === 'web'
         ? `https://wa.me/${cleanPhoneNumber}`
         : `whatsapp://send?phone=${cleanPhoneNumber}`;
-      
+
       try {
         const supported = await Linking.canOpenURL(url);
         if (supported) {
@@ -771,23 +773,23 @@ export default function RelationshipsScreen() {
 
   const handleEmail = async () => {
     if (!selectedRelationship) return;
-    
+
     // Try to get email from stored contact data first, then device contacts
     let email = '';
-    
+
     if (selectedRelationship.contactData?.emails && selectedRelationship.contactData.emails.length > 0) {
       email = selectedRelationship.contactData.emails[0].email;
     } else {
       // Fallback to device contacts
-      const deviceContact = deviceContacts.find(contact => 
+      const deviceContact = deviceContacts.find(contact =>
         contact.name === selectedRelationship.contactName
       );
       email = deviceContact?.emails?.[0]?.email || '';
     }
-    
+
     if (email) {
       const url = `mailto:${email}`;
-      
+
       try {
         const supported = await Linking.canOpenURL(url);
         if (supported) {
@@ -808,10 +810,10 @@ export default function RelationshipsScreen() {
 
   const handleFindOnX = async () => {
     if (!selectedRelationship) return;
-    
+
     const searchQuery = encodeURIComponent(selectedRelationship.contactName);
     const url = `https://x.com/search?q=${searchQuery}`;
-    
+
     try {
       await Linking.openURL(url);
       setShowMoreActions(false);
@@ -824,10 +826,10 @@ export default function RelationshipsScreen() {
 
   const handleFindOnLinkedIn = async () => {
     if (!selectedRelationship) return;
-    
+
     const searchQuery = encodeURIComponent(selectedRelationship.contactName);
     const url = `https://www.linkedin.com/search/results/people/?keywords=${searchQuery}`;
-    
+
     try {
       // Try to open the URL directly
       await Linking.openURL(url);
@@ -849,10 +851,10 @@ export default function RelationshipsScreen() {
 
   const handleFindOnGoogle = async () => {
     if (!selectedRelationship) return;
-    
+
     const searchQuery = encodeURIComponent(selectedRelationship.contactName);
     const url = `https://www.google.com/search?q=${searchQuery}`;
-    
+
     try {
       await Linking.openURL(url);
       setShowMoreActions(false);
@@ -865,10 +867,10 @@ export default function RelationshipsScreen() {
 
   const handleFindOnFacebook = async () => {
     if (!selectedRelationship) return;
-    
+
     const searchQuery = encodeURIComponent(selectedRelationship.contactName);
     const url = `https://www.facebook.com/search/people/?q=${searchQuery}`;
-    
+
     try {
       await Linking.openURL(url);
       setShowMoreActions(false);
@@ -890,7 +892,7 @@ export default function RelationshipsScreen() {
 
   const handleShareRelationship = async () => {
     if (!selectedRelationship) return;
-    
+
     const shareText = `Contact: ${selectedRelationship.contactName}\n` +
       `Phone: ${selectedRelationship.contactData?.phoneNumbers?.[0]?.number || 'N/A'}\n` +
       `Email: ${selectedRelationship.contactData?.emails?.[0]?.email || 'N/A'}\n`;
@@ -927,7 +929,7 @@ export default function RelationshipsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              
+
               // Get all reminders for this relationship
               const relationshipReminders = activities
                 .filter(activity => activity.type === 'reminder' && activity.contactName === contactName)
@@ -988,7 +990,7 @@ export default function RelationshipsScreen() {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     tomorrow.setHours(9, 0, 0, 0);
-    
+
     setReminderNote('');
     setReminderDate(tomorrow);
     setReminderTime(tomorrow);
@@ -996,25 +998,25 @@ export default function RelationshipsScreen() {
 
   const handleCreateReminder = async () => {
     if (!selectedRelationship || !currentUser) return;
-    
-    
+
+
     // Validation: Check if note is not empty
     if (!reminderNote || reminderNote.trim() === '') {
       showAlert('Validation Error', 'Please enter a note for the reminder.');
       return;
     }
-    
+
     // Validation: Check if reminder date/time is in the future
     const combinedDateTime = new Date(reminderDate);
     combinedDateTime.setHours(reminderTime.getHours());
     combinedDateTime.setMinutes(reminderTime.getMinutes());
-    
+
     const now = new Date();
     if (combinedDateTime <= now) {
       showAlert('Validation Error', 'Please select a future date and time for the reminder.');
       return;
     }
-    
+
     try {
       // Create a new reminder for this relationship
       const newReminder = await createReminder({
@@ -1027,7 +1029,7 @@ export default function RelationshipsScreen() {
         tags: selectedRelationship.tags,
         notes: reminderNote.trim(),
       });
-      
+
       setShowAddReminderModal(false);
       showAlert('Success', 'Reminder added successfully!');
     } catch (error) {
@@ -1054,31 +1056,33 @@ export default function RelationshipsScreen() {
     // Check if relationship already exists
     const existingRelationship = relationships.find(r => r.contactId === contact.id);
     if (existingRelationship) {
-      const alertTitle = Platform.OS === 'web' 
-        ? 'Relationship Already Exists' 
+      const alertTitle = Platform.OS === 'web'
+        ? 'Relationship Already Exists'
         : 'Relationship Exists';
-      
+
       const alertMessage = Platform.OS === 'web'
         ? `You already have a relationship with "${contact.name}". Would you like to edit the existing relationship or create a new one?`
         : `You already have a relationship with ${contact.name}. Would you like to edit it?`;
-      
+
       const alertButtons = Platform.OS === 'web'
         ? [
-            { text: 'Cancel', style: 'cancel' as const },
-            { text: 'Edit Existing', onPress: () => editRelationship(existingRelationship) },
-            { text: 'Create New', onPress: () => {
+          { text: 'Cancel', style: 'cancel' as const },
+          { text: 'Edit Existing', onPress: () => editRelationship(existingRelationship) },
+          {
+            text: 'Create New', onPress: () => {
               // Allow creating a new relationship with a different name
               const newName = `${contact.name} (${new Date().getFullYear()})`;
               setSelectedContact({ ...contact, name: newName, id: `new_${Date.now()}` });
               setShowContactList(false);
               setShowAddModal(true);
-            }},
-          ]
+            }
+          },
+        ]
         : [
-            { text: 'Cancel', style: 'cancel' as const },
-            { text: 'Edit', onPress: () => editRelationship(existingRelationship) },
-          ];
-      
+          { text: 'Cancel', style: 'cancel' as const },
+          { text: 'Edit', onPress: () => editRelationship(existingRelationship) },
+        ];
+
       showAlert(alertTitle, alertMessage, alertButtons);
       return;
     }
@@ -1089,26 +1093,26 @@ export default function RelationshipsScreen() {
   };
 
   const editRelationship = (relationship: Relationship) => {
-    
+
     // Check each tag individually
     relationship.tags?.forEach((tag, index) => {
       // Tag validation logic
     });
-    
+
     // Filter tags first
     const filteredTags = relationship.tags?.filter(tag => predefinedTags.includes(tag)) || [];
-    
+
     // Use stored contact data from relationship, fallback to device contact if not available
-    const deviceContact = deviceContacts.find(contact => 
+    const deviceContact = deviceContacts.find(contact =>
       contact.name === relationship.contactName
     );
-    
+
     // Get contact data from relationship or fallback to device contact
     const contactData = relationship.contactData || {};
-    
+
     // Set all form data including tags
-    setSelectedContact({ 
-      id: relationship.contactId, 
+    setSelectedContact({
+      id: relationship.contactId,
       name: relationship.contactName,
       phoneNumbers: contactData.phoneNumbers || deviceContact?.phoneNumbers?.map(p => ({ number: p.number || '', label: p.label })) || [],
       emails: contactData.emails || deviceContact?.emails?.map(e => ({ email: e.email || '', label: e.label })) || [],
@@ -1120,11 +1124,11 @@ export default function RelationshipsScreen() {
       company: contactData.company || deviceContact?.company || '',
       jobTitle: contactData.jobTitle || deviceContact?.jobTitle || '',
       address: contactData.address || deviceContact?.addresses?.[0]?.street || '',
-      birthday: contactData.birthday || (deviceContact?.birthday ? 
+      birthday: contactData.birthday || (deviceContact?.birthday ?
         `${deviceContact.birthday.month}/${deviceContact.birthday.day}/${deviceContact.birthday.year}` : ''),
       notes: contactData.notes || deviceContact?.note || '',
     });
-    
+
     // Set contact edit fields from stored contact data or device contact
     setEditContactPhone(contactData.phoneNumbers?.[0]?.number || deviceContact?.phoneNumbers?.[0]?.number || '');
     setEditContactEmail(contactData.emails?.[0]?.email || deviceContact?.emails?.[0]?.email || '');
@@ -1136,10 +1140,10 @@ export default function RelationshipsScreen() {
     setEditContactCompany(contactData.company || deviceContact?.company || '');
     setEditContactJobTitle(contactData.jobTitle || deviceContact?.jobTitle || '');
     setEditContactAddress(contactData.address || deviceContact?.addresses?.[0]?.street || '');
-    setEditContactBirthday(contactData.birthday || (deviceContact?.birthday ? 
+    setEditContactBirthday(contactData.birthday || (deviceContact?.birthday ?
       `${deviceContact.birthday.month}/${deviceContact.birthday.day}/${deviceContact.birthday.year}` : ''));
     setEditContactNotes(contactData.notes || deviceContact?.note || '');
-    
+
     const lastContactOption = getLastContactOptionFromDate(relationship.lastContactDate);
     setLastContactOption(lastContactOption);
     setContactMethod(relationship.lastContactMethod as ContactMethod);
@@ -1147,7 +1151,7 @@ export default function RelationshipsScreen() {
     setNotes(relationship.notes);
     setFamilyInfo(relationship.familyInfo);
     setTagsForEditing(filteredTags); // Set tags using stable function
-    
+
     // Set custom date if last contact option is custom
     if (lastContactOption === 'custom') {
       const lastContactDate = new Date(relationship.lastContactDate);
@@ -1155,7 +1159,7 @@ export default function RelationshipsScreen() {
     } else {
       setCustomDate('');
     }
-    
+
     setShowContactList(false);
     setShowAddModal(true);
   };
@@ -1177,9 +1181,9 @@ export default function RelationshipsScreen() {
 
   const calculateNextReminderDate = (lastDate: Date, frequency: ReminderFrequency): string => {
     if (frequency === 'never') return '';
-    
+
     const nextDate = new Date(lastDate);
-    
+
     switch (frequency) {
       case 'week':
         nextDate.setDate(nextDate.getDate() + 7);
@@ -1194,13 +1198,13 @@ export default function RelationshipsScreen() {
         nextDate.setMonth(nextDate.getMonth() + 6);
         break;
     }
-    
+
     return nextDate.toISOString();
   };
 
   const getLastContactDate = (option: LastContactOption): Date => {
     const today = new Date();
-    
+
     switch (option) {
       case 'today': return today;
       case 'yesterday':
@@ -1233,7 +1237,7 @@ export default function RelationshipsScreen() {
     setNotes('');
     setFamilyInfo({ kids: '', siblings: '', spouse: '' });
     setCustomDate('');
-    
+
     // Reset contact edit fields
     setEditContactPhone('');
     setEditContactEmail('');
@@ -1250,8 +1254,8 @@ export default function RelationshipsScreen() {
   };
 
   const toggleTag = (tag: string) => {
-    setSelectedTags(prev => 
-      prev.includes(tag) 
+    setSelectedTags(prev =>
+      prev.includes(tag)
         ? prev.filter(t => t !== tag)
         : [...prev, tag]
     );
@@ -1315,7 +1319,7 @@ export default function RelationshipsScreen() {
       return contact;
     } catch (error) {
       console.error('❌ Error creating web contact:', error);
-      
+
       // Provide more specific error messages based on the error type
       if (error instanceof Error) {
         if (error.message.includes('not supported')) {
@@ -1349,41 +1353,41 @@ export default function RelationshipsScreen() {
 
   const validateContactURL = (url: string): boolean => {
     if (!url) return true; // Empty URL is valid (optional field)
-    
+
     // Clean the URL
     let cleanUrl = url.trim();
-    
+
     // Add protocol if missing
     if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
       cleanUrl = `https://${cleanUrl}`;
     }
-    
+
     try {
       const urlObj = new URL(cleanUrl);
-      
+
       // Check if it's a valid protocol
       if (!['http:', 'https:'].includes(urlObj.protocol)) {
         return false;
       }
-      
+
       // Check if hostname is valid (not empty and has at least one dot for domain)
       if (!urlObj.hostname || !urlObj.hostname.includes('.')) {
         return false;
       }
-      
+
       // Check for valid domain structure
       const domainParts = urlObj.hostname.split('.');
       if (domainParts.length < 2) {
         return false;
       }
-      
+
       // Check that each part of the domain is not empty
       for (const part of domainParts) {
         if (!part || part.length === 0) {
           return false;
         }
       }
-      
+
       return true;
     } catch {
       return false;
@@ -1394,14 +1398,14 @@ export default function RelationshipsScreen() {
     if (!birthday) return true; // Empty birthday is valid (optional field)
     const dateRegex = /^(0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01])\/\d{4}$/;
     if (!dateRegex.test(birthday)) return false;
-    
+
     const [month, day, year] = birthday.split('/').map(Number);
     const date = new Date(year, month - 1, day);
-    return date.getFullYear() === year && 
-           date.getMonth() === month - 1 && 
-           date.getDate() === day &&
-           year >= 1900 && 
-           year <= new Date().getFullYear();
+    return date.getFullYear() === year &&
+      date.getMonth() === month - 1 &&
+      date.getDate() === day &&
+      year >= 1900 &&
+      year <= new Date().getFullYear();
   };
 
   const validateContactForm = (): boolean => {
@@ -1435,7 +1439,7 @@ export default function RelationshipsScreen() {
       // Twitter can be either a handle (@username) or URL
       const isHandle = newContactTwitter.startsWith('@');
       const isURL = newContactTwitter.startsWith('http') || newContactTwitter.includes('.');
-      
+
       if (!isHandle && !isURL) {
         errors.contactTwitter = 'Please enter a valid Twitter handle (@username) or URL';
       } else if (isURL && !validateContactURL(newContactTwitter)) {
@@ -1453,7 +1457,7 @@ export default function RelationshipsScreen() {
       // Instagram can be either a handle (@username) or URL
       const isHandle = newContactInstagram.startsWith('@');
       const isURL = newContactInstagram.startsWith('http') || newContactInstagram.includes('.');
-      
+
       if (!isHandle && !isURL) {
         errors.contactInstagram = 'Please enter a valid Instagram handle (@username) or URL';
       } else if (isURL && !validateContactURL(newContactInstagram)) {
@@ -1619,7 +1623,7 @@ export default function RelationshipsScreen() {
     }
 
     try {
-      
+
       // Create update object with proper Expo Contacts structure
       const updatedContact: any = {
         id: (contact as any).id,
@@ -1680,7 +1684,7 @@ export default function RelationshipsScreen() {
       if (contactData[Contacts.Fields.Note]) {
         updatedContact.note = contactData[Contacts.Fields.Note];
       }
-      
+
       await Contacts.updateContactAsync(updatedContact);
       return true;
     } catch (error) {
@@ -1693,35 +1697,37 @@ export default function RelationshipsScreen() {
   const proceedWithContactCreation = async () => {
 
     // Check if relationship already exists by name
-    const existingRelationship = relationships.find(r => 
+    const existingRelationship = relationships.find(r =>
       r.contactName.toLowerCase() === newContactName.trim().toLowerCase()
     );
-    
+
     if (existingRelationship) {
-      const alertTitle = Platform.OS === 'web' 
-        ? 'Relationship Already Exists' 
+      const alertTitle = Platform.OS === 'web'
+        ? 'Relationship Already Exists'
         : 'Relationship Exists';
-      
+
       const alertMessage = Platform.OS === 'web'
         ? `You already have a relationship with "${newContactName.trim()}". Would you like to edit the existing relationship or create a new one?`
         : `You already have a relationship with ${newContactName.trim()}. Would you like to edit it?`;
-      
+
       const alertButtons = Platform.OS === 'web'
         ? [
-            { text: 'Cancel', style: 'cancel' as const },
-            { text: 'Edit Existing', onPress: () => editRelationship(existingRelationship) },
-            { text: 'Create New', onPress: () => {
+          { text: 'Cancel', style: 'cancel' as const },
+          { text: 'Edit Existing', onPress: () => editRelationship(existingRelationship) },
+          {
+            text: 'Create New', onPress: () => {
               // Allow creating a new relationship with a different name
               const newName = `${newContactName.trim()} (${new Date().getFullYear()})`;
               setNewContactName(newName);
               // Continue with the creation process
-            }},
-          ]
+            }
+          },
+        ]
         : [
-            { text: 'Cancel', style: 'cancel' as const },
-            { text: 'Edit', onPress: () => editRelationship(existingRelationship) },
-          ];
-      
+          { text: 'Cancel', style: 'cancel' as const },
+          { text: 'Edit', onPress: () => editRelationship(existingRelationship) },
+        ];
+
       showAlert(alertTitle, alertMessage, alertButtons);
       return;
     }
@@ -1743,8 +1749,8 @@ export default function RelationshipsScreen() {
 
         // Add phone number if provided
         if (newContactPhone.trim()) {
-          contactData[Contacts.Fields.PhoneNumbers] = [{ 
-            number: newContactPhone.trim(), 
+          contactData[Contacts.Fields.PhoneNumbers] = [{
+            number: newContactPhone.trim(),
             label: 'mobile',
             isPrimary: true
           }];
@@ -1752,8 +1758,8 @@ export default function RelationshipsScreen() {
 
         // Add email if provided
         if (newContactEmail.trim()) {
-          contactData[Contacts.Fields.Emails] = [{ 
-            email: newContactEmail.trim(), 
+          contactData[Contacts.Fields.Emails] = [{
+            email: newContactEmail.trim(),
             label: 'work',
             isPrimary: true
           }];
@@ -1767,8 +1773,8 @@ export default function RelationshipsScreen() {
 
         // Add address if provided
         if (newContactAddress.trim()) {
-          contactData[Contacts.Fields.Addresses] = [{ 
-            street: newContactAddress.trim(), 
+          contactData[Contacts.Fields.Addresses] = [{
+            street: newContactAddress.trim(),
             label: 'home',
             isPrimary: true
           }];
@@ -1776,9 +1782,9 @@ export default function RelationshipsScreen() {
 
         // Add birthday if provided
         if (newContactBirthday.trim()) {
-          contactData[Contacts.Fields.Birthday] = { 
-            day: 1, 
-            month: 1, 
+          contactData[Contacts.Fields.Birthday] = {
+            day: 1,
+            month: 1,
             year: new Date().getFullYear() // Default year, user can edit later
           };
         }
@@ -1807,7 +1813,7 @@ export default function RelationshipsScreen() {
         } catch (contactError) {
           console.error('❌ Error adding contact to device:', contactError);
           console.error('❌ Contact data that failed:', contactData);
-          
+
           // Show platform-specific error messages
           if (Platform.OS === 'web') {
             const errorMessage = contactError instanceof Error ? contactError.message : 'Unknown error';
@@ -1851,7 +1857,7 @@ export default function RelationshipsScreen() {
 
       // Set the new contact as selected and open the relationship form
       setSelectedContact(newContact);
-      
+
       // Populate form fields with the new contact data
       setEditContactPhone(newContactPhone.trim());
       setEditContactEmail(newContactEmail.trim());
@@ -1865,7 +1871,7 @@ export default function RelationshipsScreen() {
       setEditContactAddress(newContactAddress.trim());
       setEditContactBirthday(newContactBirthday.trim());
       setEditContactNotes(newContactNotes.trim());
-      
+
       setShowNewContactModal(false);
       setShowAddModal(true);
 
@@ -1884,15 +1890,15 @@ export default function RelationshipsScreen() {
       setNewContactBirthday('');
       setNewContactNotes('');
 
-      const successMessage = Platform.OS === 'web' 
+      const successMessage = Platform.OS === 'web'
         ? 'Contact created and ready for relationship setup!'
-        : hasPermission 
+        : hasPermission
           ? 'Contact created and added to device contacts!'
           : 'Contact created! (Device contact access not granted)';
       showAlert('Success', successMessage);
     } catch (error) {
       console.error('Error creating contact:', error);
-      
+
       // Show platform-specific error messages
       if (Platform.OS === 'web') {
         showAlert(
@@ -1909,7 +1915,7 @@ export default function RelationshipsScreen() {
   // Get activities for the selected relationship - Memoized for performance
   const contactActivities = useMemo(() => {
     if (!selectedRelationship) return [];
-    
+
     // Filter activities that are related to this contact
     const contactActivities = activities.filter(activity => {
       if (activity.type === 'interaction' || activity.type === 'reminder') {
@@ -1920,8 +1926,8 @@ export default function RelationshipsScreen() {
         const noteActivity = activity as any;
         // Check if note has contact information and matches
         if (noteActivity.contactId || noteActivity.contactName) {
-          return noteActivity.contactId === selectedRelationship.contactId || 
-                 noteActivity.contactName === selectedRelationship.contactName;
+          return noteActivity.contactId === selectedRelationship.contactId ||
+            noteActivity.contactName === selectedRelationship.contactName;
         }
         // For notes without contact info, we'll show them for now (backward compatibility)
         // In the future, you might want to filter these out or handle them differently
@@ -1934,7 +1940,7 @@ export default function RelationshipsScreen() {
     if (activityFilter === 'all') {
       return contactActivities;
     }
-    
+
     return contactActivities.filter(activity => activity.type === activityFilter);
   }, [selectedRelationship, activities, activityFilter]);
 
@@ -1956,20 +1962,20 @@ export default function RelationshipsScreen() {
 
   const saveNote = async () => {
     if (!selectedRelationship || !currentUser) return;
-    
+
     if (!validateNoteForm()) {
       return;
     }
-    
+
     try {
       await updateRelationship(selectedRelationship.id, { notes: editedNote });
-      
+
       // Update the selected relationship state to reflect the changes immediately
       setSelectedRelationship(prev => prev ? {
         ...prev,
         notes: editedNote,
       } : null);
-      
+
       setShowEditNoteModal(false);
       setEditedNote('');
     } catch (error) {
@@ -1995,20 +2001,20 @@ export default function RelationshipsScreen() {
 
   const saveFamilyInfo = async () => {
     if (!selectedRelationship || !currentUser) return;
-    
+
     if (!validateFamilyInfoForm()) {
       return;
     }
-    
+
     try {
       await updateRelationship(selectedRelationship.id, { familyInfo: editedFamilyInfo });
-      
+
       // Update the selected relationship state to reflect the changes immediately
       setSelectedRelationship(prev => prev ? {
         ...prev,
         familyInfo: editedFamilyInfo,
       } : null);
-      
+
       setShowEditFamilyInfoModal(false);
       setEditedFamilyInfo({ kids: '', siblings: '', spouse: '' });
     } catch (error) {
@@ -2212,12 +2218,12 @@ export default function RelationshipsScreen() {
         contactId: selectedRelationship.contactId,
         contactName: selectedRelationship.contactName,
       });
-      
+
       showAlert('Success', 'Note activity created successfully!');
       closeAddActivityModal();
     } catch (error) {
       console.error('Error creating note activity:', error);
-      
+
       // Show platform-specific error messages
       if (Platform.OS === 'web') {
         showAlert(
@@ -2252,21 +2258,21 @@ export default function RelationshipsScreen() {
       // Check if this interaction is more recent than the current lastContactDate
       const currentLastContactDate = new Date(selectedRelationship.lastContactDate);
       const newInteractionDate = new Date(interactionDate);
-      
+
       if (newInteractionDate > currentLastContactDate) {
         // Update the relationship with the new last contact information
         await updateRelationship(selectedRelationship.id, {
           lastContactDate: newInteractionDate.toISOString(),
           lastContactMethod: interactionType,
         });
-        
+
         // Update the selected relationship state to reflect the changes
         setSelectedRelationship(prev => prev ? {
           ...prev,
           lastContactDate: newInteractionDate.toISOString(),
           lastContactMethod: interactionType,
         } : null);
-        
+
         showAlert('Success', 'Interaction activity created and last contact date updated!');
       } else {
         showAlert('Success', 'Interaction activity created! (Last contact date not updated - this interaction is older than the current last contact)');
@@ -2274,7 +2280,7 @@ export default function RelationshipsScreen() {
       closeAddActivityModal();
     } catch (error) {
       console.error('Error creating interaction activity:', error);
-      
+
       // Show platform-specific error messages
       if (Platform.OS === 'web') {
         showAlert(
@@ -2316,12 +2322,12 @@ export default function RelationshipsScreen() {
         tags: [],
         notes: activityReminderNotes,
       });
-      
+
       showAlert('Success', 'Reminder activity created and scheduled successfully!');
       closeAddActivityModal();
     } catch (error) {
       console.error('Error creating reminder activity:', error);
-      
+
       // Show platform-specific error messages
       if (Platform.OS === 'web') {
         showAlert(
@@ -2361,9 +2367,9 @@ export default function RelationshipsScreen() {
   // Render activity filter dropdown
   const renderActivityDropdown = () => {
     const selectedOption = activityFilterOptions.find(option => option.key === activityFilter);
-    
+
     return (
-      <View 
+      <View
         style={styles.dropdownContainer}
         onTouchStart={(e) => {
           // Prevent event propagation when dropdown is open
@@ -2372,7 +2378,7 @@ export default function RelationshipsScreen() {
           }
         }}
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.dropdownButton}
           onPress={() => {
             // Determine if dropdown should open above or below
@@ -2390,9 +2396,9 @@ export default function RelationshipsScreen() {
             ▼
           </Text>
         </TouchableOpacity>
-        
+
         {showActivityDropdown && (
-          <View 
+          <View
             style={[
               styles.dropdownMenu,
               dropdownPosition === 'above' && styles.dropdownMenuAbove
@@ -2402,7 +2408,7 @@ export default function RelationshipsScreen() {
               e.stopPropagation();
             }}
           >
-            <ScrollView 
+            <ScrollView
               style={styles.dropdownScrollView}
               showsVerticalScrollIndicator={false}
               nestedScrollEnabled={true}
@@ -2493,9 +2499,9 @@ export default function RelationshipsScreen() {
       } else {
         date = new Date(); // Fallback
       }
-      
-      return date.toLocaleDateString('en-US', { 
-        month: 'short', 
+
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
@@ -2503,11 +2509,11 @@ export default function RelationshipsScreen() {
     };
 
     return (
-      <TouchableOpacity 
-        key={activity.id} 
+      <TouchableOpacity
+        key={activity.id}
         style={styles.activityCard}
         onPress={() => {
-          if(activity.type !== "reminder"){
+          if (activity.type !== "reminder") {
             if (fromDetailModal) {
               openEditActivityModalFromDetail(activity);
             } else {
@@ -2527,20 +2533,20 @@ export default function RelationshipsScreen() {
         <View style={styles.activityContent}>
           <View style={styles.activityCardHeader}>
             <Text style={styles.activityCardTitle}>{getActivityTitle()}</Text>
-            
+
           </View>
           <Text style={styles.activityCardSubtitle}>{getActivitySubtitle()}</Text>
         </View>
         <View style={styles.activityActions}>
           <Text style={styles.activityTime}>{getActivityTime()}</Text>
-          
+
         </View>
       </TouchableOpacity>
     );
   }, []);
 
   const renderRelationship = useCallback(({ item }: { item: Relationship }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.relationshipCard}
       onPress={() => showRelationshipDetails(item)}
       onLongPress={() => handleDeleteRelationship(item.id, item.contactName)}
@@ -2550,7 +2556,7 @@ export default function RelationshipsScreen() {
         <Text style={styles.contactName}>{item.contactName}</Text>
         <ChevronRight size={16} color="#9CA3AF" />
       </View>
-      
+
       <View style={styles.tags}>
         {item.tags.slice(0, 3).map((tag, index) => (
           <View key={`${tag}-${index}`} style={styles.tag}>
@@ -2563,7 +2569,7 @@ export default function RelationshipsScreen() {
           </View>
         )}
       </View>
-      
+
       <View style={styles.relationshipDetails}>
         <View style={styles.detailRow}>
           <Calendar size={14} color="#6B7280" />
@@ -2571,7 +2577,7 @@ export default function RelationshipsScreen() {
             Last contact: {formatDate(item.lastContactDate)}
           </Text>
         </View>
-        
+
         <View style={styles.detailRow}>
           {item.lastContactMethod === 'call' && <Phone size={14} color="#6B7280" />}
           {item.lastContactMethod === 'text' && <MessageCircle size={14} color="#6B7280" />}
@@ -2581,7 +2587,7 @@ export default function RelationshipsScreen() {
             Via {item.lastContactMethod.replace('inPerson', 'in person')}
           </Text>
         </View>
-        
+
         {item.nextReminderDate && (
           <View style={styles.detailRow}>
             <Calendar size={14} color="#10B981" />
@@ -2591,7 +2597,7 @@ export default function RelationshipsScreen() {
           </View>
         )}
       </View>
-      
+
       {item.notes && (
         <Text style={styles.notes} numberOfLines={2}>{item.notes}</Text>
       )}
@@ -2599,8 +2605,8 @@ export default function RelationshipsScreen() {
   ), []);
 
   const renderDeviceContact = useCallback(({ item }: { item: Contacts.Contact }) => (
-    <TouchableOpacity 
-      style={styles.contactItem} 
+    <TouchableOpacity
+      style={styles.contactItem}
       onPress={() => handleDeviceContactSelect(item)}
       activeOpacity={0.7}
     >
@@ -2660,10 +2666,10 @@ export default function RelationshipsScreen() {
           </TouchableOpacity>
           <Text style={styles.title}>Relationships</Text>
         </View>
-        
+
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity 
-            style={[styles.filterButton, selectedTagFilter !== 'all' && styles.activeFilterButton]} 
+          <TouchableOpacity
+            style={[styles.filterButton, selectedTagFilter !== 'all' && styles.activeFilterButton]}
             onPress={openTagFilters}
           >
             <Filter size={20} color={selectedTagFilter !== 'all' ? '#ffffff' : '#6B7280'} />
@@ -2671,16 +2677,16 @@ export default function RelationshipsScreen() {
           <TouchableOpacity style={styles.addButton} onPress={openAddRelationship}>
             <Plus size={20} color="#ffffff" />
           </TouchableOpacity>
-        </View> 
-       
+        </View>
+
       </View>
 
       {/* Status Bar */}
       <View style={styles.statusBar}>
         <Text style={styles.statusText}>
-          {isLoadingRelationships ? 'Loading...' : 
-           !currentUser ? 'Not logged in' : 
-           `Found ${filteredRelationships.length} relationships`}
+          {isLoadingRelationships ? 'Loading...' :
+            !currentUser ? 'Not logged in' :
+              `Found ${filteredRelationships.length} relationships`}
         </Text>
       </View>
 
@@ -2731,8 +2737,8 @@ export default function RelationshipsScreen() {
       </View>
 
       {/* Contact Selection Modal */}
-      <Modal 
-        visible={showContactList} 
+      <Modal
+        visible={showContactList}
         animationType="slide"
         presentationStyle="pageSheet"
         statusBarTranslucent={false}
@@ -2741,7 +2747,7 @@ export default function RelationshipsScreen() {
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Select Contact</Text>
             <View style={styles.headerActions}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.createNewButton}
                 onPress={() => {
                   setShowContactList(false);
@@ -2756,7 +2762,7 @@ export default function RelationshipsScreen() {
               </TouchableOpacity>
             </View>
           </View>
-          
+
           <View style={styles.searchContainer}>
             <Search size={20} color="#6B7280" />
             <TextInput
@@ -2767,7 +2773,7 @@ export default function RelationshipsScreen() {
               placeholderTextColor="#9CA3AF"
             />
           </View>
-          
+
           {isLoadingDeviceContacts ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyTitle}>Loading device contacts...</Text>
@@ -2791,7 +2797,7 @@ export default function RelationshipsScreen() {
                 {contactSearchQuery ? 'No device contacts found' : 'No device contacts available'}
               </Text>
               <Text style={styles.emptySubtitle}>
-                {contactSearchQuery 
+                {contactSearchQuery
                   ? `No device contacts match "${contactSearchQuery}"`
                   : 'We use your contacts to sync your friends between our mobile and web apps. Your contacts will be securely uploaded to our server only with your consent.'
                 }
@@ -2807,8 +2813,8 @@ export default function RelationshipsScreen() {
       </Modal>
 
       {/* Create New Contact Modal */}
-      <Modal 
-        visible={showNewContactModal} 
+      <Modal
+        visible={showNewContactModal}
         animationType="slide"
         presentationStyle="pageSheet"
         statusBarTranslucent={false}
@@ -2823,11 +2829,11 @@ export default function RelationshipsScreen() {
               <X size={24} color="#6B7280" />
             </TouchableOpacity>
           </View>
-          
+
           <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Contact Information</Text>
-              
+
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Name *</Text>
                 <TextInput
@@ -3065,7 +3071,7 @@ export default function RelationshipsScreen() {
                 )}
               </View>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.saveButton, !newContactName.trim() && styles.saveButtonDisabled]}
                 onPress={createNewContactAndRelationship}
                 disabled={!newContactName.trim() || !newContactPhone}
@@ -3095,15 +3101,15 @@ export default function RelationshipsScreen() {
         visible={showEditModal}
         onClose={() => {
           setShowEditModal(false);
-          if(relationshipToEdit){
+          if (relationshipToEdit) {
             setShowRelationshipDetail(true);
           }
-          setRelationshipToEdit(null); 
+          setRelationshipToEdit(null);
         }}
         relationship={relationshipToEdit} // existing relationship means edit mode
         onRelationshipSaved={(updatedRelationship) => {
           setShowEditModal(false);
-          if(relationshipToEdit){
+          if (relationshipToEdit) {
             setShowRelationshipDetail(true);
             setSelectedRelationship(updatedRelationship);
           }
@@ -3113,13 +3119,13 @@ export default function RelationshipsScreen() {
       />
 
       {/* Relationship Detail Modal */}
-      <Modal 
-        visible={showRelationshipDetail} 
+      <Modal
+        visible={showRelationshipDetail}
         animationType="slide"
         presentationStyle="pageSheet"
         statusBarTranslucent={false}
       >
-        <SafeAreaView 
+        <SafeAreaView
           style={styles.detailModalContainer}
           edges={['top', 'left', 'right']}
         >
@@ -3131,8 +3137,8 @@ export default function RelationshipsScreen() {
               <Text style={styles.detailHeaderText}>⋯</Text>
             </TouchableOpacity>
           </View>
-          
-          <View 
+
+          <View
             style={styles.detailContent}
             onTouchStart={() => {
               // Close dropdown when tapping outside of it
@@ -3150,25 +3156,25 @@ export default function RelationshipsScreen() {
               </View>
               <Text style={styles.profileName}>{selectedRelationship?.contactName}</Text>
               <Text style={styles.profileCompany}>
-                {selectedRelationship?.contactData?.company || selectedRelationship?.contactData?.jobTitle 
+                {selectedRelationship?.contactData?.company || selectedRelationship?.contactData?.jobTitle
                   ? `${selectedRelationship?.contactData?.company || ''} ${selectedRelationship?.contactData?.jobTitle || ''}`.trim()
                   : 'No company info'
                 }
               </Text>
-              
-              
-              
-              
-              
-              
+
+
+
+
+
+
               <View style={styles.actionButtons}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.getInTouchButton}
                   onPress={openContactActions}
                 >
                   <Text style={styles.getInTouchText}>Get in touch</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.moreButton}
                   onPress={openMoreActions}
                 >
@@ -3176,7 +3182,7 @@ export default function RelationshipsScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-            
+
             {/* Tabs */}
             {/* <View style={styles.tabBar}>
               <TouchableOpacity style={styles.activeTab}>
@@ -3184,9 +3190,9 @@ export default function RelationshipsScreen() {
               </TouchableOpacity>
               
             </View> */}
-            
+
             {/* Content */}
-            <ScrollView 
+            <ScrollView
               style={styles.detailScrollView}
               showsVerticalScrollIndicator={true}
               bounces={true}
@@ -3205,7 +3211,7 @@ export default function RelationshipsScreen() {
                   {selectedRelationship?.notes || 'No notes added yet'}
                 </Text>
               </TouchableOpacity>
-              
+
               {/* Family Info Card */}
               <TouchableOpacity style={styles.noteCard} onPress={openEditFamilyInfoModal}>
                 <View style={styles.noteHeader}>
@@ -3215,7 +3221,7 @@ export default function RelationshipsScreen() {
                   <Text style={styles.noteTitle}>Family Info</Text>
                 </View>
                 <Text style={styles.noteContent}>
-                  {selectedRelationship?.familyInfo ? 
+                  {selectedRelationship?.familyInfo ?
                     `Kids: ${selectedRelationship.familyInfo.kids || 'Not specified'}\n` +
                     `Siblings: ${selectedRelationship.familyInfo.siblings || 'Not specified'}\n` +
                     `Spouse: ${selectedRelationship.familyInfo.spouse || 'Not specified'}` :
@@ -3223,14 +3229,14 @@ export default function RelationshipsScreen() {
                   }
                 </Text>
               </TouchableOpacity>
-              
+
               {/* Activity Section */}
               <View style={styles.activitySection}>
                 <View style={styles.activityHeader}>
                   <Text style={styles.activityTitle}>Activity</Text>
                   {renderActivityDropdown()}
                 </View>
-                
+
                 {/* Activity Cards - Use map for small lists, FlatList for large */}
                 {contactActivities.length > 0 ? (
                   contactActivities.length <= 20 ? (
@@ -3259,13 +3265,13 @@ export default function RelationshipsScreen() {
                 )}
               </View>
             </ScrollView>
-            
+
             {/* Bottom Input */}
             <View style={styles.bottomInput}>
               <TouchableOpacity style={styles.inputMenuButton} onPress={openAddActivityModalFromDetail}>
                 <Text style={styles.inputMenuText}>☰</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.inputField}
                 onPress={openAddActivityModalFromDetail}
               >
@@ -3286,7 +3292,7 @@ export default function RelationshipsScreen() {
                 <X size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
-            
+
             <View style={styles.frequencyOptions}>
               {reminderFrequencies.map((frequency) => (
                 <TouchableOpacity
@@ -3323,7 +3329,7 @@ export default function RelationshipsScreen() {
                 <X size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
-            
+
             <View style={styles.contactActionsList}>
               <TouchableOpacity style={styles.contactActionItem} onPress={handleCall}>
                 <View style={styles.contactActionIcon}>
@@ -3379,7 +3385,7 @@ export default function RelationshipsScreen() {
                 <X size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
-            
+
             <View style={styles.moreActionsList}>
               <TouchableOpacity style={styles.moreActionItem} onPress={handleFindOnLinkedIn}>
                 <View style={styles.moreActionIcon}>
@@ -3435,7 +3441,7 @@ export default function RelationshipsScreen() {
                 <X size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
-            
+
             <View style={styles.detailActionsList}>
               <TouchableOpacity style={styles.detailActionItem} onPress={handleEditRelationship}>
                 <View style={styles.detailActionIcon}>
@@ -3447,7 +3453,7 @@ export default function RelationshipsScreen() {
                 </View>
               </TouchableOpacity>
 
-              
+
 
               <TouchableOpacity style={styles.detailActionItem} onPress={handleShareRelationship}>
                 <View style={styles.detailActionIcon}>
@@ -3459,8 +3465,8 @@ export default function RelationshipsScreen() {
                 </View>
               </TouchableOpacity>
 
-              <TouchableOpacity 
-                style={styles.detailActionItem} 
+              <TouchableOpacity
+                style={styles.detailActionItem}
                 onPress={() => handleDeleteRelationship(selectedRelationship?.id || '', selectedRelationship?.contactName || '')}
               >
                 <View style={styles.detailActionIcon}>
@@ -3487,12 +3493,12 @@ export default function RelationshipsScreen() {
                 <X size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
-            
+
             <ScrollView style={styles.addReminderContent}>
               <View style={styles.reminderForm}>
                 <Text style={styles.reminderFormLabel}>Contact</Text>
                 <Text style={styles.reminderContactName}>{selectedRelationship?.contactName}</Text>
-                
+
                 <Text style={styles.reminderFormLabel}>Date</Text>
                 {Platform.OS === 'web' ? (
                   <View style={styles.webDateTimeInput}>
@@ -3518,7 +3524,7 @@ export default function RelationshipsScreen() {
                     />
                   </View>
                 ) : (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.dateTimeButton}
                     onPress={() => setShowDatePicker(true)}
                   >
@@ -3528,7 +3534,7 @@ export default function RelationshipsScreen() {
                     </Text>
                   </TouchableOpacity>
                 )}
-                
+
                 <Text style={styles.reminderFormLabel}>Time</Text>
                 {Platform.OS === 'web' ? (
                   <View style={styles.webDateTimeInput}>
@@ -3554,7 +3560,7 @@ export default function RelationshipsScreen() {
                     />
                   </View>
                 ) : (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.dateTimeButton}
                     onPress={() => setShowTimePicker(true)}
                   >
@@ -3564,7 +3570,7 @@ export default function RelationshipsScreen() {
                     </Text>
                   </TouchableOpacity>
                 )}
-                
+
                 <Text style={styles.reminderFormLabel}>Note *</Text>
                 <TextInput
                   style={styles.reminderNoteInput}
@@ -3577,15 +3583,15 @@ export default function RelationshipsScreen() {
                 />
               </View>
             </ScrollView>
-            
+
             <View style={styles.addReminderActions}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.cancelButton}
                 onPress={closeAddReminderModal}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.createReminderButton}
                 onPress={handleCreateReminder}
               >
@@ -3598,12 +3604,12 @@ export default function RelationshipsScreen() {
 
       {/* Edit Note Modal */}
       <Modal visible={showEditNoteModal} animationType="slide" transparent>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.editModalOverlay}
           activeOpacity={1}
           onPress={closeEditNoteModal}
         >
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.editModalContainer}
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
@@ -3617,7 +3623,7 @@ export default function RelationshipsScreen() {
                 <Text style={styles.editModalSaveButtonText}>Save</Text>
               </TouchableOpacity>
             </View>
-            
+
             <View style={styles.editModalContent}>
               <Text style={styles.editNoteLabel}>Note for {selectedRelationship?.contactName}</Text>
               <TextInput
@@ -3642,12 +3648,12 @@ export default function RelationshipsScreen() {
 
       {/* Edit Family Info Modal */}
       <Modal visible={showEditFamilyInfoModal} animationType="slide" transparent>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.editModalOverlay}
           activeOpacity={1}
           onPress={closeEditFamilyInfoModal}
         >
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.editModalContainer}
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
@@ -3661,12 +3667,12 @@ export default function RelationshipsScreen() {
                 <Text style={styles.editModalSaveButtonText}>Save</Text>
               </TouchableOpacity>
             </View>
-            
-            <ScrollView style={styles.editModalContent} contentContainerStyle={{paddingBottom: 24}} showsVerticalScrollIndicator={false}>
-              
+
+            <ScrollView style={styles.editModalContent} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+
               <Text style={styles.editFamilyInfoLabel}>Family information for {selectedRelationship?.contactName}</Text>
               <Text style={styles.editFamilyInfoSubtitle}>Add details about their family members</Text>
-              
+
               <View style={styles.familyInfoCard}>
                 <View style={styles.familyInfoField}>
                   <Text style={styles.familyInfoFieldLabel}>👶 Kids</Text>
@@ -3684,7 +3690,7 @@ export default function RelationshipsScreen() {
                     <Text style={styles.errorText}>{familyInfoValidationErrors.familyKids}</Text>
                   )}
                 </View>
-                
+
                 <View style={styles.familyInfoField}>
                   <Text style={styles.familyInfoFieldLabel}>👨‍👩‍👧‍👦 Siblings</Text>
                   <TextInput
@@ -3701,7 +3707,7 @@ export default function RelationshipsScreen() {
                     <Text style={styles.errorText}>{familyInfoValidationErrors.familySiblings}</Text>
                   )}
                 </View>
-                
+
                 <View style={styles.familyInfoField}>
                   <Text style={styles.familyInfoFieldLabel}>💍 Spouse</Text>
                   <TextInput
@@ -3815,7 +3821,7 @@ export default function RelationshipsScreen() {
                 <X size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
-            
+
             <ScrollView style={styles.filterModalContent}>
               {tagFilterOptions.map((option) => (
                 <TouchableOpacity
@@ -4272,7 +4278,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 10,
+    paddingTop: 20,
     paddingBottom: 20,
   },
   detailHeaderText: {
@@ -4411,7 +4417,7 @@ const styles = StyleSheet.create({
   detailScrollContent: {
     paddingBottom: 20,
     flexGrow: 1,
-    paddingTop:16
+    paddingTop: 16
   },
   noteCard: {
     backgroundColor: '#ffffff',
@@ -4779,7 +4785,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 8,
-    maxWidth:500
+    maxWidth: 500
   },
   editModalHeader: {
     flexDirection: 'row',
@@ -4865,7 +4871,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 8,
-    maxWidth:500
+    maxWidth: 500
   },
   addActivityHeader: {
     flexDirection: 'row',
@@ -4896,7 +4902,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   activityTypeTabs: {
-    minHeight:70,
+    minHeight: 70,
     flexDirection: 'row',
     backgroundColor: '#F1F5F9',
     marginHorizontal: 12,
@@ -5429,7 +5435,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   addReminderContainer: {
-    flex:1,
+    flex: 1,
     backgroundColor: '#ffffff',
     borderRadius: 20,
     width: '90%',

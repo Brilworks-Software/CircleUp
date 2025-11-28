@@ -18,7 +18,7 @@
     "build:android:production": "npx eas build --platform android --profile production --non-interactive",
     "build:ios:production": "eas build --platform ios --profile production --non-interactive",
     "submit:android:production": "npx eas submit --platform android --profile production --non-interactive",
-    "submit:ios:production": "npx eas submit --platform ios --profile production --non-interactive",
+    "submit:ios:production": "npx eas submit --platform ios --profile production --latest --non-interactive",
     "update:ios:production": "eas update --channel production"
   },
   "dependencies": {

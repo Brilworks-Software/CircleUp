@@ -50,7 +50,7 @@ export default function AddActivityModal({
   const { relationships, createRelationship } = useRelationships();
   const { createContact } = useContacts();
   const { currentUser } = useAuth();
-  
+
 
   // Load device contacts on mobile when modal opens
   useEffect(() => {
@@ -84,14 +84,14 @@ export default function AddActivityModal({
   const ensureRelationshipExists = async (contactName: string, deviceContact?: Contacts.Contact) => {
     try {
       // Check if relationship already exists
-      const existingRelationship = relationships.find(rel => 
+      const existingRelationship = relationships.find(rel =>
         rel.contactName.toLowerCase() === contactName.toLowerCase()
       );
-      
+
       if (existingRelationship) {
         return existingRelationship;
       }
-      
+
       // Create new relationship with comprehensive contact data
       const contactData = deviceContact ? {
         phoneNumbers: deviceContact.phoneNumbers?.map(phone => ({
@@ -103,23 +103,23 @@ export default function AddActivityModal({
           label: email.label || ''
         })) || [],
         // Extract website from URL addresses
-        website: deviceContact.urlAddresses?.find(url => 
+        website: deviceContact.urlAddresses?.find(url =>
           url.url && !url.url.includes('linkedin') && !url.url.includes('twitter') && !url.url.includes('facebook') && !url.url.includes('instagram')
         )?.url || '',
         // Extract social profiles
-        linkedin: deviceContact.urlAddresses?.find(url => url.url?.includes('linkedin'))?.url || 
-                 deviceContact.socialProfiles?.find(profile => profile.service?.toLowerCase() === 'linkedin')?.url || '',
+        linkedin: deviceContact.urlAddresses?.find(url => url.url?.includes('linkedin'))?.url ||
+          deviceContact.socialProfiles?.find(profile => profile.service?.toLowerCase() === 'linkedin')?.url || '',
         twitter: deviceContact.urlAddresses?.find(url => url.url?.includes('twitter'))?.url ||
-                deviceContact.socialProfiles?.find(profile => profile.service?.toLowerCase() === 'twitter')?.url || '',
+          deviceContact.socialProfiles?.find(profile => profile.service?.toLowerCase() === 'twitter')?.url || '',
         instagram: deviceContact.urlAddresses?.find(url => url.url?.includes('instagram'))?.url ||
-                  deviceContact.socialProfiles?.find(profile => profile.service?.toLowerCase() === 'instagram')?.url || '',
+          deviceContact.socialProfiles?.find(profile => profile.service?.toLowerCase() === 'instagram')?.url || '',
         facebook: deviceContact.urlAddresses?.find(url => url.url?.includes('facebook'))?.url ||
-                 deviceContact.socialProfiles?.find(profile => profile.service?.toLowerCase() === 'facebook')?.url || '',
+          deviceContact.socialProfiles?.find(profile => profile.service?.toLowerCase() === 'facebook')?.url || '',
         company: deviceContact.company || '',
         jobTitle: deviceContact.jobTitle || '',
-        address: deviceContact.addresses?.[0] ? 
+        address: deviceContact.addresses?.[0] ?
           `${deviceContact.addresses[0].street || ''} ${deviceContact.addresses[0].city || ''} ${deviceContact.addresses[0].region || ''} ${deviceContact.addresses[0].postalCode || ''}`.trim() : '',
-        birthday: deviceContact.birthday ? 
+        birthday: deviceContact.birthday ?
           `${(deviceContact.birthday.month || 1).toString().padStart(2, '0')}/${(deviceContact.birthday.day || 1).toString().padStart(2, '0')}/${deviceContact.birthday.year || new Date().getFullYear()}` : '',
         notes: deviceContact.note || '',
       } : {
@@ -136,7 +136,7 @@ export default function AddActivityModal({
         birthday: '',
         notes: '',
       };
-      
+
       const newRelationship = await createRelationship({
         contactId: (deviceContact as any)?.id || `contact_${Date.now()}`, // Use device contact ID if available
         contactName: contactName,
@@ -149,7 +149,7 @@ export default function AddActivityModal({
         familyInfo: { kids: '', siblings: '', spouse: '' },
         contactData,
       });
-      
+
       return newRelationship;
     } catch (error) {
       console.error('❌ Error creating relationship for:', contactName, error);
@@ -157,7 +157,7 @@ export default function AddActivityModal({
       return null;
     }
   };
-  
+
   const remindersService = RemindersService.getInstance();
   const [activeActivityTab, setActiveActivityTab] = useState<
     'note' | 'interaction' | 'reminder'
@@ -169,12 +169,12 @@ export default function AddActivityModal({
     id: string;
     name: string;
   } | null>(null);
-  
+
   // Direct contact search states
   const [showContactSearch, setShowContactSearch] = useState(false);
-  const [filteredContacts, setFilteredContacts] = useState<Array<{id: string; name: string}>>([]);
+  const [filteredContacts, setFilteredContacts] = useState<Array<{ id: string; name: string }>>([]);
   const searchContainerRef = useRef<any>(null);
-  
+
   // Device contacts state (for mobile)
   const [deviceContacts, setDeviceContacts] = useState<Contacts.Contact[]>([]);
   const [isLoadingDeviceContacts, setIsLoadingDeviceContacts] = useState(false);
@@ -363,12 +363,12 @@ export default function AddActivityModal({
 
   const handleContactSelect = async (contact: Contact) => {
     // Find the relationship that matches the selected contact
-    
-    
-    let relationship = relationships.find(rel => 
+
+
+    let relationship = relationships.find(rel =>
       rel.contactId === contact.id || rel.contactName === contact.name
     );
-    
+
     if (relationship) {
       // Use existing relationship
       setSelectedContact({ id: relationship.contactId, name: relationship.contactName });
@@ -410,18 +410,18 @@ export default function AddActivityModal({
           },
         };
 
-        
-        
+
+
 
         // Create the relationship in the database
         const createdRelationship = await createRelationship(newRelationship);
-        
+
         // Set the created relationship
         setSelectedContact({ id: createdRelationship.contactId, name: createdRelationship.contactName });
         setLocalContactName(createdRelationship.contactName);
         setContactSearchQuery(createdRelationship.contactName);
         setContactSearchError('');
-        
+
         Alert.alert('Success', 'Contact added to your relationships!');
       } catch (error) {
         console.error('Error creating relationship:', error);
@@ -540,7 +540,7 @@ export default function AddActivityModal({
       return contact;
     } catch (error) {
       console.error('❌ Error creating web contact:', error);
-      
+
       // Provide more specific error messages based on the error type
       if (error instanceof Error) {
         if (error.message.includes('not supported')) {
@@ -604,8 +604,8 @@ export default function AddActivityModal({
 
           // Add phone number if provided
           if (contactData.phoneNumbers.length > 0) {
-            deviceContactData[Contacts.Fields.PhoneNumbers] = contactData.phoneNumbers.map(phone => ({ 
-              number: phone.number, 
+            deviceContactData[Contacts.Fields.PhoneNumbers] = contactData.phoneNumbers.map(phone => ({
+              number: phone.number,
               label: 'mobile',
               isPrimary: true
             }));
@@ -613,8 +613,8 @@ export default function AddActivityModal({
 
           // Add email if provided
           if (contactData.emails.length > 0) {
-            deviceContactData[Contacts.Fields.Emails] = contactData.emails.map(email => ({ 
-              email: email.email, 
+            deviceContactData[Contacts.Fields.Emails] = contactData.emails.map(email => ({
+              email: email.email,
               label: 'work',
               isPrimary: true
             }));
@@ -628,8 +628,8 @@ export default function AddActivityModal({
 
           // Add address if provided
           if (contactData.address) {
-            deviceContactData[Contacts.Fields.Addresses] = [{ 
-              street: contactData.address, 
+            deviceContactData[Contacts.Fields.Addresses] = [{
+              street: contactData.address,
               label: 'home',
               isPrimary: true
             }];
@@ -637,9 +637,9 @@ export default function AddActivityModal({
 
           // Add birthday if provided
           if (contactData.birthday) {
-            deviceContactData[Contacts.Fields.Birthday] = { 
-              day: 1, 
-              month: 1, 
+            deviceContactData[Contacts.Fields.Birthday] = {
+              day: 1,
+              month: 1,
               year: new Date().getFullYear() // Default year, user can edit later
             };
           }
@@ -668,7 +668,7 @@ export default function AddActivityModal({
         } catch (contactError) {
           console.error('❌ Error adding contact to device:', contactError);
           console.error('❌ Contact data that failed:', contactData);
-          
+
           // Show platform-specific error messages
           if (Platform.OS === 'web') {
             const errorMessage = contactError instanceof Error ? contactError.message : 'Unknown error';
@@ -713,10 +713,10 @@ export default function AddActivityModal({
       setShowMainModel(true);
       resetNewContactForm();
 
-      const successMessage = deviceContactId 
+      const successMessage = deviceContactId
         ? 'New contact created in device and relationship created!'
         : 'New relationship created! (Device contact creation failed)';
-      
+
       Alert.alert('Success', successMessage);
     } catch (error) {
       console.error('Error creating new contact and relationship:', error);
@@ -726,11 +726,11 @@ export default function AddActivityModal({
 
   const handleTabSwitch = (tab: 'note' | 'interaction' | 'reminder') => {
     // Sync notes across all tabs before switching
-    const currentNotes = 
+    const currentNotes =
       activeActivityTab === 'note' ? noteContent :
-      activeActivityTab === 'interaction' ? interactionNotes :
-      activityReminderNotes;
-    
+        activeActivityTab === 'interaction' ? interactionNotes :
+          activityReminderNotes;
+
     // Apply the current notes to all tabs
     if (currentNotes) {
       if (tab === 'note') {
@@ -741,7 +741,7 @@ export default function AddActivityModal({
         setActivityReminderNotes(currentNotes);
       }
     }
-    
+
     setActiveActivityTab(tab);
 
     // Animate tab switches
@@ -925,7 +925,7 @@ export default function AddActivityModal({
     try {
       // Ensure relationship exists for the contact
       await ensureRelationshipExists(currentContactName);
-      
+
       const activityData = {
         type: 'note' as const,
         // title: noteTitle.trim(),
@@ -958,7 +958,7 @@ export default function AddActivityModal({
     try {
       // Ensure relationship exists for the contact
       await ensureRelationshipExists(currentContactName);
-      
+
       const activityData = {
         type: 'interaction' as const,
         // title: `${interactionType} with ${currentContactName}`,
@@ -1001,12 +1001,12 @@ export default function AddActivityModal({
     try {
       // Ensure relationship exists for the contact
       const relationship = await ensureRelationshipExists(currentContactName);
-      
+
       if (!relationship) {
         Alert.alert('Error', 'Failed to create or find relationship for this contact');
         return;
       }
-      
+
       // First create the reminder document and schedule notifications
       const reminderData = {
         contactName: currentContactName,
@@ -1071,7 +1071,7 @@ export default function AddActivityModal({
     try {
       // Ensure relationship exists for the contact
       await ensureRelationshipExists(currentContactName);
-      
+
       // Update the activity
       const activityUpdates = {
         // title: activityReminderTitle.trim(),
@@ -1162,16 +1162,16 @@ export default function AddActivityModal({
             activeActivityTab === 'note'
               ? { /* title: noteTitle.trim(), */ /* title: '', */ description: noteContent.trim() }
               : {
-                  // title: `${interactionType} with ${currentContactName}`,
-                  // title: '', // Default empty title
-                  description: interactionNotes.trim(),
-                  interactionType,
-                  date: interactionDate.toISOString(),
-                  duration: interactionDuration
-                    ? parseInt(interactionDuration)
-                    : 0,
-                  location: interactionLocation.trim(),
-                };
+                // title: `${interactionType} with ${currentContactName}`,
+                // title: '', // Default empty title
+                description: interactionNotes.trim(),
+                interactionType,
+                date: interactionDate.toISOString(),
+                duration: interactionDuration
+                  ? parseInt(interactionDuration)
+                  : 0,
+                location: interactionLocation.trim(),
+              };
 
           await updateActivity(editingActivity.id, updates);
           Alert.alert('Success', 'Activity updated successfully!');
@@ -1218,11 +1218,11 @@ export default function AddActivityModal({
       setHasContactPermission(false);
       return;
     }
-    
+
     try {
       setIsLoadingDeviceContacts(true);
       const { status } = await Contacts.requestPermissionsAsync();
-      
+
       if (status === 'granted') {
         setHasContactPermission(true);
         const { data } = await Contacts.getContactsAsync({
@@ -1246,14 +1246,14 @@ export default function AddActivityModal({
   // Direct contact search functions
   const handleContactSearch = (query: string) => {
     setContactSearchQuery(query);
-    
+
     if (query.trim()) {
-      let filtered: Array<{id: string; name: string}> = [];
-      
+      let filtered: Array<{ id: string; name: string }> = [];
+
       if (Platform.OS === 'web') {
         // Web: Use relationship data
         filtered = relationships
-          .filter(rel => 
+          .filter(rel =>
             rel.contactName.toLowerCase().includes(query.toLowerCase())
           )
           .map(rel => ({
@@ -1264,7 +1264,7 @@ export default function AddActivityModal({
       } else {
         // Mobile: Use device contacts
         filtered = deviceContacts
-          .filter(contact => 
+          .filter(contact =>
             contact.name?.toLowerCase().includes(query.toLowerCase())
           )
           .map((contact, index) => ({
@@ -1273,7 +1273,7 @@ export default function AddActivityModal({
           }))
           .slice(0, 5); // Limit to 5 results
       }
-      
+
       setFilteredContacts(filtered);
       setShowContactSearch(true);
     } else {
@@ -1286,12 +1286,12 @@ export default function AddActivityModal({
     setSelectedContact(contact);
     setShowContactSearch(false);
     setContactSearchQuery(contact.name);
-    
+
     // Find the device contact if this is from device contacts
-    const deviceContact = Platform.OS !== 'web' 
+    const deviceContact = Platform.OS !== 'web'
       ? deviceContacts.find(dc => (dc as any).id === contact.id || dc.name === contact.name)
       : undefined;
-    
+
     // Ensure relationship exists for the contact
     try {
       await ensureRelationshipExists(contact.name, deviceContact);
@@ -1312,7 +1312,7 @@ export default function AddActivityModal({
       // Check if click is outside the search container
       const target = event.target;
       const container = searchContainerRef.current;
-      
+
       // Close dropdown if clicking outside
       if (showContactSearch && !container.contains(target)) {
         setShowContactSearch(false);
@@ -1333,78 +1333,78 @@ export default function AddActivityModal({
 
   return (
     <>
-    {visible && <Modal
-      visible={showMainModel}
-      animationType="fade"
-      transparent
-      onRequestClose={handleClose}
-    >
-      <View style={styles.addActivityOverlay}>
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-          style={styles.keyboardAvoidingView}
-        >
-        <View style={styles.addActivityContainer}>
-          <View style={styles.addActivityHeader}>
-            <TouchableOpacity onPress={handleClose}>
-              <X size={24} color="#6B7280" />
-            </TouchableOpacity>
-            <Text style={styles.addActivityTitle}>
-              {editingActivity ? 'Edit Activity' : 'Add Activity'}
-            </Text>
-            
-          </View>
-
-          
-
-          {/* Activity Content */}
-          <ScrollView
-            style={styles.addActivityContent}
-            showsVerticalScrollIndicator={true}
-            bounces={true}
+      {visible && <Modal
+        visible={showMainModel}
+        animationType="fade"
+        transparent
+        onRequestClose={handleClose}
+      >
+        <View style={styles.addActivityOverlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            style={styles.keyboardAvoidingView}
           >
+            <View style={styles.addActivityContainer}>
+              <View style={styles.addActivityHeader}>
 
-            <View style={styles.activitySection}>
-              <Text style={styles.activitySectionTitle}>
-                {activeActivityTab === 'note'
-                  ? 'Create Note'
-                  : activeActivityTab === 'interaction'
-                  ? 'Log Interaction'
-                  : 'Set Reminder'}
-              </Text>
+                <Text style={styles.addActivityTitle}>
+                  {editingActivity ? 'Edit Activity' : 'Add Activity'}
+                </Text>
+                <TouchableOpacity onPress={handleClose}>
+                  <X size={24} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
 
-              {activeActivityTab === 'note' && (
-                <View style={{ marginBottom: isContactProvided ? 0 : 76 }}>
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Contact *</Text>
-                    {isContactProvided ? (
-                      <TextInput
-                        style={[styles.activityInput, styles.readOnlyInput]}
-                        value={currentContactName}
-                        editable={false}
-                        placeholder="Contact name"
-                        placeholderTextColor="#9CA3AF"
-                      />
-                    ) : (
-                      <ContactSearchInput
-                        onContactSelect={handleContactSelect}
-                        placeholder="Search for a contact..."
-                        value={selectedContact ? selectedContact.name : contactSearchQuery}
-                        onChangeText={handleContactSearchChange}
-                        error={contactSearchError}
-                        style={styles.contactSearchInput}
-                        onCreateNewContact={handleCreateNewContact}
-                      />
-                    )}
-                    {validationErrors.contactName && (
-                      <Text style={styles.errorText}>
-                        {validationErrors.contactName}
-                      </Text>
-                    )}
-                  </View>
 
-                  {/* <View style={styles.inputGroup}>
+
+              {/* Activity Content */}
+              <ScrollView
+                style={styles.addActivityContent}
+                showsVerticalScrollIndicator={true}
+                bounces={true}
+              >
+
+                <View style={styles.activitySection}>
+                  <Text style={styles.activitySectionTitle}>
+                    {activeActivityTab === 'note'
+                      ? 'Create Note'
+                      : activeActivityTab === 'interaction'
+                        ? 'Log Interaction'
+                        : 'Set Reminder'}
+                  </Text>
+
+                  {activeActivityTab === 'note' && (
+                    <View style={{ marginBottom: isContactProvided ? 0 : 76 }}>
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Contact *</Text>
+                        {isContactProvided ? (
+                          <TextInput
+                            style={[styles.activityInput, styles.readOnlyInput]}
+                            value={currentContactName}
+                            editable={false}
+                            placeholder="Contact name"
+                            placeholderTextColor="#9CA3AF"
+                          />
+                        ) : (
+                          <ContactSearchInput
+                            onContactSelect={handleContactSelect}
+                            placeholder="Search for a contact..."
+                            value={selectedContact ? selectedContact.name : contactSearchQuery}
+                            onChangeText={handleContactSearchChange}
+                            error={contactSearchError}
+                            style={styles.contactSearchInput}
+                            onCreateNewContact={handleCreateNewContact}
+                          />
+                        )}
+                        {validationErrors.contactName && (
+                          <Text style={styles.errorText}>
+                            {validationErrors.contactName}
+                          </Text>
+                        )}
+                      </View>
+
+                      {/* <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Title *</Text>
                     <TextInput
                       style={[
@@ -1423,295 +1423,295 @@ export default function AddActivityModal({
                     )}
                   </View> */}
 
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Notes *</Text>
-                    <TextInput
-                      style={[
-                        styles.activityTextArea,
-                        validationErrors.noteContent && styles.inputError,
-                      ]}
-                      value={noteContent}
-                      onChangeText={setNoteContent}
-                      placeholder="Enter notes..."
-                      placeholderTextColor="#9CA3AF"
-                      multiline
-                      textAlignVertical="top"
-                    />
-                    {validationErrors.noteContent && (
-                      <Text style={styles.errorText}>
-                        {validationErrors.noteContent}
-                      </Text>
-                    )}
-                  </View>
-                </View>
-              )}
-
-              {activeActivityTab === 'interaction' && (
-                <View>
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Contact *</Text>
-                    {isContactProvided ? (
-                      <TextInput
-                        style={[styles.activityInput, styles.readOnlyInput]}
-                        value={currentContactName}
-                        editable={false}
-                        placeholder="Contact name"
-                        placeholderTextColor="#9CA3AF"
-                      />
-                    ) : (
-                      <ContactSearchInput
-                        onContactSelect={handleContactSelect}
-                        placeholder="Search for a contact..."
-                        value={selectedContact ? selectedContact.name : contactSearchQuery}
-                        onChangeText={handleContactSearchChange}
-                        error={contactSearchError}
-                        style={styles.contactSearchInput}
-                        onCreateNewContact={handleCreateNewContact}
-                      />
-                    )}
-                    {validationErrors.contactName && (
-                      <Text style={styles.errorText}>
-                        {validationErrors.contactName}
-                      </Text>
-                    )}
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Interaction Type *</Text>
-                    <View style={styles.interactionTypeButtons}>
-                      {(['call', 'text', 'email', 'inPerson'] as const).map(
-                        (type) => (
-                          <TouchableOpacity
-                            key={type}
-                            style={[
-                              styles.interactionTypeButton,
-                              interactionType === type &&
-                                styles.activeInteractionTypeButton,
-                            ]}
-                            onPress={() => setInteractionType(type)}
-                          >
-                            <Text
-                              style={[
-                                styles.interactionTypeButtonText,
-                                interactionType === type &&
-                                  styles.activeInteractionTypeButtonText,
-                              ]}
-                            >
-                              {type === 'call'
-                                ? '📞'
-                                : type === 'text'
-                                ? '💬'
-                                : type === 'email'
-                                ? '📧'
-                                : '🤝'}{' '}
-                              {type}
-                            </Text>
-                          </TouchableOpacity>
-                        )
-                      )}
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Notes *</Text>
+                        <TextInput
+                          style={[
+                            styles.activityTextArea,
+                            validationErrors.noteContent && styles.inputError,
+                          ]}
+                          value={noteContent}
+                          onChangeText={setNoteContent}
+                          placeholder="Enter notes..."
+                          placeholderTextColor="#9CA3AF"
+                          multiline
+                          textAlignVertical="top"
+                        />
+                        {validationErrors.noteContent && (
+                          <Text style={styles.errorText}>
+                            {validationErrors.noteContent}
+                          </Text>
+                        )}
+                      </View>
                     </View>
-                  </View>
+                  )}
 
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Date & Time *</Text>
-                    {Platform.OS === 'web' ? (
-                      <View style={styles.dateTimeRow}>
-                        <View style={[styles.webDateTimeInput, { flex: 1, marginRight: 8 }]}>
-                          <input
-                            type="date"
-                            value={interactionDate.toISOString().slice(0, 10)}
-                            onChange={(e) => {
-                              const selectedDate = new Date(e.target.value);
-                              selectedDate.setHours(interactionDate.getHours(), interactionDate.getMinutes());
-                              setInteractionDate(selectedDate);
-                              setValidationErrors((prev) => ({ ...prev, interactionDate: '' }));
-                            }}
-                            max={new Date().toISOString().slice(0, 10)}
-                            style={{
-                              width: '100%',
-                              padding: '12px',
-                              border: validationErrors.interactionDate ? '1px solid #EF4444' : '1px solid #D1D5DB',
-                              borderRadius: '8px',
-                              fontSize: '16px',
-                              backgroundColor: '#ffffff',
-                              color: '#111827',
-                              outline: 'none',
-                            }}
+                  {activeActivityTab === 'interaction' && (
+                    <View>
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Contact *</Text>
+                        {isContactProvided ? (
+                          <TextInput
+                            style={[styles.activityInput, styles.readOnlyInput]}
+                            value={currentContactName}
+                            editable={false}
+                            placeholder="Contact name"
+                            placeholderTextColor="#9CA3AF"
                           />
-                        </View>
-                        <View style={[styles.webDateTimeInput, { flex: 1, marginLeft: 8 }]}>
-                          <input
-                            type="time"
-                            value={interactionDate.toTimeString().slice(0, 5)}
-                            onChange={(e) => {
-                              const [hours, minutes] = e.target.value.split(':').map(Number);
-                              const newDate = new Date(interactionDate);
-                              newDate.setHours(hours, minutes);
-                              setInteractionDate(newDate);
-                              setValidationErrors((prev) => ({ ...prev, interactionDate: '' }));
-                            }}
-                            style={{
-                              width: '100%',
-                              padding: '12px',
-                              border: validationErrors.interactionDate ? '1px solid #EF4444' : '1px solid #D1D5DB',
-                              borderRadius: '8px',
-                              fontSize: '16px',
-                              backgroundColor: '#ffffff',
-                              color: '#111827',
-                              outline: 'none',
-                            }}
+                        ) : (
+                          <ContactSearchInput
+                            onContactSelect={handleContactSelect}
+                            placeholder="Search for a contact..."
+                            value={selectedContact ? selectedContact.name : contactSearchQuery}
+                            onChangeText={handleContactSearchChange}
+                            error={contactSearchError}
+                            style={styles.contactSearchInput}
+                            onCreateNewContact={handleCreateNewContact}
                           />
-                        </View>
-                      </View>
-                    ) : Platform.OS === 'ios' ? (
-                      <View style={styles.iosDateTimeRow}>
-                        <View style={styles.iosDateTimeGroup}>
-                          <Text style={styles.iosDateTimeLabel}>Date</Text>
-                          <View style={[
-                            styles.iosDateTimeContainer, 
-                            { flex: 1 },
-                            validationErrors.interactionDate && styles.iosDateTimeContainerError
-                          ]}>
-                            <WebCompatibleDateTimePicker
-                              value={interactionDate}
-                              mode="date"
-                              display="default"
-                              onChange={handleInteractionDateChange}
-                              maximumDate={new Date()}
-                            />
-                          </View>
-                        </View>
-                        <View style={styles.iosDateTimeGroup}>
-                          <Text style={styles.iosDateTimeLabel}>Time</Text>
-                          <View style={[
-                            styles.iosDateTimeContainer, 
-                            { flex: 1 },
-                            validationErrors.interactionDate && styles.iosDateTimeContainerError
-                          ]}>
-                            <WebCompatibleDateTimePicker
-                              value={interactionDate}
-                              mode="time"
-                              display="default"
-                              onChange={handleInteractionTimeChange}
-                            />
-                          </View>
-                        </View>
-                      </View>
-                    ) : (
-                      <View style={styles.dateTimeRow}>
-                        <TouchableOpacity
-                          style={[
-                            styles.dateTimeButton,
-                            validationErrors.interactionDate && styles.inputError,
-                            { flex: 1, marginRight: 8 },
-                          ]}
-                          onPress={openInteractionDatePicker}
-                        >
-                          <Text style={styles.dateTimeButtonText}>
-                            {interactionDate.toLocaleDateString()}
+                        )}
+                        {validationErrors.contactName && (
+                          <Text style={styles.errorText}>
+                            {validationErrors.contactName}
                           </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.dateTimeButton,
-                            validationErrors.interactionDate && styles.inputError,
-                            { flex: 1, marginLeft: 8 },
-                          ]}
-                          onPress={openInteractionTimePicker}
-                        >
-                          <Text style={styles.dateTimeButtonText}>
-                            {interactionDate.toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </Text>
-                        </TouchableOpacity>
+                        )}
                       </View>
-                    )}
-                    {validationErrors.interactionDate && (
-                      <Text style={styles.errorText}>
-                        {validationErrors.interactionDate}
-                      </Text>
-                    )}
-                  </View>
 
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Notes *</Text>
-                    <TextInput
-                      style={[
-                        styles.activityTextArea,
-                        validationErrors.interactionNotes && styles.inputError,
-                      ]}
-                      value={interactionNotes}
-                      onChangeText={setInteractionNotes}
-                      placeholder="Enter notes..."
-                      placeholderTextColor="#9CA3AF"
-                      multiline
-                      textAlignVertical="top"
-                    />
-                    {validationErrors.interactionNotes && (
-                      <Text style={styles.errorText}>
-                        {validationErrors.interactionNotes}
-                      </Text>
-                    )}
-                  </View>
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Interaction Type *</Text>
+                        <View style={styles.interactionTypeButtons}>
+                          {(['call', 'text', 'email', 'inPerson'] as const).map(
+                            (type) => (
+                              <TouchableOpacity
+                                key={type}
+                                style={[
+                                  styles.interactionTypeButton,
+                                  interactionType === type &&
+                                  styles.activeInteractionTypeButton,
+                                ]}
+                                onPress={() => setInteractionType(type)}
+                              >
+                                <Text
+                                  style={[
+                                    styles.interactionTypeButtonText,
+                                    interactionType === type &&
+                                    styles.activeInteractionTypeButtonText,
+                                  ]}
+                                >
+                                  {type === 'call'
+                                    ? '📞'
+                                    : type === 'text'
+                                      ? '💬'
+                                      : type === 'email'
+                                        ? '📧'
+                                        : '🤝'}{' '}
+                                  {type}
+                                </Text>
+                              </TouchableOpacity>
+                            )
+                          )}
+                        </View>
+                      </View>
 
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Duration (minutes)</Text>
-                    <TextInput
-                      style={styles.activityInput}
-                      value={interactionDuration}
-                      onChangeText={setInteractionDuration}
-                      placeholder="e.g., 30"
-                      placeholderTextColor="#9CA3AF"
-                      keyboardType="numeric"
-                    />
-                  </View>
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Date & Time *</Text>
+                        {Platform.OS === 'web' ? (
+                          <View style={styles.dateTimeRow}>
+                            <View style={[styles.webDateTimeInput, { flex: 1, marginRight: 8 }]}>
+                              <input
+                                type="date"
+                                value={interactionDate.toISOString().slice(0, 10)}
+                                onChange={(e) => {
+                                  const selectedDate = new Date(e.target.value);
+                                  selectedDate.setHours(interactionDate.getHours(), interactionDate.getMinutes());
+                                  setInteractionDate(selectedDate);
+                                  setValidationErrors((prev) => ({ ...prev, interactionDate: '' }));
+                                }}
+                                max={new Date().toISOString().slice(0, 10)}
+                                style={{
+                                  width: '100%',
+                                  padding: '12px',
+                                  border: validationErrors.interactionDate ? '1px solid #EF4444' : '1px solid #D1D5DB',
+                                  borderRadius: '8px',
+                                  fontSize: '16px',
+                                  backgroundColor: '#ffffff',
+                                  color: '#111827',
+                                  outline: 'none',
+                                }}
+                              />
+                            </View>
+                            <View style={[styles.webDateTimeInput, { flex: 1, marginLeft: 8 }]}>
+                              <input
+                                type="time"
+                                value={interactionDate.toTimeString().slice(0, 5)}
+                                onChange={(e) => {
+                                  const [hours, minutes] = e.target.value.split(':').map(Number);
+                                  const newDate = new Date(interactionDate);
+                                  newDate.setHours(hours, minutes);
+                                  setInteractionDate(newDate);
+                                  setValidationErrors((prev) => ({ ...prev, interactionDate: '' }));
+                                }}
+                                style={{
+                                  width: '100%',
+                                  padding: '12px',
+                                  border: validationErrors.interactionDate ? '1px solid #EF4444' : '1px solid #D1D5DB',
+                                  borderRadius: '8px',
+                                  fontSize: '16px',
+                                  backgroundColor: '#ffffff',
+                                  color: '#111827',
+                                  outline: 'none',
+                                }}
+                              />
+                            </View>
+                          </View>
+                        ) : Platform.OS === 'ios' ? (
+                          <View style={styles.iosDateTimeRow}>
+                            <View style={styles.iosDateTimeGroup}>
+                              <Text style={styles.iosDateTimeLabel}>Date</Text>
+                              <View style={[
+                                styles.iosDateTimeContainer,
+                                { flex: 1 },
+                                validationErrors.interactionDate && styles.iosDateTimeContainerError
+                              ]}>
+                                <WebCompatibleDateTimePicker
+                                  value={interactionDate}
+                                  mode="date"
+                                  display="default"
+                                  onChange={handleInteractionDateChange}
+                                  maximumDate={new Date()}
+                                />
+                              </View>
+                            </View>
+                            <View style={styles.iosDateTimeGroup}>
+                              <Text style={styles.iosDateTimeLabel}>Time</Text>
+                              <View style={[
+                                styles.iosDateTimeContainer,
+                                { flex: 1 },
+                                validationErrors.interactionDate && styles.iosDateTimeContainerError
+                              ]}>
+                                <WebCompatibleDateTimePicker
+                                  value={interactionDate}
+                                  mode="time"
+                                  display="default"
+                                  onChange={handleInteractionTimeChange}
+                                />
+                              </View>
+                            </View>
+                          </View>
+                        ) : (
+                          <View style={styles.dateTimeRow}>
+                            <TouchableOpacity
+                              style={[
+                                styles.dateTimeButton,
+                                validationErrors.interactionDate && styles.inputError,
+                                { flex: 1, marginRight: 8 },
+                              ]}
+                              onPress={openInteractionDatePicker}
+                            >
+                              <Text style={styles.dateTimeButtonText}>
+                                {interactionDate.toLocaleDateString()}
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[
+                                styles.dateTimeButton,
+                                validationErrors.interactionDate && styles.inputError,
+                                { flex: 1, marginLeft: 8 },
+                              ]}
+                              onPress={openInteractionTimePicker}
+                            >
+                              <Text style={styles.dateTimeButtonText}>
+                                {interactionDate.toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                        {validationErrors.interactionDate && (
+                          <Text style={styles.errorText}>
+                            {validationErrors.interactionDate}
+                          </Text>
+                        )}
+                      </View>
 
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Location</Text>
-                    <TextInput
-                      style={styles.activityInput}
-                      value={interactionLocation}
-                      onChangeText={setInteractionLocation}
-                      placeholder="e.g., Office, Coffee shop"
-                      placeholderTextColor="#9CA3AF"
-                    />
-                  </View>
-                </View>
-              )}
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Notes *</Text>
+                        <TextInput
+                          style={[
+                            styles.activityTextArea,
+                            validationErrors.interactionNotes && styles.inputError,
+                          ]}
+                          value={interactionNotes}
+                          onChangeText={setInteractionNotes}
+                          placeholder="Enter notes..."
+                          placeholderTextColor="#9CA3AF"
+                          multiline
+                          textAlignVertical="top"
+                        />
+                        {validationErrors.interactionNotes && (
+                          <Text style={styles.errorText}>
+                            {validationErrors.interactionNotes}
+                          </Text>
+                        )}
+                      </View>
 
-              {activeActivityTab === 'reminder' && (
-                <View>
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Contact *</Text>
-                    {isContactProvided ? (
-                      <TextInput
-                        style={[styles.activityInput, styles.readOnlyInput]}
-                        value={currentContactName}
-                        editable={false}
-                        placeholder="Contact name"
-                        placeholderTextColor="#9CA3AF"
-                      />
-                    ) : (
-                      <ContactSearchInput
-                        onContactSelect={handleContactSelect}
-                        placeholder="Search for a contact..."
-                        value={selectedContact ? selectedContact.name : contactSearchQuery}
-                        onChangeText={handleContactSearchChange}
-                        error={contactSearchError}
-                        style={styles.contactSearchInput}
-                        onCreateNewContact={handleCreateNewContact}
-                      />
-                    )}
-                    {validationErrors.contactName && (
-                      <Text style={styles.errorText}>
-                        {validationErrors.contactName}
-                      </Text>
-                    )}
-                  </View>
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Duration (minutes)</Text>
+                        <TextInput
+                          style={styles.activityInput}
+                          value={interactionDuration}
+                          onChangeText={setInteractionDuration}
+                          placeholder="e.g., 30"
+                          placeholderTextColor="#9CA3AF"
+                          keyboardType="numeric"
+                        />
+                      </View>
 
-                  {/* <View style={styles.inputGroup}>
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Location</Text>
+                        <TextInput
+                          style={styles.activityInput}
+                          value={interactionLocation}
+                          onChangeText={setInteractionLocation}
+                          placeholder="e.g., Office, Coffee shop"
+                          placeholderTextColor="#9CA3AF"
+                        />
+                      </View>
+                    </View>
+                  )}
+
+                  {activeActivityTab === 'reminder' && (
+                    <View>
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Contact *</Text>
+                        {isContactProvided ? (
+                          <TextInput
+                            style={[styles.activityInput, styles.readOnlyInput]}
+                            value={currentContactName}
+                            editable={false}
+                            placeholder="Contact name"
+                            placeholderTextColor="#9CA3AF"
+                          />
+                        ) : (
+                          <ContactSearchInput
+                            onContactSelect={handleContactSelect}
+                            placeholder="Search for a contact..."
+                            value={selectedContact ? selectedContact.name : contactSearchQuery}
+                            onChangeText={handleContactSearchChange}
+                            error={contactSearchError}
+                            style={styles.contactSearchInput}
+                            onCreateNewContact={handleCreateNewContact}
+                          />
+                        )}
+                        {validationErrors.contactName && (
+                          <Text style={styles.errorText}>
+                            {validationErrors.contactName}
+                          </Text>
+                        )}
+                      </View>
+
+                      {/* <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Title *</Text>
                     <TextInput
                       style={[
@@ -1730,372 +1730,372 @@ export default function AddActivityModal({
                     )}
                   </View> */}
 
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Date & Time *</Text>
-                    {Platform.OS === 'web' ? (
-                      <View style={styles.dateTimeRow}>
-                        <View style={[styles.webDateTimeInput, { flex: 1, marginRight: 8 }]}>
-                          <input
-                            type="date"
-                            value={activityReminderDate.toISOString().slice(0, 10)}
-                            onChange={(e) => {
-                              const selectedDate = new Date(e.target.value);
-                              selectedDate.setHours(activityReminderDate.getHours(), activityReminderDate.getMinutes());
-                              setActivityReminderDate(selectedDate);
-                              setValidationErrors((prev) => ({ ...prev, reminderDate: '' }));
-                            }}
-                            min={new Date().toISOString().slice(0, 10)}
-                            style={{
-                              padding: '12px',
-                              border: validationErrors.reminderDate ? '1px solid #EF4444' : '1px solid #D1D5DB',
-                              borderRadius: '8px',
-                              fontSize: '16px',
-                              backgroundColor: '#ffffff',
-                              color: '#111827',
-                              outline: 'none',
-                            }}
-                          />
-                        </View>
-                        <View style={[styles.webDateTimeInput, { flex: 1 }]}>
-                          <input
-                            type="time"
-                            value={activityReminderDate.toTimeString().slice(0, 5)}
-                            onChange={(e) => {
-                              const [hours, minutes] = e.target.value.split(':').map(Number);
-                              const newDate = new Date(activityReminderDate);
-                              newDate.setHours(hours, minutes);
-                              setActivityReminderDate(newDate);
-                              setValidationErrors((prev) => ({ ...prev, reminderDate: '' }));
-                            }}
-                            style={{
-                              
-                              padding: '12px',
-                              border: validationErrors.reminderDate ? '1px solid #EF4444' : '1px solid #D1D5DB',
-                              borderRadius: '8px',
-                              fontSize: '16px',
-                              backgroundColor: '#ffffff',
-                              color: '#111827',
-                              outline: 'none',
-                            }}
-                          />
-                        </View>
-                      </View>
-                    ) : Platform.OS === 'ios' ? (
-                      <View style={styles.iosDateTimeRow}>
-                        <View style={styles.iosDateTimeGroup}>
-                          <Text style={styles.iosDateTimeLabel}>Date</Text>
-                          <View style={[
-                            styles.iosDateTimeContainer, 
-                            { flex: 1 },
-                            validationErrors.reminderDate && styles.iosDateTimeContainerError
-                          ]}>
-                            <WebCompatibleDateTimePicker
-                              value={activityReminderDate}
-                              mode="date"
-                              display="default"
-                              onChange={handleReminderDateChange}
-                              minimumDate={new Date()}
-                            />
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Date & Time *</Text>
+                        {Platform.OS === 'web' ? (
+                          <View style={styles.dateTimeRow}>
+                            <View style={[styles.webDateTimeInput, { flex: 1, marginRight: 8 }]}>
+                              <input
+                                type="date"
+                                value={activityReminderDate.toISOString().slice(0, 10)}
+                                onChange={(e) => {
+                                  const selectedDate = new Date(e.target.value);
+                                  selectedDate.setHours(activityReminderDate.getHours(), activityReminderDate.getMinutes());
+                                  setActivityReminderDate(selectedDate);
+                                  setValidationErrors((prev) => ({ ...prev, reminderDate: '' }));
+                                }}
+                                min={new Date().toISOString().slice(0, 10)}
+                                style={{
+                                  padding: '12px',
+                                  border: validationErrors.reminderDate ? '1px solid #EF4444' : '1px solid #D1D5DB',
+                                  borderRadius: '8px',
+                                  fontSize: '16px',
+                                  backgroundColor: '#ffffff',
+                                  color: '#111827',
+                                  outline: 'none',
+                                }}
+                              />
+                            </View>
+                            <View style={[styles.webDateTimeInput, { flex: 1 }]}>
+                              <input
+                                type="time"
+                                value={activityReminderDate.toTimeString().slice(0, 5)}
+                                onChange={(e) => {
+                                  const [hours, minutes] = e.target.value.split(':').map(Number);
+                                  const newDate = new Date(activityReminderDate);
+                                  newDate.setHours(hours, minutes);
+                                  setActivityReminderDate(newDate);
+                                  setValidationErrors((prev) => ({ ...prev, reminderDate: '' }));
+                                }}
+                                style={{
+
+                                  padding: '12px',
+                                  border: validationErrors.reminderDate ? '1px solid #EF4444' : '1px solid #D1D5DB',
+                                  borderRadius: '8px',
+                                  fontSize: '16px',
+                                  backgroundColor: '#ffffff',
+                                  color: '#111827',
+                                  outline: 'none',
+                                }}
+                              />
+                            </View>
                           </View>
-                        </View>
-                        <View style={styles.iosDateTimeGroup}>
-                          <Text style={styles.iosDateTimeLabel}>Time</Text>
-                          <View style={[
-                            styles.iosDateTimeContainer, 
-                            { flex: 1 },
-                            validationErrors.reminderDate && styles.iosDateTimeContainerError
-                          ]}>
-                            <WebCompatibleDateTimePicker
-                              value={activityReminderDate}
-                              mode="time"
-                              display="default"
-                              onChange={handleReminderTimeChange}
-                            />
+                        ) : Platform.OS === 'ios' ? (
+                          <View style={styles.iosDateTimeRow}>
+                            <View style={styles.iosDateTimeGroup}>
+                              <Text style={styles.iosDateTimeLabel}>Date</Text>
+                              <View style={[
+                                styles.iosDateTimeContainer,
+                                { flex: 1 },
+                                validationErrors.reminderDate && styles.iosDateTimeContainerError
+                              ]}>
+                                <WebCompatibleDateTimePicker
+                                  value={activityReminderDate}
+                                  mode="date"
+                                  display="default"
+                                  onChange={handleReminderDateChange}
+                                  minimumDate={new Date()}
+                                />
+                              </View>
+                            </View>
+                            <View style={styles.iosDateTimeGroup}>
+                              <Text style={styles.iosDateTimeLabel}>Time</Text>
+                              <View style={[
+                                styles.iosDateTimeContainer,
+                                { flex: 1 },
+                                validationErrors.reminderDate && styles.iosDateTimeContainerError
+                              ]}>
+                                <WebCompatibleDateTimePicker
+                                  value={activityReminderDate}
+                                  mode="time"
+                                  display="default"
+                                  onChange={handleReminderTimeChange}
+                                />
+                              </View>
+                            </View>
                           </View>
+                        ) : (
+                          <View style={styles.dateTimeRow}>
+                            <TouchableOpacity
+                              style={[
+                                styles.dateTimeButton,
+                                validationErrors.reminderDate && styles.inputError,
+                                { flex: 1, marginRight: 8 },
+                              ]}
+                              onPress={openReminderDatePicker}
+                            >
+                              <Text style={styles.dateTimeButtonText}>
+                                {activityReminderDate.toLocaleDateString()}
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[
+                                styles.dateTimeButton,
+                                validationErrors.reminderDate && styles.inputError,
+                                { flex: 1, marginLeft: 8 },
+                              ]}
+                              onPress={openReminderTimePicker}
+                            >
+                              <Text style={styles.dateTimeButtonText}>
+                                {activityReminderDate.toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                        {validationErrors.reminderDate && (
+                          <Text style={styles.errorText}>
+                            {validationErrors.reminderDate}
+                          </Text>
+                        )}
+                      </View>
+
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Type</Text>
+                        <View style={styles.reminderTypeButtons}>
+                          {Object.values(ReminderTypes).map((type) => (
+                            <TouchableOpacity
+                              key={type}
+                              style={[
+                                styles.reminderTypeButton,
+                                activityReminderType === type &&
+                                styles.activeReminderTypeButton,
+                              ]}
+                              onPress={() => setActivityReminderType(type)}
+                            >
+                              <Text
+                                style={[
+                                  styles.reminderTypeButtonText,
+                                  activityReminderType === type &&
+                                  styles.activeReminderTypeButtonText,
+                                ]}
+                              >
+                                {getReminderTypeDisplayName(type)}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
                         </View>
                       </View>
-                    ) : (
-                      <View style={styles.dateTimeRow}>
-                        <TouchableOpacity
-                          style={[
-                            styles.dateTimeButton,
-                            validationErrors.reminderDate && styles.inputError,
-                            { flex: 1, marginRight: 8 },
-                          ]}
-                          onPress={openReminderDatePicker}
-                        >
-                          <Text style={styles.dateTimeButtonText}>
-                            {activityReminderDate.toLocaleDateString()}
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.dateTimeButton,
-                            validationErrors.reminderDate && styles.inputError,
-                            { flex: 1, marginLeft: 8 },
-                          ]}
-                          onPress={openReminderTimePicker}
-                        >
-                          <Text style={styles.dateTimeButtonText}>
-                            {activityReminderDate.toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </Text>
-                        </TouchableOpacity>
+
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Frequency</Text>
+                        <View style={styles.frequencyButtons}>
+                          {(
+                            [
+                              'once',
+                              'daily',
+                              'week',
+                              'month',
+                              '3months',
+                              '6months',
+                              'yearly',
+                            ] as const
+                          ).map((freq) => (
+                            <TouchableOpacity
+                              key={freq}
+                              style={[
+                                styles.frequencyButton,
+                                activityReminderFrequency === freq &&
+                                styles.activeFrequencyButton,
+                              ]}
+                              onPress={() => setActivityReminderFrequency(freq)}
+                            >
+                              <Text
+                                style={[
+                                  styles.frequencyButtonText,
+                                  activityReminderFrequency === freq &&
+                                  styles.activeFrequencyButtonText,
+                                ]}
+                              >
+                                {freq === '3months'
+                                  ? '3 months'
+                                  : freq === '6months'
+                                    ? '6 months'
+                                    : freq === 'once'
+                                      ? 'Once'
+                                      : freq === 'daily'
+                                        ? 'Daily'
+                                        : freq === 'yearly'
+                                          ? 'Yearly'
+                                          : freq.charAt(0).toUpperCase() + freq.slice(1)}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
                       </View>
-                    )}
-                    {validationErrors.reminderDate && (
-                      <Text style={styles.errorText}>
-                        {validationErrors.reminderDate}
+
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Notes</Text>
+                        <TextInput
+                          style={styles.activityTextArea}
+                          value={activityReminderNotes}
+                          onChangeText={setActivityReminderNotes}
+                          placeholder="Enter notes..."
+                          placeholderTextColor="#9CA3AF"
+                          multiline
+                          textAlignVertical="top"
+                        />
+                      </View>
+                    </View>
+                  )}
+                </View>
+              </ScrollView>
+
+              {/* Activity Type Tabs - Fixed at top */}
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <View style={styles.activityTypeTabs}>
+                  <Animated.View
+                    style={[
+                      { transform: [{ scale: tabAnimations.note }] },
+                    ]}
+                  >
+                    <TouchableOpacity
+                      style={[
+                        styles.animatedTabButton,
+                        activeActivityTab === 'note' &&
+                        styles.activeActivityTypeTab,
+                      ]}
+                      onPress={() => handleTabSwitch('note')}
+                      activeOpacity={0.7}
+                    >
+                      <View
+                        style={[
+                          styles.tabIconContainer,
+                          activeActivityTab === 'note' &&
+                          styles.activeTabIconContainer,
+                        ]}
+                      >
+                        <Text style={styles.tabIcon}>📝</Text>
+                      </View>
+
+                    </TouchableOpacity>
+                  </Animated.View>
+
+                  <Animated.View
+                    style={[
+                      { transform: [{ scale: tabAnimations.interaction }] },
+                    ]}
+                  >
+                    <TouchableOpacity
+                      style={[
+                        styles.animatedTabButton,
+                        activeActivityTab === 'interaction' &&
+                        styles.activeActivityTypeTab,
+                      ]}
+                      onPress={() => handleTabSwitch('interaction')}
+                      activeOpacity={0.7}
+                    >
+                      <View
+                        style={[
+                          styles.tabIconContainer,
+                          activeActivityTab === 'interaction' &&
+                          styles.activeTabIconContainer,
+                        ]}
+                      >
+                        <Text style={styles.tabIcon}>🤝</Text>
+                      </View>
+
+                    </TouchableOpacity>
+                  </Animated.View>
+
+                  <Animated.View
+                    style={[
+                      { transform: [{ scale: tabAnimations.reminder }] },
+                    ]}
+                  >
+                    <TouchableOpacity
+                      style={[
+                        styles.animatedTabButton,
+                        activeActivityTab === 'reminder' &&
+                        styles.activeActivityTypeTab,
+                      ]}
+                      onPress={() => handleTabSwitch('reminder')}
+                      activeOpacity={0.7}
+                    >
+                      <View
+                        style={[
+                          styles.tabIconContainer,
+                          activeActivityTab === 'reminder' &&
+                          styles.activeTabIconContainer,
+                        ]}
+                      >
+                        <Text style={styles.tabIcon}>⏰</Text>
+                      </View>
+
+                    </TouchableOpacity>
+                  </Animated.View>
+                </View>
+                <TouchableOpacity
+                  onPress={handleCreateActivity}
+                  style={[
+                    styles.addActivitySaveButton,
+                    isCreatingActivity && styles.addActivitySaveButtonDisabled
+                  ]}
+                  disabled={isCreatingActivity}
+                >
+                  {isCreatingActivity ? (
+                    <View style={styles.saveButtonLoadingContainer}>
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                      <Text style={[styles.addActivitySaveButtonText, { marginLeft: 8 }]}>
+                        {editingActivity ? 'Updating...' : 'Creating...'}
                       </Text>
-                    )}
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Type</Text>
-                    <View style={styles.reminderTypeButtons}>
-                      {Object.values(ReminderTypes).map((type) => (
-                        <TouchableOpacity
-                          key={type}
-                          style={[
-                            styles.reminderTypeButton,
-                            activityReminderType === type &&
-                              styles.activeReminderTypeButton,
-                          ]}
-                          onPress={() => setActivityReminderType(type)}
-                        >
-                          <Text
-                            style={[
-                              styles.reminderTypeButtonText,
-                              activityReminderType === type &&
-                                styles.activeReminderTypeButtonText,
-                            ]}
-                          >
-                            {getReminderTypeDisplayName(type)}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
                     </View>
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Frequency</Text>
-                    <View style={styles.frequencyButtons}>
-                      {(
-                        [
-                          'once',
-                          'daily',
-                          'week',
-                          'month',
-                          '3months',
-                          '6months',
-                          'yearly',
-                        ] as const
-                      ).map((freq) => (
-                        <TouchableOpacity
-                          key={freq}
-                          style={[
-                            styles.frequencyButton,
-                            activityReminderFrequency === freq &&
-                              styles.activeFrequencyButton,
-                          ]}
-                          onPress={() => setActivityReminderFrequency(freq)}
-                        >
-                          <Text
-                            style={[
-                              styles.frequencyButtonText,
-                              activityReminderFrequency === freq &&
-                                styles.activeFrequencyButtonText,
-                            ]}
-                          >
-                            {freq === '3months'
-                              ? '3 months'
-                              : freq === '6months'
-                              ? '6 months'
-                              : freq === 'once'
-                              ? 'Once'
-                              : freq === 'daily'
-                              ? 'Daily'
-                              : freq === 'yearly'
-                              ? 'Yearly'
-                              : freq.charAt(0).toUpperCase() + freq.slice(1)}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Notes</Text>
-                    <TextInput
-                      style={styles.activityTextArea}
-                      value={activityReminderNotes}
-                      onChangeText={setActivityReminderNotes}
-                      placeholder="Enter notes..."
-                      placeholderTextColor="#9CA3AF"
-                      multiline
-                      textAlignVertical="top"
-                    />
-                  </View>
-                </View>
-              )}
+                  ) : (
+                    <Text style={styles.addActivitySaveButtonText}>
+                      {editingActivity ? 'Update' : 'Create'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-          </ScrollView>
-
-          {/* Activity Type Tabs - Fixed at top */}
-          <View style={{flexDirection: "row", justifyContent: "space-between"}}>
-          <View style={styles.activityTypeTabs}>
-            <Animated.View
-              style={[
-                { transform: [{ scale: tabAnimations.note }] },
-              ]}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.animatedTabButton,
-                  activeActivityTab === 'note' &&
-                    styles.activeActivityTypeTab,
-                ]}
-                onPress={() => handleTabSwitch('note')}
-                activeOpacity={0.7}
-              >
-                <View
-                  style={[
-                    styles.tabIconContainer,
-                    activeActivityTab === 'note' &&
-                      styles.activeTabIconContainer,
-                  ]}
-                >
-                  <Text style={styles.tabIcon}>📝</Text>
-                </View>
-                
-              </TouchableOpacity>
-            </Animated.View>
-
-            <Animated.View
-              style={[
-                { transform: [{ scale: tabAnimations.interaction }] },
-              ]}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.animatedTabButton,
-                  activeActivityTab === 'interaction' &&
-                    styles.activeActivityTypeTab,
-                ]}
-                onPress={() => handleTabSwitch('interaction')}
-                activeOpacity={0.7}
-              >
-                <View
-                  style={[
-                    styles.tabIconContainer,
-                    activeActivityTab === 'interaction' &&
-                      styles.activeTabIconContainer,
-                  ]}
-                >
-                  <Text style={styles.tabIcon}>🤝</Text>
-                </View>
-                
-              </TouchableOpacity>
-            </Animated.View>
-
-            <Animated.View
-              style={[
-                { transform: [{ scale: tabAnimations.reminder }] },
-              ]}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.animatedTabButton,
-                  activeActivityTab === 'reminder' &&
-                    styles.activeActivityTypeTab,
-                ]}
-                onPress={() => handleTabSwitch('reminder')}
-                activeOpacity={0.7}
-              >
-                <View
-                  style={[
-                    styles.tabIconContainer,
-                    activeActivityTab === 'reminder' &&
-                      styles.activeTabIconContainer,
-                  ]}
-                >
-                  <Text style={styles.tabIcon}>⏰</Text>
-                </View>
-                
-              </TouchableOpacity>
-            </Animated.View>
-          </View>
-          <TouchableOpacity
-              onPress={handleCreateActivity}
-              style={[
-                styles.addActivitySaveButton,
-                isCreatingActivity && styles.addActivitySaveButtonDisabled
-              ]}
-              disabled={isCreatingActivity}
-            >
-              {isCreatingActivity ? (
-                <View style={styles.saveButtonLoadingContainer}>
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                  <Text style={[styles.addActivitySaveButtonText, { marginLeft: 8 }]}>
-                    {editingActivity ? 'Updating...' : 'Creating...'}
-                  </Text>
-                </View>
-              ) : (
-                <Text style={styles.addActivitySaveButtonText}>
-                  {editingActivity ? 'Update' : 'Create'}
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
+          </KeyboardAvoidingView>
         </View>
-        </KeyboardAvoidingView>
-      </View>
 
-      {/* Date Pickers for Android (iOS uses direct inline pickers) */}
-      {Platform.OS === 'android' && showInteractionDatePicker && (
-        <WebCompatibleDateTimePicker
-          value={interactionDate}
-          mode="date"
-          display="default"
-          onChange={handleInteractionDateChange}
-          maximumDate={new Date()}
-        />
-      )}
+        {/* Date Pickers for Android (iOS uses direct inline pickers) */}
+        {Platform.OS === 'android' && showInteractionDatePicker && (
+          <WebCompatibleDateTimePicker
+            value={interactionDate}
+            mode="date"
+            display="default"
+            onChange={handleInteractionDateChange}
+            maximumDate={new Date()}
+          />
+        )}
 
-      {Platform.OS === 'android' && showInteractionTimePicker && (
-        <WebCompatibleDateTimePicker
-          value={interactionDate}
-          mode="time"
-          display="default"
-          onChange={handleInteractionTimeChange}
-        />
-      )}
+        {Platform.OS === 'android' && showInteractionTimePicker && (
+          <WebCompatibleDateTimePicker
+            value={interactionDate}
+            mode="time"
+            display="default"
+            onChange={handleInteractionTimeChange}
+          />
+        )}
 
-      {Platform.OS === 'android' && showReminderDatePicker && (
-        <WebCompatibleDateTimePicker
-          value={activityReminderDate}
-          mode="date"
-          display="default"
-          onChange={handleReminderDateChange}
-          minimumDate={new Date()}
-        />
-      )}
+        {Platform.OS === 'android' && showReminderDatePicker && (
+          <WebCompatibleDateTimePicker
+            value={activityReminderDate}
+            mode="date"
+            display="default"
+            onChange={handleReminderDateChange}
+            minimumDate={new Date()}
+          />
+        )}
 
-      {Platform.OS === 'android' && showReminderTimePicker && (
-        <WebCompatibleDateTimePicker
-          value={activityReminderDate}
-          mode="time"
-          display="default"
-          onChange={handleReminderTimeChange}
-        />
-      )}
+        {Platform.OS === 'android' && showReminderTimePicker && (
+          <WebCompatibleDateTimePicker
+            value={activityReminderDate}
+            mode="time"
+            display="default"
+            onChange={handleReminderTimeChange}
+          />
+        )}
       </Modal>}
 
       {/* Create New Contact Modal */}
-      <Modal 
-        visible={showNewContactModal} 
+      <Modal
+        visible={showNewContactModal}
         animationType="slide"
         presentationStyle="pageSheet"
         statusBarTranslucent={false}
@@ -2111,11 +2111,11 @@ export default function AddActivityModal({
               <X size={24} color="#6B7280" />
             </TouchableOpacity>
           </View>
-          
+
           <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Contact Information</Text>
-              
+
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Name *</Text>
                 <TextInput
@@ -2352,7 +2352,7 @@ export default function AddActivityModal({
                 )}
               </View>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.saveButton, !newContactName.trim() && styles.saveButtonDisabled]}
                 onPress={createNewContactAndRelationship}
                 disabled={!newContactName.trim()}
@@ -2404,20 +2404,21 @@ const styles = StyleSheet.create({
     padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
-    marginRight:16
+    // marginRight: 16
   },
   addActivityTitle: {
     fontSize: 20,
     fontWeight: '600',
     color: '#111827',
+    flex: 1,
   },
   addActivitySaveButton: {
     backgroundColor: '#3B82F6',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
-    alignSelf:"center",
-    marginRight:16,
+    alignSelf: "center",
+    marginRight: 16,
   },
   addActivitySaveButtonText: {
     color: '#ffffff',
@@ -2485,6 +2486,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#111827',
     marginBottom: 20,
+    marginTop: 20,
   },
   inputGroup: {
     marginBottom: 16,
