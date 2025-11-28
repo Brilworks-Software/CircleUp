@@ -11,7 +11,15 @@
     "ios": "expo run:ios",
     "clean": "npx expo prebuild --clean",
     "web:export": "npx expo export -p web",
-    "web:deploy": "npx eas deploy"
+    "web:deploy": "npx eas deploy",
+    "build:android:develop": "npx eas build --platform android --profile develop --non-interactive",
+    "build:ios:develop": "npx eas build --platform ios --profile develop --non-interactive",
+    "build:ios:production:local": "npx eas build --platform ios --profile production --local",
+    "build:android:production": "npx eas build --platform android --profile production --non-interactive",
+    "build:ios:production": "eas build --platform ios --profile production --non-interactive",
+    "submit:android:production": "npx eas submit --platform android --profile production --non-interactive",
+    "submit:ios:production": "npx eas submit --platform ios --profile production --non-interactive",
+    "update:ios:production": "eas update --channel production"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",

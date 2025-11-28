@@ -4,46 +4,39 @@
     "appVersionSource": "remote"
   },
   "build": {
-    "development": {
-      "developmentClient": true,
+    "develop": {
       "distribution": "internal",
-      "env": {
-        "FIREBASE_API_KEY": "AIzaSyBpmR20DaOa2Plt8qvnfQiVaa8aRYR96ds",
-        "FIREBASE_AUTH_DOMAIN": "circleup-63110.firebaseapp.com",
-        "FIREBASE_PROJECT_ID": "circleup-63110",
-        "FIREBASE_STORAGE_BUCKET": "circleup-63110.firebasestorage.app",
-        "FIREBASE_MESSAGING_SENDER_ID": "540064305831",
-        "FIREBASE_APP_ID": "1:540064305831:android:28ce9d59abe79b52c80182",
-        "FIREBASE_DATABASE_URL": "https://circleup-63110-default-rtdb.firebaseio.com"
+      "android": {
+        "buildType": "apk"
       },
-      "channel": "development"
+      "autoIncrement": true,
+      "env": {
+        "EAS_NO_FROZEN_LOCKFILE": "1"
+      },
+      "channel": "develop",
+      "cache": {
+        "disabled": false
+      }
     },
     "preview": {
       "distribution": "internal",
+      "channel": "preview",
       "env": {
-        "FIREBASE_API_KEY": "AIzaSyBpmR20DaOa2Plt8qvnfQiVaa8aRYR96ds",
-        "FIREBASE_AUTH_DOMAIN": "circleup-63110.firebaseapp.com",
-        "FIREBASE_PROJECT_ID": "circleup-63110",
-        "FIREBASE_STORAGE_BUCKET": "circleup-63110.firebasestorage.app",
-        "FIREBASE_MESSAGING_SENDER_ID": "540064305831",
-        "FIREBASE_APP_ID": "1:540064305831:android:28ce9d59abe79b52c80182",
-        "FIREBASE_DATABASE_URL": "https://circleup-63110-default-rtdb.firebaseio.com"
+        "EAS_NO_FROZEN_LOCKFILE": "1"
       },
-      "channel": "preview"
+      "cache": {
+        "disabled": false
+      }
     },
     "production": {
       "autoIncrement": true,
-      "distribution": "store",
+      "channel": "production",
       "env": {
-        "FIREBASE_API_KEY": "AIzaSyBpmR20DaOa2Plt8qvnfQiVaa8aRYR96ds",
-        "FIREBASE_AUTH_DOMAIN": "circleup-63110.firebaseapp.com",
-        "FIREBASE_PROJECT_ID": "circleup-63110",
-        "FIREBASE_STORAGE_BUCKET": "circleup-63110.firebasestorage.app",
-        "FIREBASE_MESSAGING_SENDER_ID": "540064305831",
-        "FIREBASE_APP_ID": "1:540064305831:android:28ce9d59abe79b52c80182",
-        "FIREBASE_DATABASE_URL": "https://circleup-63110-default-rtdb.firebaseio.com"
+        "EAS_NO_FROZEN_LOCKFILE": "1"
       },
-      "channel": "production"
+      "cache": {
+        "disabled": false
+      }
     }
   },
   "submit": {
