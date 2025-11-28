@@ -16,7 +16,10 @@ export default {
       config: {
         usesNonExemptEncryption: false
       },
-      googleServicesFile: "./GoogleService-Info.plist"
+      googleServicesFile: "./GoogleService-Info.plist",
+      infoPlist: {
+        NSContactsUsageDescription: "CircleUp needs access to your contacts to help you manage relationships, track interactions, and set reminders for staying connected with the people who matter to you."
+      }
     },
     web: {
       bundler: "metro",
@@ -60,6 +63,12 @@ export default {
       eas: {
         projectId: "e192a659-fba6-49e5-b3fa-501e337889c5"
       }
-    }
+    },
+    updates: {
+    url: "https://u.expo.dev/e192a659-fba6-49e5-b3fa-501e337889c5"
+  },
+  runtimeVersion: {
+    policy: "appVersion"
+  }
   }
 };

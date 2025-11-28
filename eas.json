@@ -4,16 +4,39 @@
     "appVersionSource": "remote"
   },
   "build": {
-    "development": {
-      "developmentClient": true,
-      "distribution": "internal"
+    "develop": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "autoIncrement": true,
+      "env": {
+        "EAS_NO_FROZEN_LOCKFILE": "1"
+      },
+      "channel": "develop",
+      "cache": {
+        "disabled": false
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "channel": "preview",
+      "env": {
+        "EAS_NO_FROZEN_LOCKFILE": "1"
+      },
+      "cache": {
+        "disabled": false
+      }
     },
     "production": {
       "autoIncrement": true,
-      "distribution": "store"
+      "channel": "production",
+      "env": {
+        "EAS_NO_FROZEN_LOCKFILE": "1"
+      },
+      "cache": {
+        "disabled": false
+      }
     }
   },
   "submit": {
