@@ -32,7 +32,6 @@ export default {
       favicon: './assets/images/favicon.png',
     },
     plugins: [
-      'expo-build-properties',
       'expo-router',
       'expo-font',
       'expo-web-browser',
@@ -48,6 +47,15 @@ export default {
           },
         },
       ],
+      "@react-native-firebase/app",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
+      ]
     ],
     experiments: {
       typedRoutes: true,
