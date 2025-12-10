@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
+import { analyticsService } from '@/services/AnalyticsService';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -17,6 +18,14 @@ const queryClient = new QueryClient({
 
 export default function RootLayout() {
   useFrameworkReady();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    // Log screen view on route change
+    // Using pathname as the screen name
+    const screenName = pathname === '/' ? 'Home' : pathname.replace('/', '');
+    analyticsService.logScreenView(screenName || 'Unknown');
+  }, [pathname]);
 
 
   return (

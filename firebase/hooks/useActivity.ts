@@ -1,19 +1,20 @@
 import { useState, useEffect, useCallback } from 'react';
 import ActivityService from '../services/ActivityService';
-import type { 
-  Activity, 
-  CreateActivityData, 
-  UpdateActivityData, 
+import type {
+  Activity,
+  CreateActivityData,
+  UpdateActivityData,
   ActivityStats,
-  ActivityType 
+  ActivityType
 } from '../types';
 import { useAuth } from './useAuth';
+import { analyticsService } from '../../services/AnalyticsService';
 
 export const useActivity = () => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   const activityService = ActivityService.getInstance();
   const { currentUser: user } = useAuth();
 
@@ -39,12 +40,18 @@ export const useActivity = () => {
 
   const createActivity = useCallback(async (activityData: CreateActivityData): Promise<Activity> => {
     if (!user?.uid) throw new Error('User not authenticated');
-    
+
     try {
       setError(null);
       const newActivity = await activityService.createActivity(user.uid, activityData);
-      
+
       // Real-time listener will automatically update the state
+
+      // Log Activity Created Event
+      analyticsService.logEvent('activity_created', {
+        type: activityData.type,
+      });
+
       return newActivity;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create activity');
@@ -54,11 +61,11 @@ export const useActivity = () => {
 
   const updateActivity = useCallback(async (activityId: string, updates: UpdateActivityData): Promise<boolean> => {
     if (!user?.uid) return false;
-    
+
     try {
       setError(null);
       const success = await activityService.updateActivity(user.uid, activityId, updates);
-      
+
       // Real-time listener will automatically update the state
       return success;
     } catch (err) {
@@ -69,11 +76,11 @@ export const useActivity = () => {
 
   const deleteActivity = useCallback(async (activityId: string): Promise<boolean> => {
     if (!user?.uid) return false;
-    
+
     try {
       setError(null);
       const success = await activityService.deleteActivity(user.uid, activityId);
-      
+
       // Real-time listener will automatically update the state
       return success;
     } catch (err) {
@@ -84,11 +91,11 @@ export const useActivity = () => {
 
   const archiveActivity = useCallback(async (activityId: string): Promise<boolean> => {
     if (!user?.uid) return false;
-    
+
     try {
       setError(null);
       const success = await activityService.archiveActivity(user.uid, activityId);
-      
+
       // Real-time listener will automatically update the state
       return success;
     } catch (err) {
@@ -99,11 +106,11 @@ export const useActivity = () => {
 
   const completeReminder = useCallback(async (activityId: string): Promise<boolean> => {
     if (!user?.uid) return false;
-    
+
     try {
       setError(null);
       const success = await activityService.completeReminder(user.uid, activityId);
-      
+
       // Real-time listener will automatically update the state
       return success;
     } catch (err) {
@@ -114,7 +121,7 @@ export const useActivity = () => {
 
   const getActivityById = useCallback(async (activityId: string): Promise<Activity | null> => {
     if (!user?.uid) return null;
-    
+
     try {
       setError(null);
       return await activityService.getActivityById(user.uid, activityId);
@@ -126,7 +133,7 @@ export const useActivity = () => {
 
   const getActivityByReminderId = useCallback(async (reminderId: string): Promise<Activity | null> => {
     if (!user?.uid) return null;
-    
+
     try {
       setError(null);
       return await activityService.getActivityByReminderId(user.uid, reminderId);
@@ -138,7 +145,7 @@ export const useActivity = () => {
 
   const getActivitiesByType = useCallback(async (type: ActivityType): Promise<Activity[]> => {
     if (!user?.uid) return [];
-    
+
     try {
       setError(null);
       return await activityService.getActivitiesByType(user.uid, type);
@@ -150,7 +157,7 @@ export const useActivity = () => {
 
   const searchActivities = useCallback(async (searchQuery: string): Promise<Activity[]> => {
     if (!user?.uid) return [];
-    
+
     try {
       setError(null);
       return await activityService.searchActivities(user.uid, searchQuery);
@@ -162,7 +169,7 @@ export const useActivity = () => {
 
   const getActivitiesByTags = useCallback(async (tags: string[]): Promise<Activity[]> => {
     if (!user?.uid) return [];
-    
+
     try {
       setError(null);
       return await activityService.getActivitiesByTags(user.uid, tags);
@@ -174,7 +181,7 @@ export const useActivity = () => {
 
   const getActivityStats = useCallback(async (): Promise<ActivityStats | null> => {
     if (!user?.uid) return null;
-    
+
     try {
       setError(null);
       return await activityService.getActivityStats(user.uid);
@@ -186,7 +193,7 @@ export const useActivity = () => {
 
   const getAllTags = useCallback(async (): Promise<string[]> => {
     if (!user?.uid) return [];
-    
+
     try {
       setError(null);
       return await activityService.getAllTags(user.uid);
@@ -204,8 +211,8 @@ export const useActivity = () => {
 
   // Filter activities by completion status (for reminders)
   const getRemindersByStatus = useCallback((completed: boolean) => {
-    return activities.filter(activity => 
-      activity.type === 'reminder' && 
+    return activities.filter(activity =>
+      activity.type === 'reminder' &&
       (activity as any).isCompleted === completed
     );
   }, [activities]);
@@ -215,24 +222,24 @@ export const useActivity = () => {
     if (!timestamp) {
       return new Date(); // Return current date if timestamp is null/undefined
     }
-    
+
     if (timestamp instanceof Date) {
       return timestamp;
     }
-    
+
     if (timestamp && typeof timestamp === 'object' && 'seconds' in timestamp) {
       // Firebase Timestamp object
       return new Date(timestamp.seconds * 1000);
     }
-    
+
     if (typeof timestamp === 'string') {
       return new Date(timestamp);
     }
-    
+
     if (typeof timestamp === 'number') {
       return new Date(timestamp);
     }
-    
+
     // Fallback to current date
     return new Date();
   }, []);
@@ -241,7 +248,7 @@ export const useActivity = () => {
   const getRecentActivities = useCallback(() => {
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-    
+
     return activities.filter(activity => {
       const createdAt = safeTimestampToDate(activity.createdAt);
       return createdAt >= oneWeekAgo;
@@ -253,7 +260,7 @@ export const useActivity = () => {
     activities,
     isLoading,
     error,
-    
+
     // Actions
     createActivity,
     updateActivity,
@@ -267,7 +274,7 @@ export const useActivity = () => {
     getActivitiesByTags,
     getActivityStats,
     getAllTags,
-    
+
     // Filters
     getFilteredActivities,
     getRemindersByStatus,

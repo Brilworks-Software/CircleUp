@@ -26,6 +26,7 @@ import { useAuth } from '../firebase/hooks/useAuth';
 import { Contact } from '../firebase/types';
 import { ReminderTypes, getReminderTypeDisplayName } from '../constants/ReminderTypes';
 import RemindersService from '../firebase/services/RemindersService';
+import { analyticsService } from '../services/AnalyticsService';
 
 interface AddActivityModalProps {
   visible: boolean;
@@ -54,8 +55,11 @@ export default function AddActivityModal({
 
   // Load device contacts on mobile when modal opens
   useEffect(() => {
-    if (visible && Platform.OS !== 'web') {
-      loadDeviceContacts();
+    if (visible) {
+      analyticsService.logScreenView('AddActivityModal');
+      if (Platform.OS !== 'web') {
+        loadDeviceContacts();
+      }
     }
   }, [visible]);
 

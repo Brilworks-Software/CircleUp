@@ -32,6 +32,7 @@ export default {
       favicon: './assets/images/favicon.png',
     },
     plugins: [
+      'expo-build-properties',
       'expo-router',
       'expo-font',
       'expo-web-browser',
@@ -54,6 +55,7 @@ export default {
     android: {
       package: 'com.brilworks.circleUp',
       googleServicesFile: './google-services.json',
+      edgeToEdgeEnabled: true,
     },
     extra: {
       // Firebase configuration from environment variables

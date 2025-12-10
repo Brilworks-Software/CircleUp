@@ -9,6 +9,7 @@ import { useCreateUser } from './useUser';
 import { userStore } from '../stores/userStore';
 import type { User } from 'firebase/auth';
 import { addUserFCMToken, clearUserFCMTokens } from '../../services/PushNotificationService';
+import { analyticsService } from '../../services/AnalyticsService';
 
 export const useAuth = () => {
   const queryClient = useQueryClient();
@@ -22,13 +23,16 @@ export const useAuth = () => {
     const unsubscribe = authService.onAuthStateChanged(async (user) => {
       setCurrentUser(user);
       setIsLoadingUser(false);
-      
+
       // Update userStore when auth state changes
       if (user) {
         // User is signed in - invalidate queries to refetch user data
         queryClient.invalidateQueries({ queryKey: ['currentUser'] });
         queryClient.invalidateQueries({ queryKey: ['user', user.uid] });
-        
+
+        // Set Analytics User ID
+        analyticsService.setUserId(user.uid);
+
         // Add FCM token for the logged-in user (only once per session)
         if (!fcmTokenRegistered) {
           try {
@@ -43,6 +47,8 @@ export const useAuth = () => {
         userStore.clearUser();
         queryClient.clear();
         setFcmTokenRegistered(false);
+        // Clear Analytics User ID
+        analyticsService.setUserId(null);
       }
     });
 
@@ -59,7 +65,7 @@ export const useAuth = () => {
     mutationFn: async (credentials: RegisterCredentials) => {
       // First, create the Firebase Auth user
       const userCredential = await authService.signUp(credentials);
-      
+
       // Then, create the user document in Firestore
       if (userCredential.user) {
         await createUserMutation.mutateAsync({
@@ -72,10 +78,21 @@ export const useAuth = () => {
             phone: credentials.phone,
           }
         });
-        
+
+        // Log Sign Up Event
+        analyticsService.logEvent('sign_up', {
+          method: 'email',
+        });
+
+        // Set basic user properties
+        analyticsService.setUserProperties({
+          age: credentials.age?.toString() || null,
+          gender: credentials.gender || null,
+        });
+
         // FCM token will be added automatically by the auth state listener
       }
-      
+
       return userCredential;
     },
     // Auth state listener will handle query invalidation
@@ -89,7 +106,7 @@ export const useAuth = () => {
       } catch (error) {
         console.error('Failed to clear FCM tokens on signout:', error);
       }
-      
+
       // Then sign out
       return authService.signOut();
     },
@@ -104,7 +121,7 @@ export const useAuth = () => {
       } catch (error) {
         console.error('Failed to clear FCM tokens on account deletion:', error);
       }
-      
+
       // Then delete the account
       return authService.deleteAccount();
     },

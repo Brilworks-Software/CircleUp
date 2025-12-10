@@ -57,6 +57,7 @@ import EditActivityModal from '../../components/EditActivityModal';
 import CreateEditRelationshipModal from '../../components/CreateEditRelationshipModal';
 import RelationshipInfoModal from '../../components/RelationshipInfoModal';
 import WebCompatibleDateTimePicker from '../../components/WebCompatibleDateTimePicker';
+import { analyticsService } from '../../services/AnalyticsService';
 import type {
   Reminder,
   ReminderFrequency,
@@ -461,14 +462,14 @@ export default function HomeScreen() {
       setIsReauthLoading(true);
       await reauthenticate(password);
       await deleteAccount();
-      
+
       // Small delay to ensure account deletion completes, then navigate to auth screen
       setTimeout(() => {
         router.replace('/(auth)/login');
       }, 500);
     } catch (error: any) {
       console.error('Error during re-authentication and deletion:', error);
-      
+
       // Handle specific error cases
       if (error.message?.includes('wrong-password') || error.code === 'auth/wrong-password') {
         showAlert('Error', 'Incorrect password. Please try again.');
@@ -781,6 +782,7 @@ export default function HomeScreen() {
 
   // Activity handlers
   const handleAddActivity = () => {
+    analyticsService.logAddActivityClick();
     setAddActivityModalVisible(true);
   };
 
@@ -1121,11 +1123,11 @@ export default function HomeScreen() {
         [Contacts.Fields.JobTitle]: contactData.jobTitle || '',
         [Contacts.Fields.Addresses]: contactData.address
           ? [
-              {
-                street: contactData.address,
-                label: 'work',
-              },
-            ]
+            {
+              street: contactData.address,
+              label: 'work',
+            },
+          ]
           : [],
       };
 
@@ -1326,9 +1328,8 @@ export default function HomeScreen() {
         await createActivity({
           type: 'reminder',
           title: `Reminder completed: ${reminder.contactName}`,
-          description: `Completed reminder: ${reminder.type}${
-            reminder.notes ? ` - ${reminder.notes}` : ''
-          }`,
+          description: `Completed reminder: ${reminder.type}${reminder.notes ? ` - ${reminder.notes}` : ''
+            }`,
           tags: ['completed', 'reminder'],
           contactId: reminder.contactId || '',
           contactName: reminder.contactName,
@@ -1371,9 +1372,8 @@ export default function HomeScreen() {
         await createActivity({
           type: 'reminder',
           title: `Reminder rescheduled: ${reminder.contactName}`,
-          description: `Rescheduled reminder: ${reminder.type}${
-            reminder.notes ? ` - ${reminder.notes}` : ''
-          } (Next: ${formatDate(nextDate)})`,
+          description: `Rescheduled reminder: ${reminder.type}${reminder.notes ? ` - ${reminder.notes}` : ''
+            } (Next: ${formatDate(nextDate)})`,
           tags: ['rescheduled', 'reminder'],
           contactId: reminder.contactId || '',
           contactName: reminder.contactName,
@@ -2130,22 +2130,22 @@ export default function HomeScreen() {
                       key={type}
                       style={[
                         styles.editReminderTypeOption,
+                        editReminderType === type &&
+                        styles.editReminderTypeOptionSelected,
+                      ]}
+                      onPress={() => setEditReminderType(type)}
+                    >
+                      <Text
+                        style={[
+                          styles.editReminderTypeOptionText,
                           editReminderType === type &&
-                            styles.editReminderTypeOptionSelected,
+                          styles.editReminderTypeOptionTextSelected,
                         ]}
-                        onPress={() => setEditReminderType(type)}
                       >
-                        <Text
-                          style={[
-                            styles.editReminderTypeOptionText,
-                            editReminderType === type &&
-                              styles.editReminderTypeOptionTextSelected,
-                          ]}
-                        >
-                         {getReminderTypeDisplayName(type)}
-                        </Text>
-                      </TouchableOpacity>
-                    )
+                        {getReminderTypeDisplayName(type)}
+                      </Text>
+                    </TouchableOpacity>
+                  )
                   )}
                 </View>
 
@@ -2157,7 +2157,7 @@ export default function HomeScreen() {
                       style={[
                         styles.editReminderFrequencyOption,
                         editReminderFrequency === option.key &&
-                          styles.editReminderFrequencyOptionSelected,
+                        styles.editReminderFrequencyOptionSelected,
                       ]}
                       onPress={() =>
                         setEditReminderFrequency(
@@ -2169,7 +2169,7 @@ export default function HomeScreen() {
                         style={[
                           styles.editReminderFrequencyOptionText,
                           editReminderFrequency === option.key &&
-                            styles.editReminderFrequencyOptionTextSelected,
+                          styles.editReminderFrequencyOptionTextSelected,
                         ]}
                       >
                         {option.label}
@@ -2329,7 +2329,7 @@ export default function HomeScreen() {
                 style={[
                   styles.editReminderUpdateButton,
                   !editReminderNote.trim() &&
-                    styles.editReminderUpdateButtonDisabled,
+                  styles.editReminderUpdateButtonDisabled,
                 ]}
                 onPress={handleUpdateReminder}
                 disabled={!editReminderNote.trim()}
@@ -2338,7 +2338,7 @@ export default function HomeScreen() {
                   style={[
                     styles.editReminderUpdateButtonText,
                     !editReminderNote.trim() &&
-                      styles.editReminderUpdateButtonTextDisabled,
+                    styles.editReminderUpdateButtonTextDisabled,
                   ]}
                 >
                   Update Reminder
@@ -2400,8 +2400,8 @@ export default function HomeScreen() {
             style={[
               styles.statCard,
               isLoadingRealTimeStats &&
-                !hasLoadedInitialStats &&
-                styles.statCardLoading,
+              !hasLoadedInitialStats &&
+              styles.statCardLoading,
             ]}
             onPress={() => {
               if (
@@ -2429,8 +2429,8 @@ export default function HomeScreen() {
             style={[
               styles.statCard,
               isLoadingRealTimeStats &&
-                !hasLoadedInitialStats &&
-                styles.statCardLoading,
+              !hasLoadedInitialStats &&
+              styles.statCardLoading,
             ]}
             onPress={() => {
               if (
@@ -2506,7 +2506,7 @@ export default function HomeScreen() {
                       style={[
                         styles.reminderTabText,
                         activeReminderTab === tab.key &&
-                          styles.activeReminderTabText,
+                        styles.activeReminderTabText,
                       ]}
                     >
                       {tab.label}
@@ -2516,14 +2516,14 @@ export default function HomeScreen() {
                         style={[
                           styles.reminderTabCount,
                           activeReminderTab === tab.key &&
-                            styles.activeReminderTabCount,
+                          styles.activeReminderTabCount,
                         ]}
                       >
                         <Text
                           style={[
                             styles.reminderTabCountText,
                             activeReminderTab === tab.key &&
-                              styles.activeReminderTabCountText,
+                            styles.activeReminderTabCountText,
                           ]}
                         >
                           {isLoadingReminders ? '...' : tab.count}
@@ -2571,8 +2571,8 @@ export default function HomeScreen() {
                         {activeReminderTab === 'missed'
                           ? 'All caught up!'
                           : activeReminderTab === 'thisWeek'
-                          ? 'No reminders this week'
-                          : 'No upcoming reminders'}
+                            ? 'No reminders this week'
+                            : 'No upcoming reminders'}
                       </Text>
                     </View>
                   );
@@ -2913,16 +2913,14 @@ export default function HomeScreen() {
                     <View style={styles.activityContent}>
                       <Text style={styles.activityTitle}>
                         {activity.type === 'note'
-                          ? `Note about ${
-                              (activity as any).contactName || 'Contact'
-                            }`
+                          ? `Note about ${(activity as any).contactName || 'Contact'
+                          }`
                           : activity.type === 'interaction'
-                          ? `${activity.interactionType} with ${activity.contactName}`
-                          : activity.type === 'reminder'
-                          ? `Reminder for ${activity.contactName}`
-                          : `Activity with ${
-                              (activity as any).contactName || 'Contact'
-                            }`}
+                            ? `${activity.interactionType} with ${activity.contactName}`
+                            : activity.type === 'reminder'
+                              ? `Reminder for ${activity.contactName}`
+                              : `Activity with ${(activity as any).contactName || 'Contact'
+                              }`}
                       </Text>
                       <Text style={styles.activityDescription}>
                         {activity.description}
@@ -3038,8 +3036,8 @@ export default function HomeScreen() {
       {renderEditReminderModal()}
 
       {/* Contact Selection Modal */}
-      <Modal 
-        visible={showContactList} 
+      <Modal
+        visible={showContactList}
         animationType="slide"
         presentationStyle="pageSheet"
         statusBarTranslucent={false}
@@ -3279,7 +3277,7 @@ export default function HomeScreen() {
                   style={[
                     styles.input,
                     contactValidationErrors.contactJobTitle &&
-                      styles.inputError,
+                    styles.inputError,
                   ]}
                   value={newContactJobTitle}
                   onChangeText={(text) => {
@@ -3326,7 +3324,7 @@ export default function HomeScreen() {
                   style={[
                     styles.input,
                     contactValidationErrors.contactLinkedin &&
-                      styles.inputError,
+                    styles.inputError,
                   ]}
                   value={newContactLinkedin}
                   onChangeText={(text) => {
@@ -3374,7 +3372,7 @@ export default function HomeScreen() {
                   style={[
                     styles.input,
                     contactValidationErrors.contactInstagram &&
-                      styles.inputError,
+                    styles.inputError,
                   ]}
                   value={newContactInstagram}
                   onChangeText={(text) => {
@@ -3398,7 +3396,7 @@ export default function HomeScreen() {
                   style={[
                     styles.input,
                     contactValidationErrors.contactFacebook &&
-                      styles.inputError,
+                    styles.inputError,
                   ]}
                   value={newContactFacebook}
                   onChangeText={(text) => {
@@ -3447,7 +3445,7 @@ export default function HomeScreen() {
                   style={[
                     styles.input,
                     contactValidationErrors.contactBirthday &&
-                      styles.inputError,
+                    styles.inputError,
                   ]}
                   value={newContactBirthday}
                   onChangeText={(text) => {
@@ -3606,7 +3604,7 @@ export default function HomeScreen() {
             <Text style={styles.reauthModalMessage}>
               For your security, please enter your current password to confirm account deletion. This ensures only you can delete your account.
             </Text>
-            
+
             <TextInput
               style={styles.passwordInput}
               placeholder="Enter your password"
@@ -3616,7 +3614,7 @@ export default function HomeScreen() {
               autoFocus={true}
               editable={!isReauthLoading}
             />
-            
+
             <View style={styles.reauthModalButtons}>
               <TouchableOpacity
                 style={[styles.reauthModalButton, styles.reauthCancelButton]}
@@ -3625,7 +3623,7 @@ export default function HomeScreen() {
               >
                 <Text style={styles.reauthCancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity
                 style={[styles.reauthModalButton, styles.reauthDeleteButton]}
                 onPress={handleReauthAndDelete}
