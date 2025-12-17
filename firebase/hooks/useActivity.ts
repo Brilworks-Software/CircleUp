@@ -8,7 +8,7 @@ import type {
   ActivityType
 } from '../types';
 import { useAuth } from './useAuth';
-import { analyticsService } from '../../services/AnalyticsService';
+
 
 export const useActivity = () => {
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -48,9 +48,10 @@ export const useActivity = () => {
       // Real-time listener will automatically update the state
 
       // Log Activity Created Event
-      analyticsService.logEvent('activity_created', {
-        type: activityData.type,
-      });
+      // Log Activity Created Event
+      // analyticsService.logEvent('activity_created', {
+      //   type: activityData.type,
+      // });
 
       return newActivity;
     } catch (err) {

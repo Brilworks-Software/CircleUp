@@ -26,6 +26,7 @@ import { useActivity } from '../../firebase/hooks/useActivity';
 import AddActivityModal from '../../components/AddActivityModal';
 import EditActivityModal from '../../components/EditActivityModal';
 import CreateEditRelationshipModal from '../../components/CreateEditRelationshipModal';
+
 import RemindersService from '../../firebase/services/RemindersService';
 import { Tags } from '../../constants/Tags';
 import type { Contact, Relationship } from '../../firebase/types';

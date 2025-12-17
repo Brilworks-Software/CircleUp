@@ -1,4 +1,7 @@
-import analytics from '@react-native-firebase/analytics';
+import { getAnalytics, logEvent, logScreenView, setUserId, setUserProperties } from '@react-native-firebase/analytics';
+import { app } from '../firebase/config';
+
+const analyticsInstance = getAnalytics(app);
 
 /**
  * Service Wrapper for Google Analytics (Firebase)
@@ -12,7 +15,7 @@ class AnalyticsService {
      */
     async logEvent(eventName: string, params?: Record<string, any>) {
         try {
-            await analytics().logEvent(eventName, params);
+            await logEvent(analyticsInstance, eventName, params);
             console.log(`[Analytics] Event: ${eventName}`, params);
         } catch (error) {
             console.error(`[Analytics] Failed to log event: ${eventName}`, error);
@@ -25,7 +28,7 @@ class AnalyticsService {
      */
     async setUserId(userId: string | null) {
         try {
-            await analytics().setUserId(userId);
+            await setUserId(analyticsInstance, userId);
             console.log(`[Analytics] User ID set: ${userId}`);
         } catch (error) {
             console.error(`[Analytics] Failed to set user ID`, error);
@@ -38,7 +41,7 @@ class AnalyticsService {
      */
     async setUserProperties(properties: Record<string, string | null>) {
         try {
-            await analytics().setUserProperties(properties);
+            await setUserProperties(analyticsInstance, properties);
             console.log(`[Analytics] User Properties set`, properties);
         } catch (error) {
             console.error(`[Analytics] Failed to set user properties`, error);
@@ -53,7 +56,7 @@ class AnalyticsService {
      */
     async logScreenView(screenName: string, screenClass?: string) {
         try {
-            await analytics().logScreenView({
+            await logScreenView(analyticsInstance, {
                 screen_name: screenName,
                 screen_class: screenClass,
             });

@@ -4,7 +4,7 @@ export default {
   expo: {
     name: 'circle-up',
     slug: 'circle-up',
-    version: '1.0.0',
+    version: '1.0.1',
     orientation: 'portrait',
     icon: './assets/images/icon.png',
     scheme: 'myapp',
@@ -16,15 +16,11 @@ export default {
       config: {
         usesNonExemptEncryption: false,
       },
-      googleServicesFile: './GoogleService-Info.plist',
-      infoPlist: {
-        NSContactsUsageDescription:
-          'We use your contacts to sync your friends and connections between our mobile and web apps. Contacts will be securely uploaded to our server only with your consent.',
-      },
       googleServicesFile: "./GoogleService-Info.plist",
       infoPlist: {
         NSContactsUsageDescription: "CircleUp needs access to your contacts to help you manage relationships, track interactions, and set reminders for staying connected with the people who matter to you."
-      }
+      },
+      buildNumber: '14',
     },
     web: {
       bundler: 'metro',
@@ -52,7 +48,7 @@ export default {
         "expo-build-properties",
         {
           "ios": {
-            "useFrameworks": "static"
+            "deploymentTarget": "15.1"
           }
         }
       ]
@@ -62,8 +58,9 @@ export default {
     },
     android: {
       package: 'com.brilworks.circleUp',
-      googleServicesFile: './google-services.json',
+      googleServicesFile: './circleup-63110-0c1125739074.json',
       edgeToEdgeEnabled: true,
+      versionCode: 14,
     },
     extra: {
       // Firebase configuration from environment variables

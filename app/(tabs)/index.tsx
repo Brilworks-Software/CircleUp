@@ -57,7 +57,7 @@ import EditActivityModal from '../../components/EditActivityModal';
 import CreateEditRelationshipModal from '../../components/CreateEditRelationshipModal';
 import RelationshipInfoModal from '../../components/RelationshipInfoModal';
 import WebCompatibleDateTimePicker from '../../components/WebCompatibleDateTimePicker';
-import { analyticsService } from '../../services/AnalyticsService';
+
 import type {
   Reminder,
   ReminderFrequency,
@@ -782,7 +782,7 @@ export default function HomeScreen() {
 
   // Activity handlers
   const handleAddActivity = () => {
-    analyticsService.logAddActivityClick();
+    // analyticsService.logAddActivityClick();
     setAddActivityModalVisible(true);
   };
 
