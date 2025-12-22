@@ -11,6 +11,7 @@ import {
   Animated,
   Platform,
   FlatList,
+  KeyboardAvoidingView,
 } from 'react-native';
 import WebCompatibleDateTimePicker from './WebCompatibleDateTimePicker';
 import { X, Calendar, Clock, Phone, Mail, MessageCircle, User } from 'lucide-react-native';
@@ -622,6 +623,11 @@ export default function CreateEditRelationshipModal({
         presentationStyle="pageSheet"
         statusBarTranslucent={false}
       >
+        <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+            style={[styles.keyboardAvoidingView]}
+          > 
         <SafeAreaView style={styles.modalContainer} edges={['top', 'left', 'right']}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>
@@ -1079,6 +1085,7 @@ export default function CreateEditRelationshipModal({
             </TouchableOpacity>
           </ScrollView>
         </SafeAreaView>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );
@@ -1088,6 +1095,11 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     backgroundColor: '#ffffff',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+    justifyContent: 'center',
+    // alignItems: 'center',
   },
   modalHeader: {
     flexDirection: 'row',

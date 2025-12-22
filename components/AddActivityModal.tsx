@@ -165,7 +165,7 @@ export default function AddActivityModal({
   const remindersService = RemindersService.getInstance();
   const [activeActivityTab, setActiveActivityTab] = useState<
     'note' | 'interaction' | 'reminder'
-  >('note');
+  >('reminder');
 
   // Contact picker states
   const [showContactPicker, setShowContactPicker] = useState(false);
@@ -904,6 +904,9 @@ export default function AddActivityModal({
       // if (!activityReminderTitle.trim()) {
       //   errors.reminderTitle = 'Reminder title is required';
       // }
+      if (!activityReminderNotes.trim()) {
+        errors.reminderNotes = 'Reminder notes are required';
+      }
       if (!activityReminderDate) {
         errors.reminderDate = 'Reminder date is required';
       } else {
@@ -1342,13 +1345,14 @@ export default function AddActivityModal({
         animationType="fade"
         transparent
         onRequestClose={handleClose}
+        style={{backgroundColor:'green'}}
       >
-        <View style={styles.addActivityOverlay}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-            style={styles.keyboardAvoidingView}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+            style={[styles.keyboardAvoidingView]}
           >
+        <View style={[styles.addActivityOverlay]}>
             <View style={styles.addActivityContainer}>
               <View style={styles.addActivityHeader}>
 
@@ -1931,7 +1935,7 @@ export default function AddActivityModal({
                       </View>
 
                       <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Notes</Text>
+                        <Text style={styles.inputLabel}>Notes *</Text>
                         <TextInput
                           style={styles.activityTextArea}
                           value={activityReminderNotes}
@@ -1941,7 +1945,13 @@ export default function AddActivityModal({
                           multiline
                           textAlignVertical="top"
                         />
-                      </View>
+                     
+                        {validationErrors.reminderNotes && (
+                          <Text style={styles.errorText}>
+                            {validationErrors.reminderNotes}
+                          </Text>
+                        )}
+                        </View>
                     </View>
                   )}
                 </View>
@@ -1950,6 +1960,33 @@ export default function AddActivityModal({
               {/* Activity Type Tabs - Fixed at top */}
               <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                 <View style={styles.activityTypeTabs}>
+                  <Animated.View
+                    style={[
+                      { transform: [{ scale: tabAnimations.reminder }] },
+                    ]}
+                  >
+                    <TouchableOpacity
+                      style={[
+                        styles.animatedTabButton,
+                        activeActivityTab === 'reminder' &&
+                        styles.activeActivityTypeTab,
+                      ]}
+                      onPress={() => handleTabSwitch('reminder')}
+                      activeOpacity={0.7}
+                    >
+                      <View
+                        style={[
+                          styles.tabIconContainer,
+                          activeActivityTab === 'reminder' &&
+                          styles.activeTabIconContainer,
+                        ]}
+                      >
+                        <Text style={styles.tabIcon}>⏰</Text>
+                      </View>
+
+                    </TouchableOpacity>
+                  </Animated.View>
+
                   <Animated.View
                     style={[
                       { transform: [{ scale: tabAnimations.note }] },
@@ -2004,32 +2041,7 @@ export default function AddActivityModal({
                     </TouchableOpacity>
                   </Animated.View>
 
-                  <Animated.View
-                    style={[
-                      { transform: [{ scale: tabAnimations.reminder }] },
-                    ]}
-                  >
-                    <TouchableOpacity
-                      style={[
-                        styles.animatedTabButton,
-                        activeActivityTab === 'reminder' &&
-                        styles.activeActivityTypeTab,
-                      ]}
-                      onPress={() => handleTabSwitch('reminder')}
-                      activeOpacity={0.7}
-                    >
-                      <View
-                        style={[
-                          styles.tabIconContainer,
-                          activeActivityTab === 'reminder' &&
-                          styles.activeTabIconContainer,
-                        ]}
-                      >
-                        <Text style={styles.tabIcon}>⏰</Text>
-                      </View>
-
-                    </TouchableOpacity>
-                  </Animated.View>
+                  
                 </View>
                 <TouchableOpacity
                   onPress={handleCreateActivity}
@@ -2054,8 +2066,8 @@ export default function AddActivityModal({
                 </TouchableOpacity>
               </View>
             </View>
-          </KeyboardAvoidingView>
         </View>
+          </KeyboardAvoidingView>
 
         {/* Date Pickers for Android (iOS uses direct inline pickers) */}
         {Platform.OS === 'android' && showInteractionDatePicker && (
@@ -2382,8 +2394,7 @@ const styles = StyleSheet.create({
   keyboardAvoidingView: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-    width: '100%',
+    // alignItems: 'center',
   },
   addActivityContainer: {
     backgroundColor: '#ffffff',
@@ -2482,6 +2493,7 @@ const styles = StyleSheet.create({
   addActivityContent: {
     paddingHorizontal: 20,
     paddingBottom: 20,
+    minHeight: 200,
   },
   activitySection: {
   },

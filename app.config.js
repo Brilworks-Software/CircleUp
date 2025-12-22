@@ -60,7 +60,7 @@ export default {
     },
     android: {
       package: 'com.brilworks.circleUp',
-      googleServicesFile: './circleup-63110-0c1125739074.json',
+      googleServicesFile: './google-services.json',
       edgeToEdgeEnabled: true,
       versionCode: 14,
     },

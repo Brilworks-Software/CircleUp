@@ -19,6 +19,8 @@ import {
   FlatList,
   Platform,
   Linking,
+  KeyboardAvoidingView,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -44,6 +46,8 @@ import {
   Search,
   ChevronRight,
   LogOut,
+  RefreshCw,
+  MoreVertical
 } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useAuth } from '../../firebase/hooks/useAuth';
@@ -57,6 +61,7 @@ import EditActivityModal from '../../components/EditActivityModal';
 import CreateEditRelationshipModal from '../../components/CreateEditRelationshipModal';
 import RelationshipInfoModal from '../../components/RelationshipInfoModal';
 import WebCompatibleDateTimePicker from '../../components/WebCompatibleDateTimePicker';
+import AccountMenuModal from '../../components/AccountMenuModal';
 
 import type {
   Reminder,
@@ -67,7 +72,10 @@ import type {
   ContactMethod,
   ReminderFrequency as RelationshipReminderFrequency,
 } from '../../firebase/types';
-import { ReminderTypes, getReminderTypeDisplayName } from '../../constants/ReminderTypes';
+import {
+  ReminderTypes,
+  getReminderTypeDisplayName,
+} from '../../constants/ReminderTypes';
 import { get } from 'firebase/database';
 
 // Web-compatible alert function
@@ -105,7 +113,13 @@ const showAlert = (title: string, message: string, buttons?: any[]) => {
 };
 
 export default function HomeScreen() {
-  const { currentUser, signOut, deleteAccount, isDeletingAccount, reauthenticate } = useAuth();
+  const {
+    currentUser,
+    signOut,
+    deleteAccount,
+    isDeletingAccount,
+    reauthenticate,
+  } = useAuth();
   const { data: userProfile, isLoading: isLoadingProfile } = useUser(
     currentUser?.uid || ''
   );
@@ -168,7 +182,9 @@ export default function HomeScreen() {
   const [editReminderNote, setEditReminderNote] = useState('');
   const [editReminderDate, setEditReminderDate] = useState(new Date());
   const [editReminderTime, setEditReminderTime] = useState(new Date());
-  const [editReminderType, setEditReminderType] = useState(ReminderTypes.FollowUp);
+  const [editReminderType, setEditReminderType] = useState(
+    ReminderTypes.FollowUp
+  );
   const [editReminderFrequency, setEditReminderFrequency] =
     useState<ReminderFrequency>('once');
   const [showEditDatePicker, setShowEditDatePicker] = useState(false);
@@ -186,7 +202,9 @@ export default function HomeScreen() {
 
   // Navigation state to prevent multiple taps
   const [isNavigating, setIsNavigating] = useState(false);
-  const navigationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const navigationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
 
   // Modal states
   const [editActivityModalVisible, setEditActivityModalVisible] =
@@ -222,6 +240,7 @@ export default function HomeScreen() {
   const [filteredDeviceContacts, setFilteredDeviceContacts] = useState<
     Contacts.Contact[]
   >([]);
+  const [isRefreshingContacts, setIsRefreshingContacts] = useState(false);
   const [isLoadingDeviceContacts, setIsLoadingDeviceContacts] = useState(false);
   const [hasContactPermission, setHasContactPermission] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -234,6 +253,16 @@ export default function HomeScreen() {
 
   // Contact Actions State
   const [showContactActions, setShowContactActions] = useState(false);
+
+  // Account menu modal state
+  const [showAccountMenuModal, setShowAccountMenuModal] = useState(false);
+  const menuButtonRef = useRef<View>(null);
+  const [menuButtonPosition, setMenuButtonPosition] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
 
   // New contact form states
   const [newContactName, setNewContactName] = useState('');
@@ -252,6 +281,114 @@ export default function HomeScreen() {
   const [contactValidationErrors, setContactValidationErrors] = useState<
     Record<string, string>
   >({});
+
+  // Memoized computed values
+  const recentActivities = useMemo(() => {
+    return getRecentActivities().slice(0, 6);
+  }, [activities]);
+
+  const currentReminders = useMemo(() => {
+    switch (activeReminderTab) {
+      case 'missed':
+        return missedReminders;
+      case 'thisWeek':
+        return thisWeekReminders;
+      case 'upcoming':
+        return upcomingReminders;
+      default:
+        return [];
+    }
+  }, [activeReminderTab, missedReminders, thisWeekReminders, upcomingReminders]);
+
+  const displayReminders = useMemo(() => {
+    return currentReminders.slice(0, 6);
+  }, [currentReminders]);
+
+  const reminderTabs = useMemo(
+    () => [
+      {
+        key: 'missed',
+        label: 'Missed',
+        count: reminderCounts.missed || 0,
+      },
+      {
+        key: 'thisWeek',
+        label: 'This week',
+        count: reminderCounts.thisWeek || 0,
+      },
+      {
+        key: 'upcoming',
+        label: 'Upcoming',
+        count: reminderCounts.upcoming || 0,
+      },
+    ],
+    [reminderCounts]
+  );
+
+  const filteredDeviceContactsMemo = useMemo(() => {
+    if (!contactSearchQuery.trim()) {
+      return deviceContacts;
+    }
+    return deviceContacts.filter(
+      (contact) =>
+        contact.name?.toLowerCase().includes(contactSearchQuery.toLowerCase()) ||
+        contact.phoneNumbers?.[0]?.number?.includes(contactSearchQuery) ||
+        contact.emails?.[0]?.email
+          ?.toLowerCase()
+          .includes(contactSearchQuery.toLowerCase())
+    );
+  }, [deviceContacts, contactSearchQuery]);
+
+  const relationshipsData = useMemo(() => {
+    const isWeb = Platform.OS === 'web';
+    return {
+      isWeb,
+      data: isWeb ? relationships : filteredDeviceContactsMemo,
+      isLoading: isWeb ? isLoadingRelationships : isLoadingDeviceContacts,
+    };
+  }, [relationships, filteredDeviceContactsMemo, isLoadingRelationships, isLoadingDeviceContacts]);
+
+  // Memoized activity icon helper functions
+  const getActivityIcon = useCallback((activity: any) => {
+    switch (activity.type) {
+      case 'note':
+        return <FileText size={20} color="#3B82F6" />;
+      case 'interaction':
+        switch (activity.interactionType) {
+          case 'call':
+            return <Phone size={20} color="#10B981" />;
+          case 'email':
+            return <Mail size={20} color="#10B981" />;
+          case 'text':
+            return <MessageCircle size={20} color="#10B981" />;
+          case 'inPerson':
+            return <User size={20} color="#10B981" />;
+          default:
+            return <Phone size={20} color="#10B981" />;
+        }
+      case 'reminder':
+        return activity.isCompleted ? (
+          <CheckCircle size={20} color="#059669" />
+        ) : (
+          <Calendar size={20} color="#F59E0B" />
+        );
+      default:
+        return <StickyNote size={20} color="#6B7280" />;
+    }
+  }, []);
+
+  const getActivityIconBg = useCallback((activity: any) => {
+    switch (activity.type) {
+      case 'note':
+        return '#EBF8FF';
+      case 'interaction':
+        return '#ECFDF5';
+      case 'reminder':
+        return activity.isCompleted ? '#ECFDF5' : '#FFFBEB';
+      default:
+        return '#F3F4F6';
+    }
+  }, []);
 
   // Initialize app and handle all loading states
   useEffect(() => {
@@ -362,12 +499,7 @@ export default function HomeScreen() {
     ])
   );
 
-  // Load device contacts on mobile when component mounts
-  useEffect(() => {
-    if (Platform.OS !== 'web' && isAppReady) {
-      loadDeviceContacts();
-    }
-  }, [isAppReady]);
+ 
 
   // Debounced navigation function to prevent multiple taps
   const handleDebouncedNavigation = useCallback(
@@ -400,6 +532,17 @@ export default function HomeScreen() {
       }
     };
   }, []);
+
+  const handleOpenAccountMenu = () => {
+    if (menuButtonRef.current) {
+      menuButtonRef.current.measureInWindow((x: number, y: number, width: number, height: number) => {
+        setMenuButtonPosition({ x, y, width, height });
+        setShowAccountMenuModal(true);
+      });
+    } else {
+      setShowAccountMenuModal(true);
+    }
+  };
 
   const handleSignOut = () => {
     showAlert('Sign Out', 'Are you sure you want to sign out?', [
@@ -452,6 +595,8 @@ export default function HomeScreen() {
     );
   };
 
+  
+
   const handleReauthAndDelete = async () => {
     if (!password.trim()) {
       showAlert('Error', 'Please enter your password.');
@@ -471,12 +616,24 @@ export default function HomeScreen() {
       console.error('Error during re-authentication and deletion:', error);
 
       // Handle specific error cases
-      if (error.message?.includes('wrong-password') || error.code === 'auth/wrong-password') {
+      if (
+        error.message?.includes('wrong-password') ||
+        error.code === 'auth/wrong-password'
+      ) {
         showAlert('Error', 'Incorrect password. Please try again.');
-      } else if (error.message?.includes('invalid-credential') || error.code === 'auth/invalid-credential') {
-        showAlert('Error', 'Invalid password. Please check your password and try again.');
+      } else if (
+        error.message?.includes('invalid-credential') ||
+        error.code === 'auth/invalid-credential'
+      ) {
+        showAlert(
+          'Error',
+          'Invalid password. Please check your password and try again.'
+        );
       } else {
-        showAlert('Error', 'Failed to delete account. Please check your password and try again.');
+        showAlert(
+          'Error',
+          'Failed to delete account. Please check your password and try again.'
+        );
       }
     } finally {
       setIsReauthLoading(false);
@@ -511,66 +668,43 @@ export default function HomeScreen() {
     }
   };
 
-  const loadDeviceContacts = useCallback(
-    async (reset = true) => {
-      try {
-        if (reset) {
-          setIsLoadingDeviceContacts(true);
-          setContactsPage(0);
-          setDeviceContacts([]);
-          setFilteredDeviceContacts([]);
-        } else {
-          setIsLoadingMoreContacts(true);
-        }
+  const loadDeviceContacts = useCallback(async () => {
+    try {
+      setIsLoadingDeviceContacts(true);
+      setIsRefreshingContacts(true);
 
-        const pageToLoad = reset ? 0 : contactsPage + 1;
+      const { data } = await Contacts.getContactsAsync({
+        fields: [
+          Contacts.Fields.Name,
+          Contacts.Fields.PhoneNumbers,
+          Contacts.Fields.Emails,
+        ],
+        pageSize: 0, // 👈 IMPORTANT: 0 means fetch ALL contacts
+      });
 
-        // Load contacts with pagination
-        const { data } = await Contacts.getContactsAsync({
-          fields: [
-            Contacts.Fields.Name,
-            Contacts.Fields.PhoneNumbers,
-            Contacts.Fields.Emails,
-          ],
-          pageSize: CONTACTS_PAGE_SIZE,
-          pageOffset: pageToLoad * CONTACTS_PAGE_SIZE,
-        });
+      const processedContacts = data
+        .filter((contact) => contact.name && contact.name.trim())
+        .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
-        // Filter and sort contacts
-        const processedContacts = data
-          .filter((contact) => contact.name && contact.name.trim()) // Only contacts with names
-          .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-
-        if (reset) {
-          setDeviceContacts(processedContacts);
-          setFilteredDeviceContacts(processedContacts);
-        } else {
-          setDeviceContacts((prev) => [...prev, ...processedContacts]);
-          setFilteredDeviceContacts((prev) => [...prev, ...processedContacts]);
-        }
-
-        // Check if there are more contacts to load
-        setHasMoreDeviceContacts(data.length === CONTACTS_PAGE_SIZE);
-        setContactsPage(pageToLoad);
-      } catch (error) {
-        console.error('Error loading device contacts:', error);
-      } finally {
-        setIsLoadingDeviceContacts(false);
-        setIsLoadingMoreContacts(false);
-      }
-    },
-    [contactsPage, CONTACTS_PAGE_SIZE]
-  );
+      setDeviceContacts(processedContacts);
+      setIsRefreshingContacts(false);
+      setFilteredDeviceContacts(processedContacts);
+    } catch (error) {
+      console.error('Error loading device contacts:', error);
+    } finally {
+      setIsLoadingDeviceContacts(false);
+    }
+  }, []);
 
   // Load more contacts when reaching end of list
   const loadMoreContacts = useCallback(() => {
     if (!isLoadingMoreContacts && hasMoreDeviceContacts) {
-      loadDeviceContacts(false);
+      // loadDeviceContacts(false);
     }
-  }, [isLoadingMoreContacts, hasMoreDeviceContacts, loadDeviceContacts]);
+  }, [isLoadingMoreContacts, hasMoreDeviceContacts]);
 
   // Handle device contact selection with relationship check
-  const handleDeviceContactPress = (
+  const handleDeviceContactPress = useCallback((
     contact: Contacts.Contact,
     index: number
   ) => {
@@ -604,28 +738,19 @@ export default function HomeScreen() {
       });
       setShowAddRelationshipModal(true);
     }
-  };
+  }, [relationships]);
 
   const filterDeviceContacts = useCallback(
     (query: string) => {
       setContactSearchQuery(query);
-      if (!query.trim()) {
-        setFilteredDeviceContacts(deviceContacts);
-        return;
-      }
-
-      const filtered = deviceContacts.filter(
-        (contact) =>
-          contact.name?.toLowerCase().includes(query.toLowerCase()) ||
-          contact.phoneNumbers?.[0]?.number?.includes(query) ||
-          contact.emails?.[0]?.email
-            ?.toLowerCase()
-            .includes(query.toLowerCase())
-      );
-      setFilteredDeviceContacts(filtered);
     },
-    [deviceContacts]
+    []
   );
+
+  // Update filtered contacts when search query or device contacts change
+  useEffect(() => {
+    setFilteredDeviceContacts(filteredDeviceContactsMemo);
+  }, [filteredDeviceContactsMemo]);
 
   // Contact list modal functions
   const openContactList = () => {
@@ -709,11 +834,18 @@ export default function HomeScreen() {
     }
   };
 
+  const handleDeviceContactSelectMemo = useCallback(
+    (contact: Contacts.Contact) => {
+      handleDeviceContactSelect(contact);
+    },
+    [relationships]
+  );
+
   const renderDeviceContact = useCallback(
     ({ item }: { item: Contacts.Contact }) => (
       <TouchableOpacity
         style={styles.contactItem}
-        onPress={() => handleDeviceContactSelect(item)}
+        onPress={() => handleDeviceContactSelectMemo(item)}
       >
         <View style={styles.contactItemContent}>
           <Text style={styles.contactItemName}>{item.name}</Text>
@@ -732,26 +864,26 @@ export default function HomeScreen() {
         </View>
       </TouchableOpacity>
     ),
-    []
+    [handleDeviceContactSelectMemo]
   );
 
   // Activity handlers
-  const handleEditActivity = (activity: any) => {
+  const handleEditActivity = useCallback((activity: any) => {
     setSelectedActivity(activity);
     setEditActivityModalVisible(true);
-  };
+  }, []);
 
-  const handleDeleteActivity = (activity: any) => {
+  const handleDeleteActivity = useCallback((activity: any) => {
     setSelectedActivity(activity);
     setDeleteModalVisible(true);
-  };
+  }, []);
 
-  const handleCloseEditActivityModal = () => {
+  const handleCloseEditActivityModal = useCallback(() => {
     setEditActivityModalVisible(false);
     setSelectedActivity(null);
-  };
+  }, []);
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = useCallback(async () => {
     if (!selectedActivity) return;
 
     try {
@@ -768,32 +900,32 @@ export default function HomeScreen() {
       console.error('Error deleting activity:', error);
       Alert.alert('Error', 'Failed to delete activity');
     }
-  };
+  }, [selectedActivity, deleteActivity]);
 
-  const handleActivityUpdated = () => {
+  const handleActivityUpdated = useCallback(() => {
     // Activity was updated successfully, modal will close automatically
     // You can add any additional logic here if needed
-  };
+  }, []);
 
-  const handleCancelDelete = () => {
+  const handleCancelDelete = useCallback(() => {
     setDeleteModalVisible(false);
     setSelectedActivity(null);
-  };
+  }, []);
 
   // Activity handlers
-  const handleAddActivity = () => {
+  const handleAddActivity = useCallback(() => {
     // analyticsService.logAddActivityClick();
     setAddActivityModalVisible(true);
-  };
+  }, []);
 
-  const handleCloseActivityModal = () => {
+  const handleCloseActivityModal = useCallback(() => {
     setAddActivityModalVisible(false);
-  };
+  }, []);
 
-  const handleActivityCreated = () => {
+  const handleActivityCreated = useCallback(() => {
     // Activity was created successfully, modal will close automatically
     // You can add any additional logic here if needed
-  };
+  }, []);
 
   // Relationships handlers
   const handleDeleteRelationship = async (
@@ -822,22 +954,22 @@ export default function HomeScreen() {
     );
   };
 
-  const handleEditRelationshipFromInfo = (relationship: Relationship) => {
+  const handleEditRelationshipFromInfo = useCallback((relationship: Relationship) => {
     setEditingRelationship(relationship);
     setShowEditRelationshipModal(true);
-  };
+  }, []);
 
-  const handleDataChanged = () => {
+  const handleDataChanged = useCallback(() => {
     // Force refresh of relationships and reminders data
     // The useRelationships and useRemindersInfinite hooks should automatically update
     // due to their real-time listeners, but we can trigger a manual refresh if needed
-  };
+  }, []);
 
-  const handleAddRelationship = () => {
+  const handleAddRelationship = useCallback(() => {
     setShowAddRelationshipModal(true);
-  };
+  }, []);
 
-  const selectContact = (contact: Contact) => {
+  const selectContact = useCallback((contact: Contact) => {
     // Check if relationship already exists
     const existingRelationship = relationships.find(
       (r) => r.contactId === contact.id
@@ -864,13 +996,13 @@ export default function HomeScreen() {
     setSelectedContact(contact);
     setShowContactList(false);
     setShowAddRelationshipModal(true);
-  };
+  }, [relationships]);
 
-  const handleCreateNewContact = () => {
+  const handleCreateNewContact = useCallback(() => {
     setShowNewContactModal(true);
-  };
+  }, []);
 
-  const resetNewContactForm = () => {
+  const resetNewContactForm = useCallback(() => {
     setNewContactName('');
     setNewContactPhone('');
     setNewContactEmail('');
@@ -885,7 +1017,7 @@ export default function HomeScreen() {
     setNewContactBirthday('');
     setNewContactNotes('');
     setContactValidationErrors({});
-  };
+  }, []);
 
   // Validation helper functions for new contact
   const validateContactEmail = (email: string): boolean => {
@@ -1123,11 +1255,11 @@ export default function HomeScreen() {
         [Contacts.Fields.JobTitle]: contactData.jobTitle || '',
         [Contacts.Fields.Addresses]: contactData.address
           ? [
-            {
-              street: contactData.address,
-              label: 'work',
-            },
-          ]
+              {
+                street: contactData.address,
+                label: 'work',
+              },
+            ]
           : [],
       };
 
@@ -1227,10 +1359,10 @@ export default function HomeScreen() {
   };
 
   // Reminder handlers
-  const handleReminderPress = (reminder: Reminder) => {
+  const handleReminderPress = useCallback((reminder: Reminder) => {
     setSelectedReminder(reminder);
     setShowReminderDetail(true);
-  };
+  }, []);
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
@@ -1328,8 +1460,9 @@ export default function HomeScreen() {
         await createActivity({
           type: 'reminder',
           title: `Reminder completed: ${reminder.contactName}`,
-          description: `Completed reminder: ${reminder.type}${reminder.notes ? ` - ${reminder.notes}` : ''
-            }`,
+          description: `Completed reminder: ${reminder.type}${
+            reminder.notes ? ` - ${reminder.notes}` : ''
+          }`,
           tags: ['completed', 'reminder'],
           contactId: reminder.contactId || '',
           contactName: reminder.contactName,
@@ -1372,8 +1505,9 @@ export default function HomeScreen() {
         await createActivity({
           type: 'reminder',
           title: `Reminder rescheduled: ${reminder.contactName}`,
-          description: `Rescheduled reminder: ${reminder.type}${reminder.notes ? ` - ${reminder.notes}` : ''
-            } (Next: ${formatDate(nextDate)})`,
+          description: `Rescheduled reminder: ${reminder.type}${
+            reminder.notes ? ` - ${reminder.notes}` : ''
+          } (Next: ${formatDate(nextDate)})`,
           tags: ['rescheduled', 'reminder'],
           contactId: reminder.contactId || '',
           contactName: reminder.contactName,
@@ -2131,7 +2265,7 @@ export default function HomeScreen() {
                       style={[
                         styles.editReminderTypeOption,
                         editReminderType === type &&
-                        styles.editReminderTypeOptionSelected,
+                          styles.editReminderTypeOptionSelected,
                       ]}
                       onPress={() => setEditReminderType(type)}
                     >
@@ -2139,14 +2273,13 @@ export default function HomeScreen() {
                         style={[
                           styles.editReminderTypeOptionText,
                           editReminderType === type &&
-                          styles.editReminderTypeOptionTextSelected,
+                            styles.editReminderTypeOptionTextSelected,
                         ]}
                       >
                         {getReminderTypeDisplayName(type)}
                       </Text>
                     </TouchableOpacity>
-                  )
-                  )}
+                  ))}
                 </View>
 
                 <Text style={styles.editReminderFormLabel}>Frequency</Text>
@@ -2157,7 +2290,7 @@ export default function HomeScreen() {
                       style={[
                         styles.editReminderFrequencyOption,
                         editReminderFrequency === option.key &&
-                        styles.editReminderFrequencyOptionSelected,
+                          styles.editReminderFrequencyOptionSelected,
                       ]}
                       onPress={() =>
                         setEditReminderFrequency(
@@ -2169,7 +2302,7 @@ export default function HomeScreen() {
                         style={[
                           styles.editReminderFrequencyOptionText,
                           editReminderFrequency === option.key &&
-                          styles.editReminderFrequencyOptionTextSelected,
+                            styles.editReminderFrequencyOptionTextSelected,
                         ]}
                       >
                         {option.label}
@@ -2181,7 +2314,12 @@ export default function HomeScreen() {
                 <Text style={styles.editReminderFormLabel}>Date & Time *</Text>
                 {Platform.OS === 'web' ? (
                   <View style={styles.webDateTimeRow}>
-                    <View style={[styles.webDateTimeInput, { flex: 1, marginRight: 8 }]}>
+                    <View
+                      style={[
+                        styles.webDateTimeInput,
+                        { flex: 1, marginRight: 8 },
+                      ]}
+                    >
                       <input
                         type="date"
                         value={editReminderDate.toISOString().slice(0, 10)}
@@ -2206,7 +2344,12 @@ export default function HomeScreen() {
                         }}
                       />
                     </View>
-                    <View style={[styles.webDateTimeInput, { flex: 1, marginLeft: 8 }]}>
+                    <View
+                      style={[
+                        styles.webDateTimeInput,
+                        { flex: 1, marginLeft: 8 },
+                      ]}
+                    >
                       <input
                         type="time"
                         value={editReminderTime.toTimeString().slice(0, 5)}
@@ -2266,7 +2409,9 @@ export default function HomeScreen() {
                               const newTime = new Date(selectedTime);
                               newTime.setDate(editReminderDate.getDate());
                               newTime.setMonth(editReminderDate.getMonth());
-                              newTime.setFullYear(editReminderDate.getFullYear());
+                              newTime.setFullYear(
+                                editReminderDate.getFullYear()
+                              );
                               setEditReminderTime(newTime);
                             }
                           }}
@@ -2277,7 +2422,10 @@ export default function HomeScreen() {
                 ) : (
                   <View style={styles.androidDateTimeRow}>
                     <TouchableOpacity
-                      style={[styles.editReminderDateTimeButton, { flex: 1, marginRight: 8 }]}
+                      style={[
+                        styles.editReminderDateTimeButton,
+                        { flex: 1, marginRight: 8 },
+                      ]}
                       onPress={() => setShowEditDatePicker(true)}
                     >
                       <Calendar size={20} color="#6B7280" />
@@ -2286,7 +2434,10 @@ export default function HomeScreen() {
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.editReminderDateTimeButton, { flex: 1, marginLeft: 8 }]}
+                      style={[
+                        styles.editReminderDateTimeButton,
+                        { flex: 1, marginLeft: 8 },
+                      ]}
                       onPress={() => setShowEditTimePicker(true)}
                     >
                       <Clock size={20} color="#6B7280" />
@@ -2329,7 +2480,7 @@ export default function HomeScreen() {
                 style={[
                   styles.editReminderUpdateButton,
                   !editReminderNote.trim() &&
-                  styles.editReminderUpdateButtonDisabled,
+                    styles.editReminderUpdateButtonDisabled,
                 ]}
                 onPress={handleUpdateReminder}
                 disabled={!editReminderNote.trim()}
@@ -2338,7 +2489,7 @@ export default function HomeScreen() {
                   style={[
                     styles.editReminderUpdateButtonText,
                     !editReminderNote.trim() &&
-                    styles.editReminderUpdateButtonTextDisabled,
+                      styles.editReminderUpdateButtonTextDisabled,
                   ]}
                 >
                   Update Reminder
@@ -2377,18 +2528,12 @@ export default function HomeScreen() {
               </Text>
               <Text style={styles.subtitle}>Manage your connections</Text>
             </View>
-            <View style={styles.headerButtons}>
+            <View ref={menuButtonRef} collapsable={false}>
               <TouchableOpacity
                 style={styles.headerButton}
-                onPress={handleDeleteAccount}
+                onPress={handleOpenAccountMenu}
               >
-                <Trash2 size={20} color="#EF4444" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.headerButton}
-                onPress={handleSignOut}
-              >
-                <LogOut size={20} color="#6B7280" />
+                <MoreVertical size={20} color="#6B7280" />
               </TouchableOpacity>
             </View>
           </View>
@@ -2400,8 +2545,8 @@ export default function HomeScreen() {
             style={[
               styles.statCard,
               isLoadingRealTimeStats &&
-              !hasLoadedInitialStats &&
-              styles.statCardLoading,
+                !hasLoadedInitialStats &&
+                styles.statCardLoading,
             ]}
             onPress={() => {
               if (
@@ -2429,8 +2574,8 @@ export default function HomeScreen() {
             style={[
               styles.statCard,
               isLoadingRealTimeStats &&
-              !hasLoadedInitialStats &&
-              styles.statCardLoading,
+                !hasLoadedInitialStats &&
+                styles.statCardLoading,
             ]}
             onPress={() => {
               if (
@@ -2475,23 +2620,7 @@ export default function HomeScreen() {
           {/* Reminder Tabs */}
           <View style={styles.reminderTabsContainer}>
             <View style={styles.reminderTabs}>
-              {[
-                {
-                  key: 'missed',
-                  label: 'Missed',
-                  count: reminderCounts.missed || 0,
-                },
-                {
-                  key: 'thisWeek',
-                  label: 'This week',
-                  count: reminderCounts.thisWeek || 0,
-                },
-                {
-                  key: 'upcoming',
-                  label: 'Upcoming',
-                  count: reminderCounts.upcoming || 0,
-                },
-              ].map((tab) => (
+              {reminderTabs.map((tab) => (
                 <TouchableOpacity
                   key={tab.key}
                   style={styles.reminderTab}
@@ -2506,7 +2635,7 @@ export default function HomeScreen() {
                       style={[
                         styles.reminderTabText,
                         activeReminderTab === tab.key &&
-                        styles.activeReminderTabText,
+                          styles.activeReminderTabText,
                       ]}
                     >
                       {tab.label}
@@ -2516,14 +2645,14 @@ export default function HomeScreen() {
                         style={[
                           styles.reminderTabCount,
                           activeReminderTab === tab.key &&
-                          styles.activeReminderTabCount,
+                            styles.activeReminderTabCount,
                         ]}
                       >
                         <Text
                           style={[
                             styles.reminderTabCountText,
                             activeReminderTab === tab.key &&
-                            styles.activeReminderTabCountText,
+                              styles.activeReminderTabCountText,
                           ]}
                         >
                           {isLoadingReminders ? '...' : tab.count}
@@ -2548,22 +2677,6 @@ export default function HomeScreen() {
               </View>
             ) : (
               (() => {
-                const getCurrentReminders = () => {
-                  switch (activeReminderTab) {
-                    case 'missed':
-                      return missedReminders;
-                    case 'thisWeek':
-                      return thisWeekReminders;
-                    case 'upcoming':
-                      return upcomingReminders;
-                    default:
-                      return [];
-                  }
-                };
-
-                const currentReminders = getCurrentReminders();
-                const displayReminders = currentReminders.slice(0, 6);
-
                 if (displayReminders.length === 0) {
                   return (
                     <View style={styles.emptyReminderContainer}>
@@ -2571,8 +2684,8 @@ export default function HomeScreen() {
                         {activeReminderTab === 'missed'
                           ? 'All caught up!'
                           : activeReminderTab === 'thisWeek'
-                            ? 'No reminders this week'
-                            : 'No upcoming reminders'}
+                          ? 'No reminders this week'
+                          : 'No upcoming reminders'}
                       </Text>
                     </View>
                   );
@@ -2657,6 +2770,7 @@ export default function HomeScreen() {
                 onPress={() => {
                   if (!isNavigating) {
                     handleDebouncedNavigation('/(tabs)/relationships');
+                    
                   }
                 }}
                 style={[styles.viewAllButton]}
@@ -2670,11 +2784,7 @@ export default function HomeScreen() {
           <View style={styles.relationshipsContainer}>
             {(() => {
               // Platform-specific data and loading states
-              const isWeb = Platform.OS === 'web';
-              const isLoading = isWeb
-                ? isLoadingRelationships
-                : isLoadingDeviceContacts;
-              const data = isWeb ? relationships : deviceContacts;
+              const { isWeb, data, isLoading } = relationshipsData;
               const emptyText = isWeb
                 ? 'No relationships yet'
                 : 'No device contacts found';
@@ -2845,50 +2955,7 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.activityList}>
-            {getRecentActivities()
-              .slice(0, 6)
-              .map((activity) => {
-                const getActivityIcon = () => {
-                  switch (activity.type) {
-                    case 'note':
-                      return <FileText size={20} color="#3B82F6" />;
-                    case 'interaction':
-                      // Check the specific interaction type for more accurate icons
-                      switch (activity.interactionType) {
-                        case 'call':
-                          return <Phone size={20} color="#10B981" />;
-                        case 'email':
-                          return <Mail size={20} color="#10B981" />;
-                        case 'text':
-                          return <MessageCircle size={20} color="#10B981" />;
-                        case 'inPerson':
-                          return <User size={20} color="#10B981" />;
-                        default:
-                          return <Phone size={20} color="#10B981" />; // fallback to phone
-                      }
-                    case 'reminder':
-                      return activity.isCompleted ? (
-                        <CheckCircle size={20} color="#059669" />
-                      ) : (
-                        <Calendar size={20} color="#F59E0B" />
-                      );
-                    default:
-                      return <StickyNote size={20} color="#6B7280" />;
-                  }
-                };
-
-                const getActivityIconBg = () => {
-                  switch (activity.type) {
-                    case 'note':
-                      return '#EBF8FF';
-                    case 'interaction':
-                      return '#ECFDF5';
-                    case 'reminder':
-                      return activity.isCompleted ? '#ECFDF5' : '#FFFBEB';
-                    default:
-                      return '#F3F4F6';
-                  }
-                };
+            {recentActivities.map((activity) => {
 
                 return (
                   <TouchableOpacity
@@ -2905,22 +2972,24 @@ export default function HomeScreen() {
                     <View
                       style={[
                         styles.activityIcon,
-                        { backgroundColor: getActivityIconBg() },
+                        { backgroundColor: getActivityIconBg(activity) },
                       ]}
                     >
-                      {getActivityIcon()}
+                      {getActivityIcon(activity)}
                     </View>
                     <View style={styles.activityContent}>
                       <Text style={styles.activityTitle}>
                         {activity.type === 'note'
-                          ? `Note about ${(activity as any).contactName || 'Contact'
-                          }`
+                          ? `Note about ${
+                              (activity as any).contactName || 'Contact'
+                            }`
                           : activity.type === 'interaction'
-                            ? `${activity.interactionType} with ${activity.contactName}`
-                            : activity.type === 'reminder'
-                              ? `Reminder for ${activity.contactName}`
-                              : `Activity with ${(activity as any).contactName || 'Contact'
-                              }`}
+                          ? `${activity.interactionType} with ${activity.contactName}`
+                          : activity.type === 'reminder'
+                          ? `Reminder for ${activity.contactName}`
+                          : `Activity with ${
+                              (activity as any).contactName || 'Contact'
+                            }`}
                       </Text>
                       <Text style={styles.activityDescription}>
                         {activity.description}
@@ -2955,7 +3024,7 @@ export default function HomeScreen() {
                 );
               })}
 
-            {getRecentActivities().length === 0 && (
+            {recentActivities.length === 0 && (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyStateText}>No recent activity</Text>
                 <Text style={styles.emptyStateSubtext}>
@@ -2969,7 +3038,10 @@ export default function HomeScreen() {
 
       {/* Floating Action Button */}
       <View style={styles.bottomInput}>
-        <TouchableOpacity style={styles.inputMenuButton} onPress={handleAddActivity}>
+        <TouchableOpacity
+          style={styles.inputMenuButton}
+          onPress={handleAddActivity}
+        >
           <Text style={styles.inputMenuText}>☰</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.inputField} onPress={handleAddActivity}>
@@ -3029,6 +3101,15 @@ export default function HomeScreen() {
         onActivityCreated={handleActivityCreated}
       />
 
+      {/* Account Menu Modal */}
+      <AccountMenuModal
+        visible={showAccountMenuModal}
+        onClose={() => setShowAccountMenuModal(false)}
+        onLogout={handleSignOut}
+        onDeleteAccount={handleDeleteAccount}
+        buttonPosition={menuButtonPosition || undefined}
+      />
+
       {/* Reminder Detail Modal */}
       {renderReminderDetailModal()}
 
@@ -3042,112 +3123,130 @@ export default function HomeScreen() {
         presentationStyle="pageSheet"
         statusBarTranslucent={false}
       >
-        <SafeAreaView style={styles.modalContainer} edges={['top', 'left', 'right']}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Select Contact</Text>
-            <View style={styles.headerActions}>
-              <TouchableOpacity
-                style={styles.createNewButton}
-                onPress={() => {
-                  setShowContactList(false);
-                  setShowNewContactModal(true);
-                }}
-              >
-                <Plus size={20} color="#ffffff" />
-                <Text style={styles.createNewButtonText}>New</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowContactList(false)}>
-                <X size={24} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.searchContainer}>
-            <Search size={20} color="#6B7280" />
-            <TextInput
-              style={styles.searchInput}
-              value={contactSearchQuery}
-              onChangeText={filterDeviceContacts}
-              placeholder="Search device contacts..."
-              placeholderTextColor="#9CA3AF"
-            />
-          </View>
-
-          {!isLoadingDeviceContacts && deviceContacts.length > 0 && (
-            <View style={styles.contactCountHeader}>
-              <Text style={styles.contactCountText}>
-                {filteredDeviceContacts.length} of {deviceContacts.length}{' '}
-                contacts
-              </Text>
-            </View>
-          )}
-
-          {isLoadingDeviceContacts ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>Loading device contacts...</Text>
-            </View>
-          ) : filteredDeviceContacts.length > 0 ? (
-            <FlatList
-              data={filteredDeviceContacts}
-              renderItem={renderDeviceContact}
-              keyExtractor={(item, index) =>
-                (item as any).id || `device_${index}`
-              }
-              style={styles.contactList}
-              showsVerticalScrollIndicator={false}
-              removeClippedSubviews={true}
-              maxToRenderPerBatch={10}
-              windowSize={10}
-              initialNumToRender={10}
-              getItemLayout={(data, index) => ({
-                length: 80, // Fixed item height - adjust based on your actual item height
-                offset: 80 * index,
-                index,
-              })}
-              updateCellsBatchingPeriod={50}
-              onEndReached={loadMoreContacts}
-              onEndReachedThreshold={0.5}
-              ListFooterComponent={
-                isLoadingMoreContacts ? (
-                  <View style={styles.loadingFooter}>
-                    <Text style={styles.loadingFooterText}>
-                      Loading more contacts...
-                    </Text>
-                  </View>
-                ) : null
-              }
-            />
-          ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>
-                {contactSearchQuery
-                  ? 'No device contacts found'
-                  : 'No device contacts available'}
-              </Text>
-              <Text style={styles.emptySubtitle}>
-                {contactSearchQuery
-                  ? `No device contacts match "${contactSearchQuery}"`
-                  : 'We use your contacts to sync your friends between our mobile and web apps. Your contacts will be securely uploaded to our server only with your consent.'}
-              </Text>
-              <Text style={styles.emptySubtitle}>
-                Debug: deviceContacts={deviceContacts.length}, filtered=
-                {filteredDeviceContacts.length}, hasPermission=
-                {hasContactPermission.toString()}, isLoading=
-                {isLoadingDeviceContacts.toString()}
-              </Text>
-              {!hasContactPermission && (
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+          style={[styles.keyboardAvoidingView]}
+        >
+          <SafeAreaView
+            style={styles.modalContainer}
+            edges={['top', 'left', 'right']}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Contact</Text>
+              <View style={styles.headerActions}>
                 <TouchableOpacity
-                  style={styles.permissionButton}
-                  onPress={requestContactsPermission}
+                  style={styles.createNewButton}
+                  onPress={() => {
+                    setShowContactList(false);
+                    setShowNewContactModal(true);
+                  }}
                 >
-                  <Text style={styles.permissionButtonText}>
-                    Access Contacts
-                  </Text>
+                  <Plus size={20} color="#ffffff" />
+                  <Text style={styles.createNewButtonText}>New</Text>
                 </TouchableOpacity>
-              )}
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowContactList(false);
+                    setContactSearchQuery('');
+                  }}
+                >
+                  <X size={24} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
             </View>
-          )}
-        </SafeAreaView>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16 }}>
+              <View style={[styles.searchContainer, { flex: 1 }]}>
+                <Search size={20} color="#6B7280" />
+                <TextInput
+                  style={styles.searchInput}
+                  value={contactSearchQuery}
+                  onChangeText={filterDeviceContacts}
+                  placeholder="Search device contacts..."
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+              <TouchableOpacity
+                style={styles.refreshButton}
+                onPress={async () =>{await loadDeviceContacts()}}
+                disabled={isLoadingDeviceContacts || isRefreshingContacts}
+
+              >
+                {isRefreshingContacts ? <ActivityIndicator size="small" color="#6B7280" /> : <RefreshCw size={24} color="#6B7280" />}
+              </TouchableOpacity>
+            </View>
+
+            {!isLoadingDeviceContacts && deviceContacts.length > 0 && (
+              <View style={styles.contactCountHeader}>
+                <Text style={styles.contactCountText}>
+                  {filteredDeviceContactsMemo.length} of {deviceContacts.length}{' '}
+                  contacts
+                </Text>
+              </View>
+            )}
+
+            {isLoadingDeviceContacts ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyTitle}>
+                  Loading device contacts...
+                </Text>
+              </View>
+            ) : filteredDeviceContactsMemo.length > 0 ? (
+              <FlatList
+                data={filteredDeviceContactsMemo}
+                renderItem={renderDeviceContact}
+                keyExtractor={(item, index) =>
+                  (item as any).id || `device_${index}`
+                }
+                style={styles.contactList}
+                showsVerticalScrollIndicator={false}
+                removeClippedSubviews={true}
+                maxToRenderPerBatch={10}
+                windowSize={10}
+                initialNumToRender={10}
+                getItemLayout={(data, index) => ({
+                  length: 80, // Fixed item height - adjust based on your actual item height
+                  offset: 80 * index,
+                  index,
+                })}
+                updateCellsBatchingPeriod={50}
+                onEndReached={loadMoreContacts}
+                onEndReachedThreshold={0.5}
+                
+              />
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyTitle}>
+                  {contactSearchQuery
+                    ? 'No device contacts found'
+                    : 'No device contacts available'}
+                </Text>
+                <Text style={styles.emptySubtitle}>
+                  {contactSearchQuery
+                    ? `No device contacts match "${contactSearchQuery}"`
+                    : 'We use your contacts to sync your friends between our mobile and web apps. Your contacts will be securely uploaded to our server only with your consent.'}
+                </Text>
+                <Text style={styles.emptySubtitle}>
+                  Debug: deviceContacts={deviceContacts.length}, filtered=
+                  {filteredDeviceContactsMemo.length}, hasPermission=
+                  {hasContactPermission.toString()}, isLoading=
+                  {isLoadingDeviceContacts.toString()}
+                </Text>
+                {!hasContactPermission && (
+                  <TouchableOpacity
+                    style={styles.permissionButton}
+                    onPress={requestContactsPermission}
+                  >
+                    <Text style={styles.permissionButtonText}>
+                      Access Contacts
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </SafeAreaView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* New Contact Modal */}
@@ -3277,7 +3376,7 @@ export default function HomeScreen() {
                   style={[
                     styles.input,
                     contactValidationErrors.contactJobTitle &&
-                    styles.inputError,
+                      styles.inputError,
                   ]}
                   value={newContactJobTitle}
                   onChangeText={(text) => {
@@ -3324,7 +3423,7 @@ export default function HomeScreen() {
                   style={[
                     styles.input,
                     contactValidationErrors.contactLinkedin &&
-                    styles.inputError,
+                      styles.inputError,
                   ]}
                   value={newContactLinkedin}
                   onChangeText={(text) => {
@@ -3372,7 +3471,7 @@ export default function HomeScreen() {
                   style={[
                     styles.input,
                     contactValidationErrors.contactInstagram &&
-                    styles.inputError,
+                      styles.inputError,
                   ]}
                   value={newContactInstagram}
                   onChangeText={(text) => {
@@ -3396,7 +3495,7 @@ export default function HomeScreen() {
                   style={[
                     styles.input,
                     contactValidationErrors.contactFacebook &&
-                    styles.inputError,
+                      styles.inputError,
                   ]}
                   value={newContactFacebook}
                   onChangeText={(text) => {
@@ -3445,7 +3544,7 @@ export default function HomeScreen() {
                   style={[
                     styles.input,
                     contactValidationErrors.contactBirthday &&
-                    styles.inputError,
+                      styles.inputError,
                   ]}
                   value={newContactBirthday}
                   onChangeText={(text) => {
@@ -3598,44 +3697,53 @@ export default function HomeScreen() {
         animationType="fade"
         onRequestClose={handleCancelReauth}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.reauthModalContent}>
-            <Text style={styles.reauthModalTitle}>Security Verification Required</Text>
-            <Text style={styles.reauthModalMessage}>
-              For your security, please enter your current password to confirm account deletion. This ensures only you can delete your account.
-            </Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+          style={[styles.keyboardAvoidingView]}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.reauthModalContent}>
+              <Text style={styles.reauthModalTitle}>
+                Security Verification Required
+              </Text>
+              <Text style={styles.reauthModalMessage}>
+                For your security, please enter your current password to confirm
+                account deletion. This ensures only you can delete your account.
+              </Text>
 
-            <TextInput
-              style={styles.passwordInput}
-              placeholder="Enter your password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={true}
-              autoFocus={true}
-              editable={!isReauthLoading}
-            />
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Enter your password"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={true}
+                autoFocus={true}
+                editable={!isReauthLoading}
+              />
 
-            <View style={styles.reauthModalButtons}>
-              <TouchableOpacity
-                style={[styles.reauthModalButton, styles.reauthCancelButton]}
-                onPress={handleCancelReauth}
-                disabled={isReauthLoading}
-              >
-                <Text style={styles.reauthCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
+              <View style={styles.reauthModalButtons}>
+                <TouchableOpacity
+                  style={[styles.reauthModalButton, styles.reauthCancelButton]}
+                  onPress={handleCancelReauth}
+                  disabled={isReauthLoading}
+                >
+                  <Text style={styles.reauthCancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.reauthModalButton, styles.reauthDeleteButton]}
-                onPress={handleReauthAndDelete}
-                disabled={isReauthLoading || !password.trim()}
-              >
-                <Text style={styles.reauthDeleteButtonText}>
-                  {isReauthLoading ? 'Deleting...' : 'Delete Account'}
-                </Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.reauthModalButton, styles.reauthDeleteButton]}
+                  onPress={handleReauthAndDelete}
+                  disabled={isReauthLoading || !password.trim()}
+                >
+                  <Text style={styles.reauthDeleteButtonText}>
+                    {isReauthLoading ? 'Deleting...' : 'Delete Account'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -3659,7 +3767,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    padding: 24,
+    padding: 8,
+    paddingLeft: 16,
     paddingBottom: 16,
   },
   headerContent: {
@@ -3672,7 +3781,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerButton: {
-    padding: 12,
+    padding:12,
     borderRadius: 8,
     backgroundColor: '#F3F4F6',
     justifyContent: 'center',
@@ -3795,6 +3904,7 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
   },
   emptyState: {
+    flex: 1,
     backgroundColor: '#ffffff',
     padding: 32,
     borderRadius: 12,
@@ -3823,6 +3933,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+    justifyContent: 'center',
+    // alignItems: 'center',
   },
   cancelButton: {
     paddingHorizontal: 20,
@@ -4839,10 +4954,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#ffffff',
-    marginHorizontal: 24,
     marginVertical: 16,
     paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#E5E7EB',
@@ -4852,6 +4966,16 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: '#111827',
+  },
+  refreshButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   emptyTitle: {
     fontSize: 16,
@@ -5233,6 +5357,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     marginBottom: 24,
+    color: '#111827',
     backgroundColor: '#F9FAFB',
   },
   reauthModalButtons: {
