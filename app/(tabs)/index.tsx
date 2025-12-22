@@ -19,6 +19,7 @@ import {
   FlatList,
   Platform,
   Linking,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -1970,6 +1971,11 @@ export default function HomeScreen() {
 
     return (
       <Modal visible={showContactActions} animationType="slide" transparent>
+        <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            style={styles.keyboardAvoidingView}
+          >
         <View style={styles.contactActionsOverlay}>
           <View style={styles.contactActionsContainer}>
             <View style={styles.contactActionsHeader}>
@@ -2161,6 +2167,7 @@ export default function HomeScreen() {
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     );
   };
@@ -2179,6 +2186,11 @@ export default function HomeScreen() {
 
     return (
       <Modal visible={showEditReminderModal} animationType="slide" transparent>
+        <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            style={styles.keyboardAvoidingView}
+          >
         <View style={styles.editReminderOverlay}>
           <View style={styles.editReminderContainer}>
             <View style={styles.editReminderHeader}>
@@ -2422,6 +2434,7 @@ export default function HomeScreen() {
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     );
   };
@@ -3161,7 +3174,12 @@ export default function HomeScreen() {
           setShowNewContactModal(false);
           resetNewContactForm();
         }}
-      >
+      > 
+      <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            style={styles.keyboardAvoidingView}
+          >
         <SafeAreaView style={styles.newContactModal}>
           <View style={styles.newContactModalHeader}>
             <Text style={styles.newContactModalTitle}>Create New Contact</Text>
@@ -3507,6 +3525,7 @@ export default function HomeScreen() {
             </View>
           </ScrollView>
         </SafeAreaView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* CreateEditRelationshipModal */}
@@ -3600,6 +3619,11 @@ export default function HomeScreen() {
         animationType="fade"
         onRequestClose={handleCancelReauth}
       >
+        <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            style={styles.keyboardAvoidingView}
+          >
         <View style={styles.modalOverlay}>
           <View style={styles.reauthModalContent}>
             <Text style={styles.reauthModalTitle}>Security Verification Required</Text>
@@ -3638,6 +3662,7 @@ export default function HomeScreen() {
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -3647,6 +3672,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+    justifyContent: 'center',
+    width: '100%',
   },
   loadingContainer: {
     flex: 1,

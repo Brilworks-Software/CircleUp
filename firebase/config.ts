@@ -1,3 +1,4 @@
+
 import { FirebaseApp, getApp, getApps, initializeApp } from 'firebase/app';
 import { getAuth, initializeAuth, getReactNativePersistence, Auth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
@@ -7,6 +8,7 @@ import Constants from 'expo-constants';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage'; 
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getAnalytics, Analytics } from 'firebase/analytics';
 
 // Firebase configuration
   
@@ -27,19 +29,22 @@ const firebaseConfig = {
 let app: FirebaseApp;
 let auth: Auth;
 let messaging;
+let analyticsInstance: Analytics;
 
 // Initialize Firebase services
 if (!getApps().length) {
     app = initializeApp(firebaseConfig);
-  
+    
     // 💡 Only call initializeAuth immediately after app initialization
     if (Platform.OS === 'web') {
       auth = getAuth(app); // Web: No persistence needed here
+      analyticsInstance = getAnalytics(app);
     } else {
       auth = initializeAuth(app, {
         persistence: getReactNativePersistence(AsyncStorage),
       });
     }
+    
   } else {
     app = getApp();
     auth = getAuth(app); // Don't call initializeAuth again here!
@@ -50,4 +55,4 @@ if (!getApps().length) {
     const {getMessaging} = require('firebase/messaging');
     messaging = getMessaging(app);
   }
-export { app, auth, db, storage, messaging };
+export { app, auth, db, storage, messaging, analyticsInstance };

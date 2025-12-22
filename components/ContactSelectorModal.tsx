@@ -10,6 +10,7 @@ import {
   FlatList,
   TextInput,
   AppState,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { X, Plus, RefreshCw, Search } from 'lucide-react-native';
@@ -199,6 +200,11 @@ export default function ContactSelectorModal({
       presentationStyle="pageSheet"
       statusBarTranslucent={false}
     >
+      <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            style={styles.keyboardAvoidingView}
+          >
       <SafeAreaView style={styles.modalContainer} edges={['top', 'left', 'right']}>
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>{title}</Text>
@@ -308,6 +314,7 @@ export default function ContactSelectorModal({
           )}
         </View>
       </SafeAreaView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -316,6 +323,11 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+    justifyContent: 'center',
+    width: '100%',
   },
   modalHeader: {
     flexDirection: 'row',

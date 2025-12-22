@@ -12,6 +12,7 @@ import {
   Platform,
   FlatList,
   ActivityIndicator,
+  KeyboardAvoidingView,
 } from 'react-native';
 import WebCompatibleDateTimePicker from './WebCompatibleDateTimePicker';
 import { X, ChevronDown, Search, Calendar, Clock } from 'lucide-react-native';
@@ -530,7 +531,12 @@ export default function EditActivityModal({
       transparent
       onRequestClose={handleClose}
     >
-      <View style={styles.addActivityOverlay}>
+      <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            style={styles.keyboardAvoidingView}
+              >
+          <View style={styles.addActivityOverlay}>
         <View style={styles.addActivityContainer}>
           <View style={styles.addActivityHeader}>
             <TouchableOpacity onPress={handleClose}>
@@ -1116,6 +1122,7 @@ export default function EditActivityModal({
           </View>
         </View>
       </View>
+      </KeyboardAvoidingView>
 
       {/* Date Pickers for Native Platforms */}
       {Platform.OS !== 'web' && showInteractionDatePicker && (
@@ -1165,6 +1172,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+    justifyContent: 'center',
+    width: '100%',
   },
   addActivityContainer: {
     backgroundColor: '#ffffff',

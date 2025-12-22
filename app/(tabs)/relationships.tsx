@@ -14,6 +14,7 @@ import {
   Animated,
   Vibration,
   AppState,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import WebCompatibleDateTimePicker from '../../components/WebCompatibleDateTimePicker';
@@ -2862,6 +2863,11 @@ export default function RelationshipsScreen() {
         presentationStyle="pageSheet"
         statusBarTranslucent={false}
       >
+        <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            style={styles.keyboardAvoidingView}
+          >
         <SafeAreaView style={styles.modalContainer} edges={['top', 'left', 'right']}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Create New Contact</Text>
@@ -3124,6 +3130,7 @@ export default function RelationshipsScreen() {
             </View>
           </ScrollView>
         </SafeAreaView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Create Relationship Modal */}
@@ -3528,6 +3535,11 @@ export default function RelationshipsScreen() {
 
       {/* Add Reminder Modal */}
       <Modal visible={showAddReminderModal} animationType="slide" transparent>
+        <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            style={styles.keyboardAvoidingView}
+          >
         <View style={styles.addReminderOverlay}>
           <View style={styles.addReminderContainer}>
             <View style={styles.addReminderHeader}>
@@ -3643,10 +3655,16 @@ export default function RelationshipsScreen() {
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Edit Note Modal */}
       <Modal visible={showEditNoteModal} animationType="slide" transparent>
+        <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            style={styles.keyboardAvoidingView}
+          >
         <TouchableOpacity
           style={styles.editModalOverlay}
           activeOpacity={1}
@@ -3687,10 +3705,16 @@ export default function RelationshipsScreen() {
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Edit Family Info Modal */}
       <Modal visible={showEditFamilyInfoModal} animationType="slide" transparent>
+        <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            style={styles.keyboardAvoidingView}
+          >
         <TouchableOpacity
           style={styles.editModalOverlay}
           activeOpacity={1}
@@ -3771,6 +3795,7 @@ export default function RelationshipsScreen() {
             </ScrollView>
           </TouchableOpacity>
         </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Add Activity Modal */}
@@ -4050,6 +4075,11 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+    justifyContent: 'center',
+    width: '100%',
   },
   modalHeader: {
     flexDirection: 'row',
