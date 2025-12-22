@@ -13,11 +13,12 @@ import {
   Platform,
   Animated,
   Vibration,
+  AppState,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import WebCompatibleDateTimePicker from '../../components/WebCompatibleDateTimePicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Plus, Users, X, Calendar, Clock, MessageCircle, Phone, Mail, User, ChevronRight, Search, Filter, ArrowLeft, CircleCheck as CheckCircle } from 'lucide-react-native';
+import { Plus, Users, X, Calendar, Clock, MessageCircle, Phone, Mail, User, ChevronRight, Search, Filter, ArrowLeft, CircleCheck as CheckCircle, RefreshCw } from 'lucide-react-native';
 import * as Contacts from 'expo-contacts';
 import { useRelationships } from '../../firebase/hooks/useRelationships';
 import { useReminders } from '../../firebase/hooks/useReminders';
@@ -26,6 +27,7 @@ import { useActivity } from '../../firebase/hooks/useActivity';
 import AddActivityModal from '../../components/AddActivityModal';
 import EditActivityModal from '../../components/EditActivityModal';
 import CreateEditRelationshipModal from '../../components/CreateEditRelationshipModal';
+import ContactSelectorModal from '../../components/ContactSelectorModal';
 
 import RemindersService from '../../firebase/services/RemindersService';
 import { Tags } from '../../constants/Tags';
@@ -283,6 +285,9 @@ export default function RelationshipsScreen() {
     reminder: new Animated.Value(1),
   }).current;
 
+  // Animation state for sync button rotation
+  const syncButtonRotation = useRef(new Animated.Value(0)).current;
+
   // Handle tab switching with animation
   const handleTabSwitch = (tab: 'note' | 'interaction' | 'reminder') => {
     // Reset all animations
@@ -406,6 +411,45 @@ export default function RelationshipsScreen() {
       loadDeviceContacts();
     }
   }, [hasPermission]);
+
+  // Fetch contacts when contact selection modal opens
+  useEffect(() => {
+    if (showContactList && hasPermission) {
+      loadDeviceContacts();
+    }
+  }, [showContactList, hasPermission]);
+
+  // Fetch contacts when app comes to foreground
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active' && hasPermission) {
+        loadDeviceContacts();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [hasPermission]);
+
+  // Animate sync button rotation when loading
+  useEffect(() => {
+    if (isLoadingDeviceContacts) {
+      // Start continuous rotation
+      syncButtonRotation.setValue(0);
+      Animated.loop(
+        Animated.timing(syncButtonRotation, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        })
+      ).start();
+    } else {
+      // Stop animation
+      syncButtonRotation.stopAnimation();
+      syncButtonRotation.setValue(0);
+    }
+  }, [isLoadingDeviceContacts]);
 
   // Debug selectedTags changes
 
@@ -605,18 +649,74 @@ export default function RelationshipsScreen() {
     }
   };
 
+  // Handler for contact selection from ContactSelectorModal
+  const handleContactSelect = async (contact: Contact) => {
+    try {
+      // Check if relationship already exists by name
+      const existingRelationship = relationships.find(r =>
+        r.contactName.toLowerCase() === contact.name.toLowerCase()
+      );
+
+      if (existingRelationship) {
+        const alertTitle = Platform.OS === 'web'
+          ? 'Relationship Already Exists'
+          : 'Relationship Exists';
+
+        const alertMessage = Platform.OS === 'web'
+          ? `You already have a relationship with "${contact.name}". Would you like to edit the existing relationship or create a new one?`
+          : `You already have a relationship with ${contact.name}. Would you like to edit it?`;
+
+        const alertButtons = Platform.OS === 'web'
+          ? [
+            { text: 'Cancel', style: 'cancel' as const },
+            { text: 'Edit Existing', onPress: () => editRelationship(existingRelationship) },
+            {
+              text: 'Create New', onPress: () => {
+                // Allow creating a new relationship with a different name
+                const newName = `${contact.name} (${new Date().getFullYear()})`;
+                setSelectedContact({ ...contact, name: newName, id: `new_${Date.now()}` });
+                setShowContactList(false);
+                setShowAddModal(true);
+              }
+            },
+          ]
+          : [
+            { text: 'Cancel', style: 'cancel' as const },
+            { text: 'Edit', onPress: () => editRelationship(existingRelationship) },
+          ];
+
+        showAlert(alertTitle, alertMessage, alertButtons);
+        return;
+      }
+
+      // Set the selected contact for the relationship form
+      setSelectedContact(contact);
+
+      // Populate form fields with contact data
+      setEditContactPhone(contact.phoneNumbers?.[0]?.number || '');
+      setEditContactEmail(contact.emails?.[0]?.email || '');
+      setEditContactWebsite(contact.website || '');
+      setEditContactLinkedin(contact.linkedin || '');
+      setEditContactTwitter(contact.twitter || '');
+      setEditContactInstagram(contact.instagram || '');
+      setEditContactFacebook(contact.facebook || '');
+      setEditContactCompany(contact.company || '');
+      setEditContactJobTitle(contact.jobTitle || '');
+      setEditContactAddress(contact.address || '');
+      setEditContactBirthday(contact.birthday || '');
+      setEditContactNotes(contact.notes || '');
+
+      setShowContactList(false);
+      setShowAddModal(true);
+
+    } catch (error) {
+      console.error('Error selecting contact:', error);
+      showAlert('Error', 'Failed to select contact');
+    }
+  };
 
   const openAddRelationship = () => {
-    if (Platform.OS === "web") {
-      setShowNewContactModal(true);
-      return
-    }
-    if (!hasPermission) {
-      // Permission not granted - user can still add relationships manually
-      return;
-    }
-
-
+    // Always open ContactSelectorModal - it handles web/mobile differences internally
     setShowContactList(true);
   };
 
@@ -2738,80 +2838,22 @@ export default function RelationshipsScreen() {
       </View>
 
       {/* Contact Selection Modal */}
-      <Modal
+      <ContactSelectorModal
         visible={showContactList}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        statusBarTranslucent={false}
-      >
-        <SafeAreaView style={styles.modalContainer} edges={['top', 'left', 'right']}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Select Contact</Text>
-            <View style={styles.headerActions}>
-              <TouchableOpacity
-                style={styles.createNewButton}
-                onPress={() => {
-                  setShowContactList(false);
-                  setShowNewContactModal(true);
-                }}
-              >
-                <Plus size={20} color="#ffffff" />
-                <Text style={styles.createNewButtonText}>New</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowContactList(false)}>
-                <X size={24} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.searchContainer}>
-            <Search size={20} color="#6B7280" />
-            <TextInput
-              style={styles.searchInput}
-              value={contactSearchQuery}
-              onChangeText={handleSearchQueryChange}
-              placeholder="Search device contacts..."
-              placeholderTextColor="#9CA3AF"
-            />
-          </View>
-
-          {isLoadingDeviceContacts ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>Loading device contacts...</Text>
-            </View>
-          ) : filteredDeviceContactsMemo.length > 0 ? (
-            <FlatList
-              data={filteredDeviceContactsMemo}
-              renderItem={renderDeviceContact}
-              keyExtractor={contactKeyExtractor}
-              style={styles.contactList}
-              showsVerticalScrollIndicator={false}
-              removeClippedSubviews={true}
-              maxToRenderPerBatch={10}
-              updateCellsBatchingPeriod={50}
-              initialNumToRender={15}
-              windowSize={21}
-            />
-          ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>
-                {contactSearchQuery ? 'No device contacts found' : 'No device contacts available'}
-              </Text>
-              <Text style={styles.emptySubtitle}>
-                {contactSearchQuery
-                  ? `No device contacts match "${contactSearchQuery}"`
-                  : 'We use your contacts to sync your friends between our mobile and web apps. Your contacts will be securely uploaded to our server only with your consent.'
-                }
-              </Text>
-              {!hasPermission && (
-                <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-                  <Text style={styles.permissionButtonText}>Access Contacts</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-        </SafeAreaView>
-      </Modal>
+        onClose={() => setShowContactList(false)}
+        onContactSelect={handleContactSelect}
+        title="Select Contact"
+        placeholder="Search contacts..."
+        showNewButton={true}
+        onNewContactPress={() => {
+          setShowContactList(false);
+          setShowNewContactModal(true);
+        }}
+        showSyncButton={Platform.OS !== 'web'}
+        onSyncPress={loadDeviceContacts}
+        isSyncing={isLoadingDeviceContacts}
+        syncButtonRotation={syncButtonRotation}
+      />
 
       {/* Create New Contact Modal */}
       <Modal
@@ -4043,6 +4085,18 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  syncButton: {
+    backgroundColor: '#F3F4F6',
+    padding: 8,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  syncButtonDisabled: {
+    opacity: 0.6,
   },
   label: {
     fontSize: 14,

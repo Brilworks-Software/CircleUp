@@ -13,11 +13,13 @@ import {
   FlatList,
 } from 'react-native';
 import WebCompatibleDateTimePicker from './WebCompatibleDateTimePicker';
-import { X, Calendar, Clock, Phone, Mail, MessageCircle, User } from 'lucide-react-native';
+import { X, Calendar, Clock, Phone, Mail, MessageCircle, User, ChevronRight } from 'lucide-react-native';
 import { useRelationships } from '../firebase/hooks/useRelationships';
 import { useAuth } from '../firebase/hooks/useAuth';
 import { Tags } from '../constants/Tags';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import ContactSelectorModal from './ContactSelectorModal';
+import * as Contacts from 'expo-contacts';
 import type { Contact, Relationship, LastContactOption, ContactMethod, ReminderFrequency } from '../firebase/types';
 
 interface CreateEditRelationshipModalProps {
@@ -112,11 +114,6 @@ export default function CreateEditRelationshipModal({
     siblings: '',
     spouse: '',
   });
-  useEffect(()=>{
-    console.log(initialContact);
-    
-  },[])
-
   // Contact data states
   const [contactPhone, setContactPhone] = useState('');
   const [contactEmail, setContactEmail] = useState('');
@@ -134,9 +131,62 @@ export default function CreateEditRelationshipModal({
   // UI states
   const [isSaving, setIsSaving] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [showContactSelector, setShowContactSelector] = useState(false);
+  const [isLoadingDeviceContacts, setIsLoadingDeviceContacts] = useState(false);
+  const [hasContactPermission, setHasContactPermission] = useState(false);
+
+  // Animation state for sync button rotation
+  const syncButtonRotation = useRef(new Animated.Value(0)).current;
 
   // Date picker states
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
+
+  // Load device contacts
+  const loadDeviceContacts = async () => {
+    if (Platform.OS === 'web') {
+      return;
+    }
+
+    try {
+      setIsLoadingDeviceContacts(true);
+      const { status } = await Contacts.getPermissionsAsync();
+      setHasContactPermission(status === 'granted');
+      
+      if (status === 'granted') {
+        await Contacts.getContactsAsync({
+          fields: [
+            Contacts.Fields.Name,
+            Contacts.Fields.PhoneNumbers,
+            Contacts.Fields.Emails
+          ],
+        });
+        // Contacts are loaded - ContactSearchInput will use them
+      }
+    } catch (error) {
+      console.error('Error loading device contacts:', error);
+    } finally {
+      setIsLoadingDeviceContacts(false);
+    }
+  };
+
+  // Animate sync button rotation when loading
+  useEffect(() => {
+    if (isLoadingDeviceContacts) {
+      // Start continuous rotation
+      syncButtonRotation.setValue(0);
+      Animated.loop(
+        Animated.timing(syncButtonRotation, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        })
+      ).start();
+    } else {
+      // Stop animation
+      syncButtonRotation.stopAnimation();
+      syncButtonRotation.setValue(0);
+    }
+  }, [isLoadingDeviceContacts, syncButtonRotation]);
 
   // Initialize form when relationship or initialContact changes
   useEffect(() => {
@@ -612,7 +662,28 @@ export default function CreateEditRelationshipModal({
     );
   };
 
-  // Contact picker removed - contact is passed via props
+  const handleContactSelect = (contact: Contact) => {
+    setSelectedContact(contact);
+    
+    // Update contact data fields from selected contact
+    setContactPhone(contact.phoneNumbers?.[0]?.number || '');
+    setContactEmail(contact.emails?.[0]?.email || '');
+    setContactCompany(contact.company || '');
+    setContactJobTitle(contact.jobTitle || '');
+    setContactWebsite(contact.website || '');
+    setContactLinkedin(contact.linkedin || '');
+    setContactTwitter(contact.twitter || '');
+    setContactInstagram(contact.instagram || '');
+    setContactFacebook(contact.facebook || '');
+    setContactAddress(contact.address || '');
+    setContactBirthday(contact.birthday || '');
+    setContactNotes(contact.notes || '');
+    
+    // Clear contact validation error if exists
+    clearFieldError('contact');
+    
+    setShowContactSelector(false);
+  };
 
   return (
     <>
@@ -636,11 +707,19 @@ export default function CreateEditRelationshipModal({
             {/* Contact Display */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Contact</Text>
-              <View style={styles.contactDisplay}>
+              <TouchableOpacity
+                style={[styles.contactDisplay, !selectedContact && styles.contactDisplayEmpty]}
+                onPress={() => setShowContactSelector(true)}
+                activeOpacity={0.7}
+              >
                 <Text style={styles.contactDisplayText}>
-                  {selectedContact ? selectedContact.name : 'No contact selected'}
+                  {selectedContact ? selectedContact.name : 'Tap to select contact'}
                 </Text>
-              </View>
+                <ChevronRight size={20} color="#6B7280" />
+              </TouchableOpacity>
+              {validationErrors.contact && (
+                <Text style={styles.errorText}>{validationErrors.contact}</Text>
+              )}
             </View>
 
             {/* Last Contact Section - Only show when creating new relationship */}
@@ -1080,6 +1159,25 @@ export default function CreateEditRelationshipModal({
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      {/* Contact Selector Modal */}
+      <ContactSelectorModal
+        visible={showContactSelector}
+        onClose={() => setShowContactSelector(false)}
+        onContactSelect={handleContactSelect}
+        title="Select Contact"
+        placeholder="Search contacts..."
+        showNewButton={true}
+        onNewContactPress={() => {
+          setShowContactSelector(false);
+          // Allow user to manually enter contact information in the form
+          // The form fields below can be filled in manually
+        }}
+        showSyncButton={Platform.OS !== 'web'}
+        onSyncPress={loadDeviceContacts}
+        isSyncing={isLoadingDeviceContacts}
+        syncButtonRotation={syncButtonRotation}
+      />
     </>
   );
 }
@@ -1117,6 +1215,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   contactDisplay: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderWidth: 1,
@@ -1124,10 +1225,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#F9FAFB',
   },
+  contactDisplayEmpty: {
+    borderColor: '#9CA3AF',
+    borderStyle: 'dashed',
+  },
   contactDisplayText: {
     fontSize: 16,
     color: '#111827',
     fontWeight: '500',
+    flex: 1,
   },
   optionsGrid: {
     flexDirection: 'row',

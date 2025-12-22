@@ -165,7 +165,7 @@ export default function AddActivityModal({
   const remindersService = RemindersService.getInstance();
   const [activeActivityTab, setActiveActivityTab] = useState<
     'note' | 'interaction' | 'reminder'
-  >('note');
+  >('reminder');
 
   // Contact picker states
   const [showContactPicker, setShowContactPicker] = useState(false);
@@ -344,7 +344,7 @@ export default function AddActivityModal({
     setActivityReminderFrequency('month');
     setActivityReminderNotes('');
     setValidationErrors({});
-    setActiveActivityTab('note');
+    setActiveActivityTab('reminder');
     setContactSearchError('');
   };
 
@@ -1950,6 +1950,35 @@ export default function AddActivityModal({
               {/* Activity Type Tabs - Fixed at top */}
               <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                 <View style={styles.activityTypeTabs}>
+                  {/* Reminder Tab */}
+                <Animated.View
+                    style={[
+                      { transform: [{ scale: tabAnimations.reminder }] },
+                    ]}
+                  >
+                    <TouchableOpacity
+                      style={[
+                        styles.animatedTabButton,
+                        activeActivityTab === 'reminder' &&
+                        styles.activeActivityTypeTab,
+                      ]}
+                      onPress={() => handleTabSwitch('reminder')}
+                      activeOpacity={0.7}
+                    >
+                      <View
+                        style={[
+                          styles.tabIconContainer,
+                          activeActivityTab === 'reminder' &&
+                          styles.activeTabIconContainer,
+                        ]}
+                      >
+                        <Text style={styles.tabIcon}>⏰</Text>
+                      </View>
+
+                    </TouchableOpacity>
+                  </Animated.View>
+
+                  {/* Note Tab */}
                   <Animated.View
                     style={[
                       { transform: [{ scale: tabAnimations.note }] },
@@ -2004,32 +2033,7 @@ export default function AddActivityModal({
                     </TouchableOpacity>
                   </Animated.View>
 
-                  <Animated.View
-                    style={[
-                      { transform: [{ scale: tabAnimations.reminder }] },
-                    ]}
-                  >
-                    <TouchableOpacity
-                      style={[
-                        styles.animatedTabButton,
-                        activeActivityTab === 'reminder' &&
-                        styles.activeActivityTypeTab,
-                      ]}
-                      onPress={() => handleTabSwitch('reminder')}
-                      activeOpacity={0.7}
-                    >
-                      <View
-                        style={[
-                          styles.tabIconContainer,
-                          activeActivityTab === 'reminder' &&
-                          styles.activeTabIconContainer,
-                        ]}
-                      >
-                        <Text style={styles.tabIcon}>⏰</Text>
-                      </View>
-
-                    </TouchableOpacity>
-                  </Animated.View>
+                  
                 </View>
                 <TouchableOpacity
                   onPress={handleCreateActivity}

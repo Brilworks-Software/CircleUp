@@ -44,6 +44,7 @@ import {
   Search,
   ChevronRight,
   LogOut,
+  MoreVertical,
 } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useAuth } from '../../firebase/hooks/useAuth';
@@ -57,6 +58,7 @@ import EditActivityModal from '../../components/EditActivityModal';
 import CreateEditRelationshipModal from '../../components/CreateEditRelationshipModal';
 import RelationshipInfoModal from '../../components/RelationshipInfoModal';
 import WebCompatibleDateTimePicker from '../../components/WebCompatibleDateTimePicker';
+import ContactSelectorModal from '../../components/ContactSelectorModal';
 
 import type {
   Reminder,
@@ -204,6 +206,9 @@ export default function HomeScreen() {
   const [showReauthModal, setShowReauthModal] = useState(false);
   const [password, setPassword] = useState('');
   const [isReauthLoading, setIsReauthLoading] = useState(false);
+  
+  // Header menu state
+  const [showMenu, setShowMenu] = useState(false);
   const [showContactList, setShowContactList] = useState(false);
   const [showNewContactModal, setShowNewContactModal] = useState(false);
   const [showRelationshipInfoModal, setShowRelationshipInfoModal] =
@@ -225,6 +230,9 @@ export default function HomeScreen() {
   const [isLoadingDeviceContacts, setIsLoadingDeviceContacts] = useState(false);
   const [hasContactPermission, setHasContactPermission] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Animation state for sync button rotation
+  const syncButtonRotation = useRef(new Animated.Value(0)).current;
 
   // Device contacts pagination state
   const [hasMoreDeviceContacts, setHasMoreDeviceContacts] = useState(false);
@@ -368,6 +376,25 @@ export default function HomeScreen() {
       loadDeviceContacts();
     }
   }, [isAppReady]);
+
+  // Animate sync button rotation when loading
+  useEffect(() => {
+    if (isLoadingDeviceContacts) {
+      // Start continuous rotation
+      syncButtonRotation.setValue(0);
+      Animated.loop(
+        Animated.timing(syncButtonRotation, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        })
+      ).start();
+    } else {
+      // Stop animation
+      syncButtonRotation.stopAnimation();
+      syncButtonRotation.setValue(0);
+    }
+  }, [isLoadingDeviceContacts]);
 
   // Debounced navigation function to prevent multiple taps
   const handleDebouncedNavigation = useCallback(
@@ -704,6 +731,54 @@ export default function HomeScreen() {
         id: (contact as any).id || `device_${Date.now()}`,
         name: contactName,
       });
+      setShowContactList(false);
+      setShowAddRelationshipModal(true);
+    }
+  };
+
+  // Handler for contact selection from ContactSelectorModal
+  const handleContactSelectFromModal = (contact: Contact) => {
+    // Check if relationship already exists
+    const existingRelationship = relationships.find(
+      (rel) => rel.contactName.toLowerCase() === contact.name.toLowerCase()
+    );
+
+    if (existingRelationship) {
+      // Show options: Edit relationship or View relationship
+      showAlert(
+        'Relationship Exists',
+        `A relationship already exists for ${contact.name}. What would you like to do?`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Edit Relationship',
+            onPress: () => {
+              // Open edit modal with existing relationship
+              setEditingRelationship(existingRelationship);
+              setSelectedContact({
+                id: existingRelationship.contactId,
+                name: existingRelationship.contactName,
+              });
+              setShowContactList(false);
+              setShowAddRelationshipModal(true);
+            },
+          },
+          {
+            text: 'View Relationship',
+            onPress: () => {
+              // Navigate to relationships page
+              setShowContactList(false);
+              router.push('/(tabs)/relationships');
+            },
+          },
+        ]
+      );
+    } else {
+      // Create new relationship
+      setSelectedContact(contact);
       setShowContactList(false);
       setShowAddRelationshipModal(true);
     }
@@ -2367,6 +2442,8 @@ export default function HomeScreen() {
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
+        onScrollBeginDrag={() => setShowMenu(false)}
+        scrollEventThrottle={16}
       >
         <View style={styles.header}>
           <View style={styles.headerContent}>
@@ -2378,18 +2455,40 @@ export default function HomeScreen() {
               <Text style={styles.subtitle}>Manage your connections</Text>
             </View>
             <View style={styles.headerButtons}>
-              <TouchableOpacity
-                style={styles.headerButton}
-                onPress={handleDeleteAccount}
-              >
-                <Trash2 size={20} color="#EF4444" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.headerButton}
-                onPress={handleSignOut}
-              >
-                <LogOut size={20} color="#6B7280" />
-              </TouchableOpacity>
+              <View style={styles.menuContainer}>
+                <TouchableOpacity
+                  style={styles.menuButton}
+                  onPress={() => setShowMenu(!showMenu)}
+                >
+                  <MoreVertical size={20} color="#6B7280" />
+                </TouchableOpacity>
+                {showMenu && (
+                  <View style={styles.menuDropdown}>
+                    <TouchableOpacity
+                      style={styles.menuItem}
+                      onPress={() => {
+                        setShowMenu(false);
+                        handleDeleteAccount();
+                      }}
+                    >
+                      <Trash2 size={18} color="#EF4444" />
+                      <Text style={[styles.menuItemText, styles.menuItemDanger]}>
+                        Delete Account
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.menuItem}
+                      onPress={() => {
+                        setShowMenu(false);
+                        handleSignOut();
+                      }}
+                    >
+                      <LogOut size={18} color="#6B7280" />
+                      <Text style={styles.menuItemText}>Sign Out</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
             </View>
           </View>
         </View>
@@ -3036,119 +3135,22 @@ export default function HomeScreen() {
       {renderEditReminderModal()}
 
       {/* Contact Selection Modal */}
-      <Modal
+      <ContactSelectorModal
         visible={showContactList}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        statusBarTranslucent={false}
-      >
-        <SafeAreaView style={styles.modalContainer} edges={['top', 'left', 'right']}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Select Contact</Text>
-            <View style={styles.headerActions}>
-              <TouchableOpacity
-                style={styles.createNewButton}
-                onPress={() => {
-                  setShowContactList(false);
-                  setShowNewContactModal(true);
-                }}
-              >
-                <Plus size={20} color="#ffffff" />
-                <Text style={styles.createNewButtonText}>New</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowContactList(false)}>
-                <X size={24} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.searchContainer}>
-            <Search size={20} color="#6B7280" />
-            <TextInput
-              style={styles.searchInput}
-              value={contactSearchQuery}
-              onChangeText={filterDeviceContacts}
-              placeholder="Search device contacts..."
-              placeholderTextColor="#9CA3AF"
-            />
-          </View>
-
-          {!isLoadingDeviceContacts && deviceContacts.length > 0 && (
-            <View style={styles.contactCountHeader}>
-              <Text style={styles.contactCountText}>
-                {filteredDeviceContacts.length} of {deviceContacts.length}{' '}
-                contacts
-              </Text>
-            </View>
-          )}
-
-          {isLoadingDeviceContacts ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>Loading device contacts...</Text>
-            </View>
-          ) : filteredDeviceContacts.length > 0 ? (
-            <FlatList
-              data={filteredDeviceContacts}
-              renderItem={renderDeviceContact}
-              keyExtractor={(item, index) =>
-                (item as any).id || `device_${index}`
-              }
-              style={styles.contactList}
-              showsVerticalScrollIndicator={false}
-              removeClippedSubviews={true}
-              maxToRenderPerBatch={10}
-              windowSize={10}
-              initialNumToRender={10}
-              getItemLayout={(data, index) => ({
-                length: 80, // Fixed item height - adjust based on your actual item height
-                offset: 80 * index,
-                index,
-              })}
-              updateCellsBatchingPeriod={50}
-              onEndReached={loadMoreContacts}
-              onEndReachedThreshold={0.5}
-              ListFooterComponent={
-                isLoadingMoreContacts ? (
-                  <View style={styles.loadingFooter}>
-                    <Text style={styles.loadingFooterText}>
-                      Loading more contacts...
-                    </Text>
-                  </View>
-                ) : null
-              }
-            />
-          ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>
-                {contactSearchQuery
-                  ? 'No device contacts found'
-                  : 'No device contacts available'}
-              </Text>
-              <Text style={styles.emptySubtitle}>
-                {contactSearchQuery
-                  ? `No device contacts match "${contactSearchQuery}"`
-                  : 'We use your contacts to sync your friends between our mobile and web apps. Your contacts will be securely uploaded to our server only with your consent.'}
-              </Text>
-              <Text style={styles.emptySubtitle}>
-                Debug: deviceContacts={deviceContacts.length}, filtered=
-                {filteredDeviceContacts.length}, hasPermission=
-                {hasContactPermission.toString()}, isLoading=
-                {isLoadingDeviceContacts.toString()}
-              </Text>
-              {!hasContactPermission && (
-                <TouchableOpacity
-                  style={styles.permissionButton}
-                  onPress={requestContactsPermission}
-                >
-                  <Text style={styles.permissionButtonText}>
-                    Access Contacts
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-        </SafeAreaView>
-      </Modal>
+        onClose={() => setShowContactList(false)}
+        onContactSelect={handleContactSelectFromModal}
+        title="Select Contact"
+        placeholder="Search contacts..."
+        showNewButton={true}
+        onNewContactPress={() => {
+          setShowContactList(false);
+          setShowNewContactModal(true);
+        }}
+        showSyncButton={Platform.OS !== 'web'}
+        onSyncPress={loadDeviceContacts}
+        isSyncing={isLoadingDeviceContacts}
+        syncButtonRotation={syncButtonRotation}
+      />
 
       {/* New Contact Modal */}
       <Modal
@@ -3677,6 +3679,51 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  menuContainer: {
+    position: 'relative',
+    zIndex: 1000,
+  },
+  menuButton: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuDropdown: {
+    position: 'absolute',
+    top: '100%',
+    right: 0,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    minWidth: 160,
+    marginTop: 4,
+    zIndex: 1001,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  menuItemText: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  menuItemDanger: {
+    color: '#EF4444',
   },
   title: {
     fontSize: 24,
