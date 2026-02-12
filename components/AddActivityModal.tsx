@@ -904,6 +904,9 @@ export default function AddActivityModal({
       // if (!activityReminderTitle.trim()) {
       //   errors.reminderTitle = 'Reminder title is required';
       // }
+      if (!activityReminderNotes.trim()) {
+        errors.reminderNotes = 'Reminder notes are required';
+      }
       if (!activityReminderDate) {
         errors.reminderDate = 'Reminder date is required';
       } else {
@@ -1342,11 +1345,12 @@ export default function AddActivityModal({
         animationType="fade"
         transparent
         onRequestClose={handleClose}
+        style={{backgroundColor:'green'}}
       >
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-            style={styles.keyboardAvoidingView}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+            style={[styles.keyboardAvoidingView]}
           >
         <View style={styles.addActivityOverlay}>
             <View style={styles.addActivityContainer}>
@@ -1931,7 +1935,7 @@ export default function AddActivityModal({
                       </View>
 
                       <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Notes</Text>
+                        <Text style={styles.inputLabel}>Notes *</Text>
                         <TextInput
                           style={styles.activityTextArea}
                           value={activityReminderNotes}
@@ -1941,7 +1945,13 @@ export default function AddActivityModal({
                           multiline
                           textAlignVertical="top"
                         />
-                      </View>
+                     
+                        {validationErrors.reminderNotes && (
+                          <Text style={styles.errorText}>
+                            {validationErrors.reminderNotes}
+                          </Text>
+                        )}
+                        </View>
                     </View>
                   )}
                 </View>
@@ -2485,6 +2495,7 @@ const styles = StyleSheet.create({
   addActivityContent: {
     paddingHorizontal: 20,
     paddingBottom: 20,
+    minHeight: 200,
   },
   activitySection: {
   },

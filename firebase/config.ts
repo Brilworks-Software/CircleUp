@@ -43,6 +43,7 @@ if (!getApps().length) {
       auth = initializeAuth(app, {
         persistence: getReactNativePersistence(AsyncStorage),
       });
+      analyticsInstance = null;
     }
     
   } else {
