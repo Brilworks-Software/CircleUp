@@ -47,3 +47,7 @@ web/
 .expo-env.d.ts.map.gz.map.gz.map
 
 .bolt/
+
+.vercel
+
+circleup-63110-0c1125739074.json
