@@ -532,11 +532,11 @@ export default function EditActivityModal({
       onRequestClose={handleClose}
     >
       <KeyboardAvoidingView
-                  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                  keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-                  style={[styles.keyboardAvoidingView]}
-                >
-      <View style={styles.addActivityOverlay}>
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            style={styles.keyboardAvoidingView}
+              >
+          <View style={styles.addActivityOverlay}>
         <View style={styles.addActivityContainer}>
           <View style={styles.addActivityHeader}>
             <TouchableOpacity onPress={handleClose}>
@@ -1176,7 +1176,7 @@ const styles = StyleSheet.create({
   keyboardAvoidingView: {
     flex: 1,
     justifyContent: 'center',
-    // alignItems: 'center',
+    width: '100%',
   },
   addActivityContainer: {
     backgroundColor: '#ffffff',

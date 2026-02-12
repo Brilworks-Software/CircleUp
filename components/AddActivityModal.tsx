@@ -344,7 +344,7 @@ export default function AddActivityModal({
     setActivityReminderFrequency('month');
     setActivityReminderNotes('');
     setValidationErrors({});
-    setActiveActivityTab('note');
+    setActiveActivityTab('reminder');
     setContactSearchError('');
   };
 
@@ -1352,7 +1352,7 @@ export default function AddActivityModal({
             keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
             style={[styles.keyboardAvoidingView]}
           >
-        <View style={[styles.addActivityOverlay]}>
+        <View style={styles.addActivityOverlay}>
             <View style={styles.addActivityContainer}>
               <View style={styles.addActivityHeader}>
 
@@ -1960,7 +1960,8 @@ export default function AddActivityModal({
               {/* Activity Type Tabs - Fixed at top */}
               <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                 <View style={styles.activityTypeTabs}>
-                  <Animated.View
+                  {/* Reminder Tab */}
+                <Animated.View
                     style={[
                       { transform: [{ scale: tabAnimations.reminder }] },
                     ]}
@@ -1987,6 +1988,7 @@ export default function AddActivityModal({
                     </TouchableOpacity>
                   </Animated.View>
 
+                  {/* Note Tab */}
                   <Animated.View
                     style={[
                       { transform: [{ scale: tabAnimations.note }] },
@@ -2394,7 +2396,7 @@ const styles = StyleSheet.create({
   keyboardAvoidingView: {
     flex: 1,
     justifyContent: 'center',
-    // alignItems: 'center',
+    width: '100%',
   },
   addActivityContainer: {
     backgroundColor: '#ffffff',

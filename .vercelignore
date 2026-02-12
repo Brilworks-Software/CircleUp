@@ -1,0 +1,10 @@
+node_modules
+.expo
+web-build
+build
+dist
+.git
+android
+ios
+*.aab
+*.ipa

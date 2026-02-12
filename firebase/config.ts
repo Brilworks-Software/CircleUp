@@ -1,3 +1,4 @@
+
 import { FirebaseApp, getApp, getApps, initializeApp } from 'firebase/app';
 import { getAuth, initializeAuth, getReactNativePersistence, Auth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
@@ -7,7 +8,7 @@ import Constants from 'expo-constants';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage'; 
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getAnalytics } from 'firebase/analytics';
+import { getAnalytics, Analytics } from 'firebase/analytics';
 
 // Firebase configuration
   
@@ -28,7 +29,7 @@ const firebaseConfig = {
 let app: FirebaseApp;
 let auth: Auth;
 let messaging;
-let analyticsInstance;
+let analyticsInstance: Analytics;
 
 // Initialize Firebase services
 if (!getApps().length) {
