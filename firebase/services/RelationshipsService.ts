@@ -107,10 +107,11 @@ class RelationshipsService {
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         relationships.push({
-          id: doc.id,
           ...data,
+          id: doc.id,
         } as Relationship);
       });
+      
 
       return relationships;
     } catch (error) {
@@ -131,8 +132,8 @@ class RelationshipsService {
         const data = relationshipSnap.data();
         if (data.userId === userId) {
           return {
-            id: relationshipSnap.id,
             ...data,
+            id: relationshipSnap.id,
           } as Relationship;
         }
       }
@@ -160,8 +161,8 @@ class RelationshipsService {
         const doc = querySnapshot.docs[0];
         const data = doc.data();
         return {
-          id: doc.id,
           ...data,
+          id: doc.id,
         } as Relationship;
       }
       return null;
@@ -178,8 +179,8 @@ class RelationshipsService {
     try {
       const relationshipRef = doc(collection(db, this.COLLECTION_NAME));
       const relationship: Relationship = {
-        id: relationshipRef.id,
         ...relationshipData,
+        id: relationshipRef.id,
       };
 
       await setDoc(relationshipRef, {
@@ -493,8 +494,8 @@ class RelationshipsService {
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         relationships.push({
-          id: doc.id,
           ...data,
+          id: doc.id,
         } as Relationship);
       });
       callback(relationships);

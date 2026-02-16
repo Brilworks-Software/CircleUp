@@ -26,6 +26,7 @@ import { useAuth } from '../firebase/hooks/useAuth';
 import { Contact } from '../firebase/types';
 import { ReminderTypes, getReminderTypeDisplayName } from '../constants/ReminderTypes';
 import RemindersService from '../firebase/services/RemindersService';
+import { fetchResults } from '@/services/SearchAPIService';
 
 
 interface AddActivityModalProps {
@@ -268,6 +269,8 @@ export default function AddActivityModal({
     Record<string, string>
   >({});
 
+  const [isCreatingContact, setIsCreatingContact] = useState(false);
+
   // Contact search states
   const [contactSearchQuery, setContactSearchQuery] = useState('');
   const [contactSearchError, setContactSearchError] = useState('');
@@ -441,9 +444,23 @@ export default function AddActivityModal({
     }
   };
 
-  const handleCreateNewContact = (contactData: any) => {
+  const handleCreateNewContact = async(contactData: any) => {
+
+    const linkedinRegex = /^https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/(?:in|company|posts|jobs|showcase)\/[\w\-\_À-ÿ%]+\/?$/i;
+    if (contactData && linkedinRegex.test(contactData.name.trim() || '')) {
+      const result = await fetchResults(contactData.name.trim());
+      
+      setNewContactName(result?.name || contactData.name);
+      setNewContactLinkedin(result?.linkedInUrl || '');
+      setNewContactNotes(result?.note || '');
+      
+    }
+    else{
+      setNewContactName(contactData.name || '');
+    }
+    
+    
     setShowMainModel(false);
-    setNewContactName(contactData.name || '');
     setShowNewContactModal(true);
   };
 
@@ -563,14 +580,15 @@ export default function AddActivityModal({
   };
 
   const createNewContactAndRelationship = async () => {
-    if (!validateContactForm()) {
+    if (!validateContactForm() || isCreatingContact) {
       return;
     }
-
+    
     if (!currentUser) {
       Alert.alert('Error', 'User not authenticated');
       return;
     }
+    setIsCreatingContact(true);
 
     try {
       // Create contact data object
@@ -716,6 +734,7 @@ export default function AddActivityModal({
       setShowNewContactModal(false);
       setShowMainModel(true);
       resetNewContactForm();
+      setIsCreatingContact(false);
 
       const successMessage = deviceContactId
         ? 'New contact created in device and relationship created!'
@@ -725,6 +744,7 @@ export default function AddActivityModal({
     } catch (error) {
       console.error('Error creating new contact and relationship:', error);
       Alert.alert('Error', 'Failed to create new contact and relationship');
+      setIsCreatingContact(false);
     }
   };
 
@@ -2119,6 +2139,11 @@ export default function AddActivityModal({
         statusBarTranslucent={false}
       >
         <SafeAreaView style={styles.modalContainer} edges={['top', 'left', 'right']}>
+        <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+            style={[styles.keyboardAvoidingView]}
+          >
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Create New Contact</Text>
             <TouchableOpacity onPress={() => {
@@ -2373,12 +2398,20 @@ export default function AddActivityModal({
               <TouchableOpacity
                 style={[styles.saveButton, !newContactName.trim() && styles.saveButtonDisabled]}
                 onPress={createNewContactAndRelationship}
-                disabled={!newContactName.trim()}
+                disabled={!newContactName.trim() || isCreatingContact}
               >
-                <Text style={styles.saveButtonText}>Create Contact & Add to Activity</Text>
+                {isCreatingContact ? (
+                  <View style={styles.saveButtonLoadingContainer}>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={[styles.saveButtonText, { marginLeft: 8 }]}>Creating Contact...</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.saveButtonText}>Create Contact</Text>
+                )}
               </TouchableOpacity>
             </View>
           </ScrollView>
+        </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
     </>
@@ -2876,6 +2909,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 20,
+    marginBottom: 20,
   },
   saveButtonDisabled: {
     backgroundColor: '#9CA3AF',

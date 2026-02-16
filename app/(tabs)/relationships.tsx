@@ -57,8 +57,8 @@ const showAlert = (title: string, message: string, buttons?: any[]) => {
     }
 
     // For relationship exists alerts with multiple options
-    if (buttons.length === 3 && buttons[1].text === 'Edit Existing' && buttons[2].text === 'Create New') {
-      const result = window.confirm(`${title}\n\n${message}\n\nClick OK to edit existing relationship, or Cancel to create a new one.`);
+    if (buttons.length === 3 && buttons[1].text === 'Edit Existing' && buttons[0].text === 'Cancel' && buttons[2].text === 'Create New') {
+      const result = window.confirm(`${title}\n\n${message}\n\nClick OK to edit existing relationship, or Cancel to close this alert and choose an option.`);
       if (result) {
         // Edit existing relationship
         if (buttons[1].onPress) {
@@ -66,8 +66,8 @@ const showAlert = (title: string, message: string, buttons?: any[]) => {
         }
       } else {
         // Create new relationship
-        if (buttons[2].onPress) {
-          buttons[2].onPress();
+        if (buttons[0].onPress) {
+          buttons[0].onPress();
         }
       }
       return;
@@ -685,11 +685,12 @@ export default function RelationshipsScreen() {
             { text: 'Cancel', style: 'cancel' as const },
             { text: 'Edit', onPress: () => editRelationship(existingRelationship) },
           ];
-
+          
         showAlert(alertTitle, alertMessage, alertButtons);
+        
         return;
       }
-
+      
       // Set the selected contact for the relationship form
       setSelectedContact(contact);
 

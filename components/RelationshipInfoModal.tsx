@@ -277,8 +277,14 @@ export default function RelationshipInfoModal({
   };
 
   const handleFindOnLinkedIn = async () => {
+    let url = '';
+    if (relationship?.contactData?.linkedin) {
+      url = relationship.contactData.linkedin;
+    }
+    else {
     const searchQuery = encodeURIComponent(relationship?.contactName || '');
-    const url = `https://www.linkedin.com/search/results/people/?keywords=${searchQuery}`;
+     url = `https://www.linkedin.com/search/results/people/?keywords=${searchQuery}`;
+    }
     
     try {
       await Linking.openURL(url);
