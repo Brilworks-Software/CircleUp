@@ -74,7 +74,7 @@ import {
   ReminderTypes,
   getReminderTypeDisplayName,
 } from '../../constants/ReminderTypes';
-import { get } from 'firebase/database';
+import AccountMenuModal from '@/components/AccountMenuModal';
 
 // Web-compatible alert function
 const showAlert = (title: string, message: string, buttons?: any[]) => {
@@ -909,7 +909,7 @@ export default function HomeScreen() {
     ({ item }: { item: Contacts.Contact }) => (
       <TouchableOpacity
         style={styles.contactItem}
-        onPress={() => handleDeviceContactSelectMemo(item)}
+        onPress={() => handleDeviceContactSelect(item)}
       >
         <View style={styles.contactItemContent}>
           <Text style={styles.contactItemName}>{item.name}</Text>
@@ -928,7 +928,7 @@ export default function HomeScreen() {
         </View>
       </TouchableOpacity>
     ),
-    [handleDeviceContactSelectMemo]
+    [handleDeviceContactSelect]
   );
 
   // Activity handlers
@@ -2610,7 +2610,13 @@ export default function HomeScreen() {
               <View style={styles.menuContainer}>
                 <TouchableOpacity
                   style={styles.menuButton}
-                  onPress={() => setShowMenu(!showMenu)}
+                  onPress={() => {
+                    if (Platform.OS === 'web') {
+                      setShowAccountMenuModal(true);
+                    } else {
+                      setShowMenu(!showMenu);
+                    }
+                  }}
                 >
                   <MoreVertical size={20} color="#6B7280" />
                 </TouchableOpacity>
@@ -3737,7 +3743,7 @@ export default function HomeScreen() {
               </View>
             </View>
           </View>
-        </View>
+        
         </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
@@ -3978,11 +3984,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-  },
-  keyboardAvoidingView: {
-    flex: 1,
-    justifyContent: 'center',
-    // alignItems: 'center',
   },
   cancelButton: {
     paddingHorizontal: 20,
